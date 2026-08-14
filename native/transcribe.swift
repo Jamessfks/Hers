@@ -51,9 +51,35 @@ enum Failure: Int32 {
     case timedOut = 8
 }
 
+/** Set during argument parsing below; see the note there for why it exists. */
+var outputPath: String?
+
 func die(_ code: Failure, _ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
+    // When launched through `open`, stderr goes nowhere the caller can read, so
+    // the failure has to travel in the result file or it is invisible.
+    writeResult(transcript: nil, confidence: 0, error: message, code: code.rawValue)
     exit(code.rawValue)
+}
+
+/**
+ * Writes the result where the caller can find it.
+ *
+ * Straight to stdout when run by hand, and to a JSON file when an output path
+ * was given — which is how it is invoked in production, because `open` detaches
+ * the process from the caller's pipes. Both paths carry the same information so
+ * that debugging by hand and running for real cannot diverge.
+ */
+func writeResult(transcript: String?, confidence: Float, error: String?, code: Int32) {
+    guard let outputPath else {
+        if let transcript { print(transcript) }
+        return
+    }
+    var payload: [String: Any] = ["code": Int(code), "confidence": Double(confidence)]
+    if let transcript { payload["transcript"] = transcript }
+    if let error { payload["error"] = error }
+    let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+    try? data.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
 }
 
 /*
@@ -94,7 +120,7 @@ let path = arguments[1]
  * that stdout is no longer connected to the caller, so the transcript is
  * written to a file instead when one is given.
  */
-let outputPath = arguments.count >= 3 && arguments[2].hasSuffix(".json") ? arguments[2] : nil
+outputPath = arguments.count >= 3 && arguments[2].hasSuffix(".json") ? arguments[2] : nil
 let localeId = arguments.count >= 4 ? arguments[3] : (outputPath == nil && arguments.count >= 3 ? arguments[2] : "en-US")
 
 guard FileManager.default.fileExists(atPath: path) else {
@@ -173,6 +199,7 @@ func transcribe() {
              * front of anyone.
              */
             if failure.code == 1110 || failure.code == 203 {
+                writeResult(transcript: "", confidence: 0, error: nil, code: 0)
                 print("")
                 exit(0)
             }
@@ -203,6 +230,7 @@ func transcribe() {
          * good transcript.
          */
         FileHandle.standardError.write(Data("confidence=\(confidence)\n".utf8))
+        writeResult(transcript: best.formattedString, confidence: confidence, error: nil, code: 0)
         print(best.formattedString)
         exit(0)
     }
