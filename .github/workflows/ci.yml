@@ -1,0 +1,40 @@
+# CI runs the three things that can be checked without a display or an API key.
+#
+# Node 24 is the floor because `node:sqlite` and native TypeScript type
+# stripping both land there, and the test suite depends on both. Running the
+# matrix against 24 and the current release catches a regression in either.
+
+name: CI
+
+on:
+  push:
+    branches: [main, 'pivot/**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', 'current']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
