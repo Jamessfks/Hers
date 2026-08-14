@@ -390,11 +390,18 @@ async function main(): Promise<void> {
 
     for (const path of candidates) {
       try {
-        return await readFile(path);
-      } catch {
-        // Try the next candidate; a missing character is never fatal.
+        const bytes = await readFile(path);
+        diag.note('character-loaded', { path, bytes: bytes.length });
+        // Returned as a plain Uint8Array rather than a Node Buffer: a Buffer
+        // survives structured clone, but the renderer then receives something
+        // that is not quite the array it expects, and 15MB is large enough
+        // that being sloppy about the copy is worth avoiding.
+        return new Uint8Array(bytes);
+      } catch (error) {
+        diag.note('character-miss', { path, why: String(error).slice(0, 80) });
       }
     }
+    diag.note('character-none', { candidates });
     return null;
   });
 
