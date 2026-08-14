@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Live page: re-reads itself every 30 seconds so it stays current as the work moves. -->
+    <meta http-equiv="refresh" content="30" />
+    <meta name="color-scheme" content="dark" />
+    <title>Anna — build progress</title>
+    <style>
+      :root {
+        --bg: #0c0e11;
+        --panel: #12151a;
+        --panel-edge: #1e242c;
+        --rule: #1a1f26;
+        --ink: #e9edf2;
+        --ink-2: #b6c0cc;
+        --ink-3: #8793a1;
+        --accent: #8ecdff;
+        --accent-dim: rgba(142, 205, 255, 0.16);
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          "Liberation Mono", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--bg);
+      }
+
+      body {
+        margin: 0;
+        padding: 72px 32px 96px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      /* ---------------------------------------------------------------- head */
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin: 0 0 20px;
+      }
+
+      h1 {
+        font-size: 40px;
+        line-height: 1.1;
+        letter-spacing: -0.022em;
+        font-weight: 600;
+        margin: 0 0 14px;
+      }
+
+      .lede {
+        font-size: 18px;
+        line-height: 1.55;
+        color: var(--ink-2);
+        max-width: 60ch;
+        margin: 0 0 28px;
+      }
+
+      .status-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid rgba(142, 205, 255, 0.34);
+        background: var(--accent-dim);
+        color: var(--accent);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .pill .mark {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .status-note {
+        color: var(--ink-3);
+        font-size: 14px;
+      }
+
+      /* -------------------------------------------------------------- layout */
+
+      section {
+        margin-top: 72px;
+      }
+
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin: 0 0 6px;
+      }
+
+      .section-note {
+        color: var(--ink-3);
+        font-size: 14px;
+        margin: 0 0 24px;
+        max-width: 64ch;
+      }
+
+      hr.rule {
+        border: 0;
+        border-top: 1px solid var(--rule);
+        margin: 0;
+      }
+
+      /* ------------------------------------------------------------- metrics */
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1px;
+        background: var(--panel-edge);
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .metric {
+        background: var(--panel);
+        padding: 24px 22px 22px;
+      }
+
+      .metric dt {
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin: 0 0 12px;
+      }
+
+      .metric dd {
+        margin: 0;
+      }
+
+      .metric .value {
+        font-family: var(--mono);
+        font-size: 30px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+        display: block;
+      }
+
+      .metric .value .of {
+        font-size: 17px;
+        color: var(--ink-3);
+      }
+
+      .metric .sub {
+        display: block;
+        margin-top: 10px;
+        font-size: 12.5px;
+        color: var(--ink-3);
+        line-height: 1.45;
+      }
+
+      /* --------------------------------------------------------------- table */
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      caption {
+        text-align: left;
+        color: var(--ink-3);
+        font-size: 13px;
+        padding-bottom: 14px;
+      }
+
+      thead th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        font-weight: 600;
+        padding: 0 16px 12px 0;
+        border-bottom: 1px solid var(--panel-edge);
+      }
+
+      tbody th,
+      tbody td {
+        text-align: left;
+        font-weight: 400;
+        vertical-align: top;
+        padding: 15px 16px 15px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      tbody th {
+        color: var(--ink);
+        font-weight: 500;
+        width: 25%;
+      }
+
+      tbody td:last-child,
+      thead th:last-child {
+        padding-right: 0;
+      }
+
+      .path {
+        display: block;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--ink-3);
+        margin-top: 4px;
+        word-break: break-all;
+      }
+
+      .note {
+        color: var(--ink-2);
+      }
+
+      .note code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--ink);
+      }
+
+      .state {
+        white-space: nowrap;
+        width: 132px;
+      }
+
+      /* Status is carried by the text label; the marker is a redundant cue. */
+      .state span {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13.5px;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+
+      .state-done span {
+        color: var(--accent);
+      }
+      .state-done .dot {
+        background: var(--accent);
+      }
+
+      .state-partial span {
+        color: var(--ink);
+      }
+      .state-partial .dot {
+        background: transparent;
+        border: 2px solid var(--accent);
+      }
+
+      .state-none span {
+        color: var(--ink-3);
+      }
+      .state-none .dot {
+        background: transparent;
+        border: 2px solid var(--ink-3);
+      }
+
+      .tally {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        margin: 0 0 22px;
+        padding: 0;
+        list-style: none;
+        font-size: 13.5px;
+        color: var(--ink-2);
+      }
+
+      .tally li {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .tally .count {
+        font-family: var(--mono);
+        color: var(--ink);
+      }
+
+      /* -------------------------------------------------------------- budget */
+
+      .budget {
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+        background: var(--panel);
+        padding: 28px 26px 24px;
+      }
+
+      .bar {
+        display: flex;
+        width: 100%;
+        height: 42px;
+        border-radius: 5px;
+        overflow: hidden;
+        background: #0a0c0f;
+      }
+
+      .bar div {
+        height: 100%;
+        border-right: 1px solid var(--panel);
+      }
+
+      .seg-1 {
+        background: var(--accent);
+      }
+      .seg-2 {
+        background: rgba(142, 205, 255, 0.62);
+      }
+      .seg-3 {
+        background: rgba(142, 205, 255, 0.34);
+      }
+      .seg-head {
+        background: repeating-linear-gradient(
+          135deg,
+          #171c22 0 6px,
+          #12161b 6px 12px
+        );
+        border-right: 0;
+      }
+
+      .scale {
+        display: flex;
+        margin-top: 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+
+      .scale span {
+        flex: 1;
+      }
+
+      .scale span:last-child {
+        flex: none;
+        text-align: right;
+      }
+
+      .legend {
+        list-style: none;
+        margin: 26px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+      }
+
+      .legend li {
+        display: grid;
+        grid-template-columns: 12px 62px 1fr;
+        align-items: baseline;
+        gap: 14px;
+        font-size: 14px;
+        color: var(--ink-2);
+      }
+
+      .legend .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        position: relative;
+        top: 1px;
+      }
+
+      .legend .ms {
+        font-family: var(--mono);
+        color: var(--ink);
+        text-align: right;
+      }
+
+      .legend .total {
+        border-top: 1px solid var(--rule);
+        padding-top: 12px;
+      }
+
+      .legend .total .ms,
+      .legend .total .what {
+        color: var(--ink);
+      }
+
+      /* ---------------------------------------------------------------- gaps */
+
+      .gaps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 1px;
+        background: var(--panel-edge);
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .gaps li {
+        background: var(--panel);
+        padding: 18px 22px;
+      }
+
+      .gaps .what {
+        display: block;
+        color: var(--ink);
+        font-weight: 500;
+        margin-bottom: 3px;
+      }
+
+      .gaps .why {
+        color: var(--ink-2);
+        font-size: 14px;
+      }
+
+      .gaps code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--ink);
+      }
+
+      /* -------------------------------------------------------------- footer */
+
+      footer {
+        margin-top: 76px;
+        padding-top: 22px;
+        border-top: 1px solid var(--rule);
+        color: var(--ink-3);
+        font-size: 13px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 26px;
+      }
+
+      footer .mono {
+        font-family: var(--mono);
+        color: var(--ink-2);
+      }
+
+      @media (max-width: 860px) {
+        body {
+          padding: 44px 20px 72px;
+        }
+        h1 {
+          font-size: 32px;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        tbody th {
+          width: auto;
+        }
+        table,
+        thead,
+        tbody,
+        tr,
+        tbody th,
+        tbody td {
+          display: block;
+        }
+        thead {
+          display: none;
+        }
+        tbody tr {
+          border-bottom: 1px solid var(--rule);
+          padding: 6px 0 14px;
+        }
+        tbody th,
+        tbody td {
+          border-bottom: 0;
+          padding: 4px 0;
+        }
+        .state {
+          width: auto;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        /* Nothing animates here. A status page that moves is a status page you
+           stop trusting. */
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">Build progress</p>
+        <h1>Anna</h1>
+        <p class="lede">
+          An always-on AI companion who lives at the edge of your screen: a
+          full-body VRM character in a transparent, always-on-top macOS window,
+          driven by your own API keys. Electron and three.js; nothing hosted,
+          nothing leaves the machine except the provider calls you configured.
+        </p>
+        <p class="status-line">
+          <span class="pill"><span class="mark" aria-hidden="true"></span>v0.1 — working vertical slice</span>
+          <span class="status-note">
+            Brain, memory, voice, sensors, attention policy and body are built
+            and tested end to end. She ships without a character model.
+          </span>
+        </p>
+      </header>
+
+      <main>
+        <section aria-labelledby="metrics-h">
+          <h2 id="metrics-h">Measured now</h2>
+          <p class="section-note">
+            Read directly from the working tree: <code>npm test</code>,
+            <code>tsc --noEmit</code>, <code>git log</code>, and a file walk of
+            <code>src/</code>.
+          </p>
+          <dl class="metrics">
+            <div class="metric">
+              <dt>Tests passing</dt>
+              <dd>
+                <span class="value">57<span class="of"> / 57</span></span>
+                <span class="sub">0 failing, 0 skipped. Node's built-in runner, no network.</span>
+              </dd>
+            </div>
+            <div class="metric">
+              <dt>Type errors</dt>
+              <dd>
+                <span class="value">0</span>
+                <span class="sub">Strict, with <code>noUncheckedIndexedAccess</code>.</span>
+              </dd>
+            </div>
+            <div class="metric">
+              <dt>TypeScript files</dt>
+              <dd>
+                <span class="value">43</span>
+                <span class="sub">45 files in <code>src/</code> in total.</span>
+              </dd>
+            </div>
+            <div class="metric">
+              <dt>Lines of source</dt>
+              <dd>
+                <span class="value">7,136</span>
+                <span class="sub">6,947 of them TypeScript.</span>
+              </dd>
+            </div>
+            <div class="metric">
+              <dt>Commits</dt>
+              <dd>
+                <span class="value">33</span>
+                <span class="sub">Single branch, no release tags yet.</span>
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section aria-labelledby="components-h">
+          <h2 id="components-h">Component status</h2>
+          <p class="section-note">
+            One row per subsystem. A row is Done only when the code exists, is
+            wired into the running app, and does the whole job described.
+          </p>
+
+          <ul class="tally">
+            <li>
+              <span class="dot" style="background: var(--accent)" aria-hidden="true"></span>
+              <span class="count">13</span> Done
+            </li>
+            <li>
+              <span class="dot" style="border: 2px solid var(--accent)" aria-hidden="true"></span>
+              <span class="count">2</span> Partial
+            </li>
+            <li>
+              <span class="dot" style="border: 2px solid var(--ink-3)" aria-hidden="true"></span>
+              <span class="count">2</span> Not started
+            </li>
+          </ul>
+
+          <table>
+            <caption>
+              Every major subsystem, its state, and what is actually behind it.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Subsystem</th>
+                <th scope="col">State</th>
+                <th scope="col">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">
+                  Persona and prompt
+                  <span class="path">core/persona/anna.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Written as prohibitions with worked examples rather than
+                  adjectives, plus few-shot style turns, memory, running summary
+                  and situation folded into every system prompt.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Streaming directive parser
+                  <span class="path">core/persona/performance.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Character-level state machine, so a tag split across token
+                  boundaries fires once. Unknown tags dropped, stray brackets
+                  rescued as prose; both covered by tests.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Language providers &times;3
+                  <span class="path">core/llm/ — anthropic, openai, google</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  All three behind one streaming interface. SSE framing across
+                  arbitrary chunk boundaries has its own test file.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Memory store and ranked recall
+                  <span class="path">core/memory/</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  SQLite through <code>node:sqlite</code>, no native addon.
+                  Recall blends similarity, recency, confidence and usage;
+                  consolidation into durable facts runs off the critical path
+                  and retries its window on failure.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Voice providers &times;3
+                  <span class="path">core/speech/ — cartesia, elevenlabs, hume</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Normalised to Float32 PCM behind one interface. Frame
+                  alignment is tested, including a chunk that ends on the low
+                  byte of a 16-bit sample.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Hearing providers &times;2
+                  <span class="path">core/speech/stt.ts — deepgram, openai</span>
+                </th>
+                <td class="state state-partial">
+                  <span><span class="dot" aria-hidden="true"></span>Partial</span>
+                </td>
+                <td class="note">
+                  Both transcribe a finished utterance in the main process, by
+                  design. But <code>stt.openai</code> is missing from the
+                  <code>SecretName</code> union in <code>main/secrets.ts</code>,
+                  so only a Deepgram key can actually be stored.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Vision
+                  <span class="path">core/llm/vision.ts, renderer/senses/vision.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Off by default. One 512px JPEG every 45 seconds, never faster
+                  than 15 and never written to disk; only the sentence the model
+                  returns is kept. The capture indicator stays lit rather than
+                  blinking.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  macOS sensors
+                  <span class="path">main/senses/macos.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  HID idle time from <code>ioreg</code>, frontmost app and
+                  window title over AppleScript, next calendar event. Every
+                  reader fails soft and times out, so a denied permission makes
+                  her less observant rather than broken.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Attention policy
+                  <span class="path">core/senses/attention.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Six triggers, each with its own long cooldown, one opener per
+                  window, absolute quiet hours, and nothing at all while a
+                  conversation is live. Tested mostly for staying quiet.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Turn loop
+                  <span class="path">core/orchestrator/companion.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Overlapped synthesis with a two-clause lookahead cap, strictly
+                  ordered emission, immediate barge-in. The latency budget,
+                  clause ordering and the concurrency cap are asserted directly
+                  in <code>companion.test.ts</code>.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Electron window
+                  <span class="path">main/window.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Transparent, frameless, screen-saver level, visible on full
+                  screen, pointer-tracked click-through, and excluded from
+                  screen capture unless explicitly opted in.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Keys and configuration
+                  <span class="path">main/secrets.ts, main/config.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Keys encrypted through Electron <code>safeStorage</code>,
+                  never written to the config file and never handed to the
+                  renderer, which can only ask for a masked status. Refuses to
+                  store rather than fall back to plaintext.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Microphone and local VAD
+                  <span class="path">renderer/audio/microphone.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Energy gate with hysteresis so it does not flicker through the
+                  gaps inside a sentence. Audio leaves the machine only when
+                  someone actually spoke; speech onset is reported immediately
+                  so she can be cut off mid-sentence.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Audio playback
+                  <span class="path">renderer/audio/player.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Chunks scheduled against a running playhead rather than played
+                  on arrival, which is what removes the streaming-TTS stutter.
+                  An amplitude tap on the same graph drives lip sync.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  VRM body and motion
+                  <span class="path">renderer/avatar/</span>
+                </th>
+                <td class="state state-partial">
+                  <span><span class="dot" aria-hidden="true"></span>Partial</span>
+                </td>
+                <td class="note">
+                  Idle, gesture and speech layers composited every frame; 18
+                  gestures authored against VRM humanoid bones so they work on
+                  any character; blink, gaze, expressions and viseme motion all
+                  live, with a luminous stand-in figure until a
+                  <code>.vrm</code> is dropped on the window. No locomotion —
+                  <code>sit_down</code> holds a pose and she does not walk.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Settings UI
+                  <span class="path">main/window.ts — createSettingsWindow</span>
+                </th>
+                <td class="state state-none">
+                  <span><span class="dot" aria-hidden="true"></span>Not started</span>
+                </td>
+                <td class="note">
+                  The IPC handlers behind it work — config get and set, key set,
+                  key status — but nothing calls
+                  <code>createSettingsWindow()</code> and no settings document
+                  exists. Configuration is by hand in
+                  <code>config.json</code> for now.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Video avatar backends
+                  <span class="path">shared/protocol.ts — AvatarRendererId</span>
+                </th>
+                <td class="state state-none">
+                  <span><span class="dot" aria-hidden="true"></span>Not started</span>
+                </td>
+                <td class="note">
+                  <code>heygen</code> and <code>tavus</code> are valid renderer
+                  ids with key slots reserved, and nothing behind them. A seam,
+                  deliberately, not an implementation.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section aria-labelledby="budget-h">
+          <h2 id="budget-h">The 800ms budget</h2>
+          <p class="section-note">
+            Past roughly a second, a reply stops reading as a person thinking
+            and starts reading as a machine processing. Every structural
+            decision in the codebase is downstream of this number. It only holds
+            because the three stages overlap rather than queue.
+          </p>
+
+          <div class="budget">
+            <div
+              class="bar"
+              role="img"
+              aria-label="Latency budget of 800 milliseconds. First token 120ms, first clause 180ms, first audio 90ms, giving 390ms typical and 410ms of headroom."
+            >
+              <div class="seg-1" style="width: 15%"></div>
+              <div class="seg-2" style="width: 22.5%"></div>
+              <div class="seg-3" style="width: 11.25%"></div>
+              <div class="seg-head" style="width: 51.25%"></div>
+            </div>
+            <p class="scale" aria-hidden="true">
+              <span>0</span><span>200ms</span><span>400ms</span><span>600ms</span><span>800ms</span>
+            </p>
+
+            <ul class="legend">
+              <li>
+                <span class="swatch seg-1" aria-hidden="true"></span>
+                <span class="ms">120ms</span>
+                <span class="what">Model time to first token</span>
+              </li>
+              <li>
+                <span class="swatch seg-2" aria-hidden="true"></span>
+                <span class="ms">180ms</span>
+                <span class="what">Enough tokens to make a first clause worth speaking</span>
+              </li>
+              <li>
+                <span class="swatch seg-3" aria-hidden="true"></span>
+                <span class="ms">90ms</span>
+                <span class="what">Cartesia time to first audio</span>
+              </li>
+              <li>
+                <span class="swatch seg-head" aria-hidden="true"></span>
+                <span class="ms">410ms</span>
+                <span class="what">Headroom, left for a bad network</span>
+              </li>
+              <li class="total">
+                <span aria-hidden="true"></span>
+                <span class="ms">390ms</span>
+                <span class="what">Typical, against a budget of 800ms</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section aria-labelledby="gaps-h">
+          <h2 id="gaps-h">Known gaps</h2>
+          <p class="section-note">
+            Stated plainly, because a status page that implies otherwise wastes
+            your time. This list is the README's own.
+          </p>
+          <ul class="gaps">
+            <li>
+              <span class="what">No settings UI.</span>
+              <span class="why">
+                Keys and provider choice go through IPC handlers that work, but
+                the window that calls them is not built. Configure by editing
+                <code>~/Library/Application Support/Anna/config.json</code> for
+                now.
+              </span>
+            </li>
+            <li>
+              <span class="what">The video-avatar backends are a seam, not an implementation.</span>
+              <span class="why">
+                <code>heygen</code> and <code>tavus</code> are valid values of
+                <code>AvatarRendererId</code> with nothing behind them.
+              </span>
+            </li>
+            <li>
+              <span class="what">No sit or stand locomotion.</span>
+              <span class="why">
+                <code>sit_down</code> holds a pose; she does not walk.
+              </span>
+            </li>
+            <li>
+              <span class="what">Ambient audio sensing is mic-triggered only.</span>
+              <span class="why">
+                She does not listen to the room when you are not talking to her,
+                by design, but that also means she cannot notice that you
+                sighed.
+              </span>
+            </li>
+            <li>
+              <span class="what">macOS only.</span>
+              <span class="why">
+                The window behaviour and every sensor is AppKit-specific.
+              </span>
+            </li>
+          </ul>
+        </section>
+      </main>
+
+      <footer>
+        <span>Generated <span class="mono">2026-08-14 13:25 +08</span></span>
+        <span>Refreshes every 30 seconds</span>
+        <span>Last rendered <span class="mono" id="rendered">—</span></span>
+      </footer>
+    </div>
+
+    <script>
+      // The generation stamp above is fixed; this one moves with each reload,
+      // so a stale tab is obvious at a glance.
+      (function () {
+        var el = document.getElementById("rendered");
+        if (!el) return;
+        var now = new Date();
+        var pad = function (n) {
+          return String(n).padStart(2, "0");
+        };
+        el.textContent =
+          now.getFullYear() +
+          "-" +
+          pad(now.getMonth() + 1) +
+          "-" +
+          pad(now.getDate()) +
+          " " +
+          pad(now.getHours()) +
+          ":" +
+          pad(now.getMinutes()) +
+          ":" +
+          pad(now.getSeconds());
+      })();
+    </script>
+  </body>
+</html>
