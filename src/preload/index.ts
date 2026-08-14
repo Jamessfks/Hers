@@ -53,6 +53,22 @@ const api = {
     ipcRenderer.send(IPC.sense, event);
   },
 
+  /**
+   * Hand a dropped .vrm to main to be stored. Returns the id to put in config.
+   *
+   * The renderer cannot write to disk, so a blob: URL is all it has — and a
+   * blob URL dies with the window, which is why a dropped character used to
+   * vanish on restart.
+   */
+  saveCharacter(name: string, bytes: Uint8Array): Promise<{ id: string } | { error: string }> {
+    return ipcRenderer.invoke(IPC.characterSave, name, bytes);
+  },
+
+  /** Read the stored character back. Null when none is set. */
+  loadCharacter(): Promise<Uint8Array | null> {
+    return ipcRenderer.invoke(IPC.characterLoad);
+  },
+
   getConfig(): Promise<AnnaConfig> {
     return ipcRenderer.invoke(IPC.configGet);
   },

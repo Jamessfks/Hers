@@ -8,7 +8,8 @@
  */
 
 import { BrowserWindow, app, ipcMain } from 'electron';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import { Attention, SituationTracker } from '../core/senses/attention.ts';
 import { Companion } from '../core/orchestrator/companion.ts';
@@ -202,6 +203,41 @@ async function main(): Promise<void> {
 
   ipcMain.on(IPC.window, (_event, message: { action: string; value: boolean }) => {
     if (message.action === 'interactive') setInteractiveRegion(message.value);
+  });
+
+  /**
+   * Character storage.
+   *
+   * The renderer gets a dropped file as a Blob and can only make a `blob:` URL
+   * from it, and a blob URL dies with the window — so persisting one in config
+   * means the character silently vanishes on the next launch. Main copies the
+   * bytes into the app's data directory and hands them back on request, which
+   * keeps the renderer off the filesystem and keeps the character across
+   * restarts.
+   */
+  const charactersDir = join(app.getPath('userData'), 'characters');
+
+  ipcMain.handle(IPC.characterSave, async (_event, name: string, bytes: Uint8Array) => {
+    try {
+      // Never trust a filename from a drag-and-drop; it is attacker-influenced.
+      const safe = `${basename(name).replace(/[^a-zA-Z0-9._-]/g, '_').slice(-64)}`;
+      const id = safe.toLowerCase().endsWith('.vrm') ? safe : `${safe}.vrm`;
+      await mkdir(charactersDir, { recursive: true });
+      await writeFile(join(charactersDir, id), bytes);
+      return { id };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Could not save that character.' };
+    }
+  });
+
+  ipcMain.handle(IPC.characterLoad, async () => {
+    const id = config.get().avatar.modelPath;
+    if (!id) return null;
+    try {
+      return await readFile(join(charactersDir, basename(id)));
+    } catch {
+      return null;
+    }
   });
 
   // -- Sensor loops ---------------------------------------------------------

@@ -68,9 +68,20 @@ window.addEventListener('drop', async (event) => {
   event.preventDefault();
   const file = event.dataTransfer?.files?.[0];
   if (!file || !file.name.toLowerCase().endsWith('.vrm')) return;
-  const url = URL.createObjectURL(file);
-  await loadCharacter(url);
-  await window.anna.setConfig({ avatar: { modelPath: url } });
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  // Show it immediately from a blob URL, then hand the bytes to main to be
+  // stored. A blob URL cannot be persisted — it dies with the window — so the
+  // config records the id main gives back, not the URL.
+  await loadCharacter(URL.createObjectURL(new Blob([bytes as BlobPart])));
+
+  const saved = await window.anna.saveCharacter(file.name, bytes);
+  if ('error' in saved) {
+    showTrouble(`She is wearing that for now, but I could not save it: ${saved.error}`);
+    return;
+  }
+  await window.anna.setConfig({ avatar: { modelPath: saved.id } });
 });
 
 // ---------------------------------------------------------------------------
@@ -209,7 +220,10 @@ async function boot(): Promise<void> {
   });
   window.anna.onTrouble(showTrouble);
 
-  await loadCharacter(config.avatar.modelPath);
+  // The stored character comes back as bytes, not a path: the renderer has no
+  // filesystem access, and a blob URL is the only thing the loader can take.
+  const stored = config.avatar.modelPath ? await window.anna.loadCharacter() : null;
+  await loadCharacter(stored ? URL.createObjectURL(new Blob([stored as BlobPart])) : '');
   trackPointer();
 
   const microphone = new Microphone({

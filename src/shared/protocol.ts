@@ -172,6 +172,10 @@ export const IPC = {
   trouble: 'anna:trouble',
   /** renderer -> main: user clicked through to a window control. */
   window: 'anna:window',
+  /** renderer -> main: persist a dropped .vrm; returns its stored id. */
+  characterSave: 'anna:character:save',
+  /** renderer -> main: read the stored character back as bytes. */
+  characterLoad: 'anna:character:load',
 } as const;
 
 export type BrainState = 'idle' | 'listening' | 'thinking' | 'speaking';

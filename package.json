@@ -15,7 +15,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --disable-warning=ExperimentalWarning \"src/core/**/*.test.ts\"",
+    "test": "node --test --disable-warning=ExperimentalWarning \"src/**/*.test.ts\"",
     "lint": "tsc --noEmit",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never"
   },
@@ -52,7 +52,8 @@
         "NSCameraUsageDescription": "Anna looks up to see how you are doing. The camera is off until you turn it on, and frames are never stored.",
         "NSMicrophoneUsageDescription": "Anna listens so she can answer you out loud.",
         "NSCalendarsUsageDescription": "Anna reads your calendar so she knows what your day looks like.",
-        "NSSpeechRecognitionUsageDescription": "Anna transcribes your speech so she can reply."
+        "NSSpeechRecognitionUsageDescription": "Anna transcribes your speech so she can reply.",
+        "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps."
       }
     }
   }
