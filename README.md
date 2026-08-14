@@ -11,10 +11,9 @@ leaves your machine except the provider calls you configured.
 The reference point is Joi from *Blade Runner 2049* — presence, not assistance.
 The engineering bar is [Grok's Ani](docs/BENCHMARK.md).
 
-> **Status: v0.1, working vertical slice.** The brain, memory, voice, sensors,
-> attention policy and body are built and tested end to end. What is not done is
-> listed honestly in [Not done yet](#not-done-yet). She ships without a character
-> model — see [Giving her a body](#giving-her-a-body).
+> **Status: v1.0.0.** Built, packaged and signed as a `.dmg` for Apple Silicon
+> and Intel. She ships with a body, a settings window, and a menu bar item.
+> What is still missing is listed honestly in [Not done yet](#not-done-yet).
 
 ---
 
@@ -61,20 +60,36 @@ Then give her at least two keys — one to think with, one to speak with.
 | Voice | Cartesia, ElevenLabs, Hume | [play.cartesia.ai](https://play.cartesia.ai/keys) |
 | Hearing (optional) | Deepgram, OpenAI | [console.deepgram.com](https://console.deepgram.com) |
 
-Keys are stored in the macOS Keychain through Electron's `safeStorage`. They are
-never written to the config file and never sent to the window that draws her.
-See [docs/PRIVACY.md](docs/PRIVACY.md).
+Keys go in through **Settings** — from the menu bar item, the gear beside her
+composer, or ⌘,. Each one is checked with the provider before it is stored, so
+a bad key tells you immediately rather than leaving her mute later. They are
+then kept in the macOS Keychain through Electron's `safeStorage`, never written
+to the config file, and never handed to the window that draws her. See
+[docs/PRIVACY.md](docs/PRIVACY.md).
 
-### Giving her a body
+Settings also holds the voice picker (with an audition button), the character
+picker, the sense toggles — which report which macOS permissions are *actually*
+granted and deep-link to the right System Settings pane — the limits on when she
+speaks first, and a memory inspector where you can read everything she knows and
+forget any of it one line at a time.
 
-Anna ships without a character model, because every good VRM belongs to
-somebody. Until you give her one she appears as a luminous stand-in figure that
-breathes, sways and lights up when she speaks — enough to show the pipeline is
-alive, obviously not the finished article.
+### Her body
 
-**Drag any `.vrm` file onto her window.** That is the whole setup. Free models
-are on [VRoid Hub](https://hub.vroid.com/); you can also make one in
-[VRoid Studio](https://vroid.com/en/studio) in an afternoon.
+Anna ships with one. The default is `AvatarSample_B`, a VRoid Studio sample
+avatar released **CC0** by pixiv — copyright waived, no attribution required, no
+conditions. That licence is the whole reason it was chosen: it is the only
+category of character that can be put inside an application without asking
+anything of the user or of the author.
+
+It is fetched at build time against a pinned SHA-256 rather than committed, so
+the repository stays free of a 15MB binary and the file cannot be quietly
+swapped. See [`scripts/fetch-character.mjs`](scripts/fetch-character.mjs).
+
+**To use a different one, drag any `.vrm` onto her window**, or pick one in
+Settings. Free characters are on [VRoid Hub](https://hub.vroid.com/); you can
+make your own in [VRoid Studio](https://vroid.com/en/studio) in an afternoon.
+If no character is available at all, she falls back to a luminous stand-in
+figure that breathes and lights up when she speaks.
 
 Gestures are authored against the humanoid bone names in the VRM spec rather
 than baked as retargeted animation, so they transfer across characters without
@@ -135,10 +150,10 @@ boundary is where it is, is in
 
 ```bash
 npm run dev        # run with hot reload
-npm test           # 67 unit tests, no network, no mocks of our own code
+npm test           # 76 unit tests, no network, no mocks of our own code
 npm run typecheck  # strict, noUncheckedIndexedAccess
 npm run build      # production bundle
-npm run dist:mac   # signed .dmg
+npm run dist:mac   # fetch character, build, package a .dmg
 ```
 
 Tests run on Node's built-in runner with native type stripping — no Jest, no
@@ -161,9 +176,6 @@ the repo rather than quoted as end-to-end.
 
 Stated plainly, because a README that implies otherwise wastes your time.
 
-- **No settings UI.** Keys and provider choice go through IPC handlers that
-  work, but the window that calls them is not built. Configure by editing
-  `~/Library/Application Support/Anna/config.json` for now.
 - **The video-avatar backends are a seam, not an implementation.** `heygen` and
   `tavus` are valid values of `AvatarRendererId` with nothing behind them.
 - **No sit/stand locomotion.** `sit_down` holds a pose; she does not walk.
@@ -171,6 +183,8 @@ Stated plainly, because a README that implies otherwise wastes your time.
   room when you are not talking to her, by design, but that also means she
   cannot notice that you sighed.
 - **macOS only.** The window behaviour and every sensor is AppKit-specific.
+- **The build is signed but not notarised**, so the first launch needs a
+  right-click → Open.
 - **Voice input is slower than the budget.** See the note under Development.
 - **She has no persistent mood.** Anna remembers what you told her, but nothing
   about how you have treated her carries between turns, so there is nothing to
