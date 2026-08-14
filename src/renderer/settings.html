@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'none'"
+    />
+    <title>Anna — Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <header class="titlebar">
+      <h1>Anna</h1>
+      <p id="status" class="status">Checking…</p>
+    </header>
+
+    <main>
+      <!-- Keys ------------------------------------------------------------ -->
+      <section aria-labelledby="keys-heading">
+        <h2 id="keys-heading">Keys</h2>
+        <p class="section-note">
+          Anna runs on your accounts. Keys are checked with the provider before
+          they are saved, then kept in your macOS Keychain. They are never
+          written to a config file and never handed to the window that draws
+          her.
+        </p>
+
+        <div class="key-group" data-kind="llm">
+          <div class="key-head">
+            <h3>Language <span class="required">required</span></h3>
+            <p>The one that decides what she says.</p>
+          </div>
+          <div class="key-row">
+            <label class="visually-hidden" for="llm-provider">Language provider</label>
+            <select id="llm-provider" data-provider></select>
+            <label class="visually-hidden" for="llm-key">Language API key</label>
+            <input id="llm-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-save>Check &amp; save</button>
+          </div>
+          <p class="key-status" data-status aria-live="polite"></p>
+          <div class="key-row model-row">
+            <label for="llm-model">Model</label>
+            <input id="llm-model" list="llm-models" spellcheck="false" autocomplete="off" />
+            <datalist id="llm-models"></datalist>
+          </div>
+        </div>
+
+        <div class="key-group" data-kind="tts">
+          <div class="key-head">
+            <h3>Voice <span class="required">required</span></h3>
+            <p>The one that decides how she sounds.</p>
+          </div>
+          <div class="key-row">
+            <label class="visually-hidden" for="tts-provider">Voice provider</label>
+            <select id="tts-provider" data-provider></select>
+            <label class="visually-hidden" for="tts-key">Voice API key</label>
+            <input id="tts-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-save>Check &amp; save</button>
+          </div>
+          <p class="key-status" data-status aria-live="polite"></p>
+          <p class="provider-why" data-why></p>
+          <div class="key-row model-row">
+            <label for="voice-id">Voice</label>
+            <select id="voice-id"></select>
+            <button type="button" id="voice-preview" disabled>Hear it</button>
+          </div>
+        </div>
+
+        <div class="key-group" data-kind="stt">
+          <div class="key-head">
+            <h3>Hearing <span class="optional">optional</span></h3>
+            <p>Without this you can still type to her.</p>
+          </div>
+          <div class="key-row">
+            <label class="visually-hidden" for="stt-provider">Transcription provider</label>
+            <select id="stt-provider" data-provider></select>
+            <label class="visually-hidden" for="stt-key">Transcription API key</label>
+            <input id="stt-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-save>Check &amp; save</button>
+          </div>
+          <p class="key-status" data-status aria-live="polite"></p>
+        </div>
+      </section>
+
+      <!-- Body ------------------------------------------------------------ -->
+      <section aria-labelledby="body-heading">
+        <h2 id="body-heading">Her body</h2>
+        <p class="section-note">
+          Anna ships without a character, because every good one belongs to
+          somebody. Any VRM works — drag one onto her window, or choose a file.
+          Free characters are on VRoid Hub.
+        </p>
+        <div class="key-row">
+          <button type="button" id="pick-character">Choose a .vrm…</button>
+          <span id="character-name" class="muted">Using the stand-in figure</span>
+        </div>
+      </section>
+
+      <!-- Senses ---------------------------------------------------------- -->
+      <section aria-labelledby="senses-heading">
+        <h2 id="senses-heading">What she notices</h2>
+        <p class="section-note">
+          Everything here is off unless you turn it on, and each one degrades on
+          its own — a denied permission makes her less observant, never broken.
+        </p>
+
+        <ul class="toggles" id="senses"></ul>
+
+        <div class="key-row model-row">
+          <label for="camera-interval">Camera sampling</label>
+          <input id="camera-interval" type="range" min="15" max="300" step="15" />
+          <output id="camera-interval-out" for="camera-interval"></output>
+        </div>
+      </section>
+
+      <!-- Presence -------------------------------------------------------- -->
+      <section aria-labelledby="presence-heading">
+        <h2 id="presence-heading">When she speaks first</h2>
+        <p class="section-note">
+          Anna will start a conversation on her own when something is actually
+          worth mentioning. These are the limits on that.
+        </p>
+
+        <ul class="toggles" id="presence-toggles"></ul>
+
+        <div class="key-row model-row">
+          <label for="opener-gap">Never more often than</label>
+          <input id="opener-gap" type="range" min="5" max="180" step="5" />
+          <output id="opener-gap-out" for="opener-gap"></output>
+        </div>
+
+        <div class="key-row model-row">
+          <label for="quiet-from">Stay quiet between</label>
+          <input id="quiet-from" type="number" min="0" max="23" step="1" aria-label="Quiet hours start" />
+          <span class="muted">and</span>
+          <input id="quiet-to" type="number" min="0" max="23" step="1" aria-label="Quiet hours end" />
+          <span class="muted">o'clock</span>
+        </div>
+      </section>
+
+      <!-- Memory ---------------------------------------------------------- -->
+      <section aria-labelledby="memory-heading">
+        <h2 id="memory-heading">What she remembers</h2>
+        <p class="section-note" id="memory-stats">Reading memory…</p>
+        <p class="section-note" id="memory-summary"></p>
+
+        <ul class="facts" id="facts"></ul>
+
+        <div class="key-row danger-row">
+          <button type="button" id="wipe" class="danger">Make her forget everything</button>
+          <span class="muted">This cannot be undone.</span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./settings.ts"></script>
+  </body>
+</html>
