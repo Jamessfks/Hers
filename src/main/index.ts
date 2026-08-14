@@ -53,13 +53,22 @@ async function main(): Promise<void> {
   const charactersDir = join(app.getPath('userData'), 'characters');
 
   /**
-   * The bundled default, which lives beside the asar rather than inside it —
-   * it is 15MB and is never imported by code, only read as a file.
+   * Where the bundled default character might be.
+   *
+   * It lives beside the asar rather than inside it — 15MB that is never
+   * imported by code, only read as a file. Packaged, that is a single known
+   * path. In development it depends on how Electron was invoked:
+   * `app.getAppPath()` is the project root under `electron .` but `out/main`
+   * under `electron out/main/index.js`, which is exactly the sort of difference
+   * that produces "works on my machine". Both are tried rather than guessed.
    */
-  const defaultCharacterPath = (): string =>
+  const defaultCharacterPaths = (): string[] =>
     app.isPackaged
-      ? join(process.resourcesPath, 'characters', 'anna-default.vrm')
-      : join(app.getAppPath(), 'resources', 'characters', 'anna-default.vrm');
+      ? [join(process.resourcesPath, 'characters', 'anna-default.vrm')]
+      : [
+          join(__dirname, '..', '..', 'resources', 'characters', 'anna-default.vrm'),
+          join(app.getAppPath(), 'resources', 'characters', 'anna-default.vrm'),
+        ];
   const store = new MemoryStore({ path: join(app.getPath('userData'), 'memory.db') });
 
   /**
@@ -253,16 +262,14 @@ async function main(): Promise<void> {
   ipcMain.handle(IPC.characterLoad, async () => {
     const id = config.get().avatar.modelPath;
     const candidates = id
-      ? [join(charactersDir, basename(id)), defaultCharacterPath()]
-      : [defaultCharacterPath()];
+      ? [join(charactersDir, basename(id)), ...defaultCharacterPaths()]
+      : defaultCharacterPaths();
 
     for (const path of candidates) {
       try {
-        const bytes = await readFile(path);
-        console.log('[anna] character loaded from', path, bytes.length, 'bytes');
-        return bytes;
-      } catch (error) {
-        console.log('[anna] no character at', path, String(error).slice(0, 80));
+        return await readFile(path);
+      } catch {
+        // Try the next candidate; a missing character is never fatal.
       }
     }
     return null;
