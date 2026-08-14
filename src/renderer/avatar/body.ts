@@ -222,6 +222,7 @@ export class Body {
     if (state === this.#attention) return;
     this.#attention = state;
     this.#attentionWeight = 0;
+    console.log('[body] attention ->', state);
     // Re-decide where to look promptly on a state change: holding the previous
     // fixation through a turn boundary is exactly when it reads as a lag.
     this.#fixationAt = Math.min(this.#fixationAt, 0.25);
