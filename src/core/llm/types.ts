@@ -41,13 +41,14 @@ export interface LlmProvider {
 }
 
 export class LlmError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-    readonly provider?: string,
-  ) {
+  readonly status: number | undefined;
+  readonly provider: string | undefined;
+
+  constructor(message: string, status?: number, provider?: string) {
     super(message);
     this.name = 'LlmError';
+    this.status = status;
+    this.provider = provider;
   }
 
   /** True when retrying the same request might work. */

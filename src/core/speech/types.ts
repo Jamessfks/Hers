@@ -45,13 +45,14 @@ export interface TtsProvider {
 }
 
 export class TtsError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-    readonly provider?: string,
-  ) {
+  readonly status: number | undefined;
+  readonly provider: string | undefined;
+
+  constructor(message: string, status?: number, provider?: string) {
     super(message);
     this.name = 'TtsError';
+    this.status = status;
+    this.provider = provider;
   }
 }
 
@@ -99,14 +100,17 @@ export function base64ToBytes(base64: string): Uint8Array {
  */
 export class FrameAligner {
   #carry = new Uint8Array(0);
+  readonly #frameBytes: number;
 
-  constructor(private readonly frameBytes: number) {}
+  constructor(frameBytes: number) {
+    this.#frameBytes = frameBytes;
+  }
 
   push(bytes: Uint8Array): Uint8Array {
     const joined = new Uint8Array(this.#carry.length + bytes.length);
     joined.set(this.#carry);
     joined.set(bytes, this.#carry.length);
-    const usable = joined.length - (joined.length % this.frameBytes);
+    const usable = joined.length - (joined.length % this.#frameBytes);
     this.#carry = joined.subarray(usable);
     return joined.subarray(0, usable);
   }
