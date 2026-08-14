@@ -79,6 +79,55 @@ interface ActiveGesture {
   held: boolean;
 }
 
+/**
+ * How much of the time she looks at the person, per state.
+ *
+ * These are not invented. Conversation-analysis studies put gaze at the partner
+ * at roughly three quarters of the time while *listening* and under half while
+ * *speaking* — the listener holds a long look with short glances away, and the
+ * speaker looks away in long stretches and glances back to hand over the turn.
+ * Getting this backwards is what makes an avatar feel like it is staring, and
+ * making it constant is what makes one feel blind.
+ */
+const GAZE_AT_USER: Record<Attention, number> = {
+  idle: 0.35,
+  listening: 0.78,
+  thinking: 0.2,
+  speaking: 0.45,
+};
+
+/** How long one fixation lasts before she may look elsewhere, in seconds. */
+const FIXATION_SECONDS: Record<Attention, [number, number]> = {
+  idle: [1.6, 5.0],
+  listening: [1.8, 4.5],
+  thinking: [1.2, 3.0],
+  speaking: [0.9, 2.6],
+};
+
+/**
+ * Seconds between backchannel nods while listening.
+ *
+ * Listeners produce feedback every ten to twenty seconds in ordinary
+ * conversation, and the overwhelming majority of it is a head nod rather than a
+ * word. Continuer nods are also visibly *smaller* than agreement nods, which is
+ * why these fire at low intensity — a full nod every fifteen seconds reads as
+ * a bobblehead.
+ */
+const BACKCHANNEL_SECONDS: [number, number] = [9, 22];
+
+/** What Anna is doing, which changes how she holds herself. */
+export type Attention = 'idle' | 'listening' | 'thinking' | 'speaking';
+
+/** Posture bias per state, applied under the idle layer. */
+const ATTENTION_POSE: Record<Attention, Pose> = {
+  idle: {},
+  // Toward the person, chin slightly down: the shape of paying attention.
+  listening: { spine: [2.5, 0, 0], chest: [1.5, 0, 0], head: [2, 0, 0] },
+  // Weight back, head off to one side: the shape of working something out.
+  thinking: { spine: [-2, 0, 0], head: [-2, 6, 3], neck: [0, 3, 0] },
+  speaking: { chest: [1, 0, 0] },
+};
+
 /** How long a gesture fades in and out, as a fraction of its duration. */
 const FADE = 0.18;
 /** Never run more than this many clips at once; more reads as twitching. */
@@ -113,6 +162,16 @@ export class Body {
   readonly #saccadeTo = new Vector3();
   #saccadeAt = 0;
   #saccadeProgress = 1;
+
+  // Attention
+  #attention: Attention = 'idle';
+  #attentionWeight = 0;
+  /** True while she is looking away from the person during a fixation. */
+  #lookingAway = false;
+  #fixationAt = 0;
+  #backchannelAt = 0;
+  /** Mouth shape from the audio spectrum, rather than a guess. */
+  #viseme = { aa: 0, ih: 0, ou: 0, ss: 0 };
 
   #time = 0;
 
@@ -194,6 +253,28 @@ export class Body {
   }
 
   /**
+   * What Anna is doing right now.
+   *
+   * This is the difference between a character that performs at you and one
+   * that is in a conversation with you. Before this existed the avatar ran the
+   * identical idle loop whether you were typing, talking, or being answered —
+   * every reaction she had was to her own output, and none to yours.
+   */
+  setAttention(state: Attention): void {
+    if (state === this.#attention) return;
+    this.#attention = state;
+    this.#attentionWeight = 0;
+    // Re-decide where to look promptly on a state change: holding the previous
+    // fixation through a turn boundary is exactly when it reads as a lag.
+    this.#fixationAt = Math.min(this.#fixationAt, 0.25);
+    if (state === 'listening') this.#scheduleBackchannel();
+  }
+
+  get attention(): Attention {
+    return this.#attention;
+  }
+
+  /**
    * Drives the mouth from the speech envelope.
    *
    * Real viseme extraction needs phonemes, which needs either a forced aligner
@@ -204,8 +285,9 @@ export class Body {
    * mouth that snaps between open and closed, so the envelope is smoothed
    * asymmetrically: fast to open, slow to close, like a jaw.
    */
-  setSpeechEnergy(energy: number): void {
+  setSpeechEnergy(energy: number, viseme?: { aa: number; ih: number; ou: number; ss: number }): void {
     this.#mouthTarget = Math.min(1, Math.max(0, energy));
+    if (viseme) this.#viseme = viseme;
   }
 
   /** Everything stops. Used on barge-in. */
@@ -217,6 +299,8 @@ export class Body {
 
   update(deltaSeconds: number): void {
     this.#time += deltaSeconds;
+    this.#attentionWeight = Math.min(1, this.#attentionWeight + deltaSeconds * 3);
+    this.#advanceBackchannel(deltaSeconds);
     this.#resetToRest();
 
     const pose: Pose = {};
@@ -252,6 +336,15 @@ export class Body {
       [BoneName, [number, number, number]]
     >) {
       add(pose, bone, euler);
+    }
+
+    // Then the posture of whatever she is doing, eased in so a turn boundary
+    // does not snap her upright.
+    for (const [bone, euler] of Object.entries(ATTENTION_POSE[this.#attention]) as Array<
+      [BoneName, [number, number, number]]
+    >) {
+      const w = this.#attentionWeight;
+      add(pose, bone, [euler[0] * w, euler[1] * w, euler[2] * w]);
     }
 
     // Breathing, about 14 cycles a minute.
@@ -382,13 +475,25 @@ export class Body {
     if (!expressions) return;
 
     const open = this.#mouthOpen;
-    // Drift between three mouth shapes so the mouth is not a single hinge.
-    const aa = open * (0.6 + 0.4 * Math.sin(this.#vowel));
-    const ih = open * (0.3 + 0.3 * Math.sin(this.#vowel * 1.7 + 1.2));
-    const ou = open * (0.25 + 0.25 * Math.sin(this.#vowel * 0.9 + 2.4));
-    expressions.setValue('aa', aa);
-    expressions.setValue('ih', ih);
-    expressions.setValue('ou', ou);
+    const shape = this.#viseme;
+    const shaped = shape.aa + shape.ih + shape.ou + shape.ss;
+
+    if (shaped > 0) {
+      // Real mouth shapes, estimated from the spectrum rather than guessed.
+      // A fricative closes the jaw to a slit, so it scales the opening down
+      // rather than adding to it.
+      const jaw = open * (1 - shape.ss * 0.55);
+      expressions.setValue('aa', jaw * shape.aa);
+      expressions.setValue('ih', jaw * shape.ih + open * shape.ss * 0.45);
+      expressions.setValue('ou', jaw * shape.ou);
+    } else {
+      // No spectrum yet, or silence: fall back to a plain jaw so a missing
+      // analyser degrades to the old behaviour rather than to a closed mouth.
+      this.#vowel += 0;
+      expressions.setValue('aa', open * 0.7);
+      expressions.setValue('ih', open * 0.2);
+      expressions.setValue('ou', open * 0.15);
+    }
   }
 
   /**
@@ -454,8 +559,15 @@ export class Body {
 
     this.#advanceSaccade(delta);
 
+    this.#advanceFixation(delta);
+
+    // An explicit directive from Anna wins; otherwise the state's own policy
+    // decides whether she is looking at the person right now.
+    const mode =
+      this.#gazeMode === 'user' && this.#lookingAway ? this.#awayDirection() : this.#gazeMode;
+
     const base = new Vector3();
-    switch (this.#gazeMode) {
+    switch (mode) {
       case 'user':
         base.copy(this.#viewer);
         break;
@@ -481,6 +593,29 @@ export class Body {
     );
   }
 
+  /**
+   * Decides, once per fixation, whether to keep looking at the person.
+   *
+   * The ratio comes from {@link GAZE_AT_USER}; the point of doing it per
+   * fixation rather than per frame is that gaze is *held*. Re-rolling every
+   * frame at the same average would produce the same statistics and look like a
+   * malfunction.
+   */
+  #advanceFixation(delta: number): void {
+    this.#fixationAt -= delta;
+    if (this.#fixationAt > 0) return;
+
+    const [from, to] = FIXATION_SECONDS[this.#attention];
+    this.#fixationAt = from + Math.random() * (to - from);
+    this.#lookingAway = Math.random() > GAZE_AT_USER[this.#attention];
+  }
+
+  /** Where she looks when she looks away. Down reads as thought, aside as ease. */
+  #awayDirection(): 'away' | 'down' {
+    if (this.#attention === 'thinking') return Math.random() < 0.5 ? 'away' : 'down';
+    return 'away';
+  }
+
   #advanceSaccade(delta: number): void {
     this.#saccadeAt -= delta;
 
@@ -496,6 +631,28 @@ export class Body {
       const eased = this.#saccadeProgress * this.#saccadeProgress * (3 - 2 * this.#saccadeProgress);
       this.#saccade.lerpVectors(this.#saccade, this.#saccadeTo, eased);
     }
+  }
+
+  /**
+   * The nod that means "go on".
+   *
+   * Only while listening, only at low intensity, and never while she is
+   * gesturing for her own reasons. A listener who nods on a metronome is worse
+   * than one who does not nod at all, so the interval is redrawn every time.
+   */
+  #advanceBackchannel(delta: number): void {
+    if (this.#attention !== 'listening') return;
+    this.#backchannelAt -= delta;
+    if (this.#backchannelAt > 0) return;
+    this.#scheduleBackchannel();
+    if (this.#gestures.length === 0) {
+      this.playGesture('nod', 0.28 + Math.random() * 0.14);
+    }
+  }
+
+  #scheduleBackchannel(): void {
+    const [from, to] = BACKCHANNEL_SECONDS;
+    this.#backchannelAt = from + Math.random() * (to - from);
   }
 
   /** Picks the next fixation point: 3-6 degrees away, held 100-400ms. */

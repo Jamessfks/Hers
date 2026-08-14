@@ -197,6 +197,10 @@ document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click',
   window.setTimeout(() => window.anna.hide(), LEAVE_MS);
 });
 
+// She looks up the moment you start typing, not when the reply comes back.
+inputEl.addEventListener('focus', () => body?.setAttention('listening'));
+inputEl.addEventListener('input', () => body?.setAttention('listening'));
+
 inputEl.addEventListener('keydown', async (event) => {
   if (event.key !== 'Enter') return;
   const text = inputEl.value.trim();
@@ -217,7 +221,7 @@ function frame(now: number): void {
   previous = now;
 
   const energy = player.energy();
-  body?.setSpeechEnergy(energy);
+  body?.setSpeechEnergy(energy, player.viseme());
   body?.update(delta);
   placeholder?.update(delta, energy);
 
@@ -238,6 +242,10 @@ async function boot(): Promise<void> {
   });
   window.anna.onState((state) => {
     document.body.dataset['state'] = state;
+    // This is the line that makes her react to *you* rather than only to
+    // herself: listening, thinking and speaking each carry their own posture,
+    // gaze ratio and backchannel behaviour.
+    body?.setAttention(state);
   });
   window.anna.onTrouble(showTrouble);
   window.anna.onVisibility((visible) => {

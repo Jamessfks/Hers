@@ -142,9 +142,11 @@ async function main(): Promise<void> {
     situation.observe(sensed);
 
     if (sensed.kind === 'user-speech' && !sensed.final) {
-      // They started talking over her. Stop immediately; the transcript for
-      // what they said arrives separately, once they finish.
+      // They started talking. Stop her if she was mid-sentence — the transcript
+      // arrives separately once they finish — and either way put her into a
+      // listening posture now rather than when the words land.
       companion?.bargeIn();
+      send(IPC.state, 'listening');
       return;
     }
 
