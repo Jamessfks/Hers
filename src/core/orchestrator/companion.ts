@@ -6,7 +6,10 @@
  *
  * The number that decides whether this feels alive is the gap between the user
  * finishing a sentence and Anna making her first sound. Past roughly a second
- * it reads as a machine thinking. The budget is 800ms, and it is spent:
+ * it reads as a machine thinking.
+ *
+ * This class owns an 800ms budget measured **from the transcript being in
+ * hand**, and that is the number the tests assert:
  *
  *     ~120ms   model time-to-first-token
  *     ~180ms   enough tokens to make a first clause worth speaking
@@ -14,11 +17,21 @@
  *     ------
  *     ~390ms   typical, leaving headroom for a bad network
  *
- * That budget only works because three things overlap: the parser emits a
- * clause before the model has finished the sentence, synthesis of clause N+1
- * starts while clause N is still playing, and the body starts moving on the
- * first directive rather than waiting for audio. Serialise any one of them and
- * the budget is gone.
+ * It only works because three things overlap: the parser emits a clause before
+ * the model has finished the sentence, synthesis of clause N+1 starts while
+ * clause N is still playing, and the body starts moving on the first directive
+ * rather than waiting for audio. Serialise any one of them and it is gone.
+ *
+ * Be clear about what that budget does *not* cover. On the voice path, two
+ * things happen before this class is called at all:
+ *
+ *     ~420ms   silence before the VAD calls the utterance finished
+ *   300-900ms  a non-streaming transcription round trip
+ *
+ * So real end-of-speech to first audio is closer to 1.1-1.7s today. Typing to
+ * her hits the 390ms figure, because there is nothing in front of it. Closing
+ * that gap needs streaming transcription with interim results, which is the
+ * seam described at the top of core/speech/stt.ts — not a change here.
  *
  * ## Barge-in
  *
@@ -34,7 +47,7 @@ import type { ChatMessage, LlmProvider } from '../llm/types.ts';
 import { Attention, SituationTracker } from '../senses/attention.ts';
 import { Memory } from '../memory/memory.ts';
 import { PerformanceParser, spokenText } from '../persona/performance.ts';
-import { STYLE_EXAMPLES, buildSystemPrompt } from '../persona/anna.ts';
+import { buildSystemPrompt } from '../persona/anna.ts';
 
 /** How many clauses may be synthesised ahead of the one playing. */
 const SYNTHESIS_LOOKAHEAD = 2;
@@ -143,8 +156,11 @@ export class Companion {
         ...(input.openerReason && { openerReason: input.openerReason }),
       });
 
+      // Only real history goes in the message list. The style examples live
+      // inside the system prompt: as message turns the model cannot tell them
+      // from memory, and a fresh install opens by asking how the interview
+      // went — an interview that never happened.
       const messages: ChatMessage[] = [
-        ...STYLE_EXAMPLES,
         ...memory.liveTranscript().map(
           (turn): ChatMessage => ({
             role: turn.speaker === 'user' ? 'user' : 'assistant',

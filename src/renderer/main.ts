@@ -50,6 +50,7 @@ async function loadCharacter(path: string): Promise<void> {
     stage.scene.add(vrm.scene);
     frameFullBody(stage.camera, vrm);
     body = new Body(vrm);
+    body.setViewer(stage.camera.position);
     body.setExpression('warm', 0.6);
     placeholder?.dispose();
     placeholder = null;

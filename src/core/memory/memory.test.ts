@@ -209,3 +209,45 @@ test('a failing consolidation never throws into the conversation', async () => {
   memory.record('user', 'hi');
   await assert.doesNotReject(() => memory.consolidate());
 });
+
+test('retrieval does not pin a fact at the top of recall forever', async () => {
+  // Regression guard. `markRecalled` used to refresh `last_seen_at`, which made
+  // recency self-reinforcing: a retrieved fact reset its own recency to 1.0,
+  // which guaranteed it was retrieved again. The first facts learned would sit
+  // at the top of every recall for the life of the install, and nothing learned
+  // later could displace them.
+  let clock = 1_000_000;
+  const { store, memory } = fixture({ now: () => clock });
+
+  await memory.remember('event', 'He adopted a cat named Pixel.', { confidence: 0.6 });
+
+  // Two weeks of being retrieved every single turn.
+  for (let turn = 0; turn < 40; turn += 1) {
+    await memory.recall('anything at all');
+    clock += 8 * 60 * 60 * 1000;
+  }
+
+  const [old] = store.allFacts();
+  assert.ok((old?.recallCount ?? 0) >= 40, 'usage should still be counted');
+  assert.equal(old?.lastSeenAt, 1_000_000, 'retrieval must not refresh last_seen_at');
+
+  // Something new, said today, on an unrelated topic.
+  await memory.remember('event', 'He is moving to Seattle in March.', { confidence: 0.6 });
+  const hits = await memory.recallDetailed('unrelated query about the weather', 2);
+  assert.match(hits[0]?.text ?? '', /Seattle/, 'a fresh fact must be able to outrank a stale one');
+});
+
+test('usage is damped so a few incumbents cannot crowd out everything', async () => {
+  let clock = 1_000_000;
+  const { store, memory } = fixture({ now: () => clock });
+  await memory.remember('event', 'He adopted a cat named Pixel.');
+  await memory.remember('event', 'He is moving to Seattle in March.');
+
+  // Hammer the first fact's recall count far above the second's.
+  const [first] = store.allFacts();
+  store.markRecalled(Array.from({ length: 500 }, () => first!.id));
+
+  const hits = store.recall(null, { limit: 2, now: clock });
+  const spread = (hits[0]?.score ?? 0) - (hits[1]?.score ?? 0);
+  assert.ok(spread < 0.1, `usage should be damped, but it opened a ${spread.toFixed(3)} gap`);
+});

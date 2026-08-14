@@ -15,7 +15,7 @@ api.openai.com                        api.elevenlabs.io
 generativelanguage.googleapis.com     api.hume.ai
 ```
 
-That list is `grep -rho 'https://[a-z.]*' src/` minus the key-signup links that
+That list is `grep -rho 'https://[a-z0-9.-]*' src/` minus the signup links that
 open in your browser. If you configure only Anthropic and Cartesia, only those
 two are ever contacted.
 

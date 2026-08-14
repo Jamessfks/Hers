@@ -92,10 +92,7 @@ export class Memory {
   async recall(text: string, limit = 8): Promise<string[]> {
     const [query] = await this.#embedQuietly([text]);
     const hits = this.#store.recall(query ?? null, { limit, now: this.#now() });
-    this.#store.markRecalled(
-      hits.map((hit) => hit.id),
-      this.#now(),
-    );
+    this.#store.markRecalled(hits.map((hit) => hit.id));
     return hits.map((hit) => hit.text);
   }
 
