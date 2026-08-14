@@ -245,6 +245,7 @@ async function main(): Promise<void> {
       window.hide();
     }
     send(IPC.visibility, visible);
+    console.log('[anna] visibility ->', visible, 'window.isVisible:', window.isVisible());
     tray.refresh();
   }
 
