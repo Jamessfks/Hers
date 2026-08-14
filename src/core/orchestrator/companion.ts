@@ -43,7 +43,8 @@
 
 import type { AudioChunk, TtsProvider } from '../speech/types.ts';
 import type { BrainState, PerformanceEvent } from '../../shared/protocol.ts';
-import type { ChatMessage, LlmProvider } from '../llm/types.ts';
+import type { LlmProvider } from '../llm/types.ts';
+import { toConversation, validateConversation } from '../llm/conversation.ts';
 import { Attention, SituationTracker } from '../senses/attention.ts';
 import { Memory } from '../memory/memory.ts';
 import { PerformanceParser, spokenText } from '../persona/performance.ts';
@@ -159,7 +160,7 @@ export class Companion {
         memories,
         ...(memory.runningSummary() && { runningSummary: memory.runningSummary() }),
         situation: situation.describe(this.#now()),
-        turnsSoFar: memory.liveTranscript().length,
+        turnsSoFar: memory.turnCount(),
         ...(input.openerReason && { openerReason: input.openerReason }),
       });
 
@@ -167,18 +168,21 @@ export class Companion {
       // inside the system prompt: as message turns the model cannot tell them
       // from memory, and a fresh install opens by asking how the interview
       // went — an interview that never happened.
-      const transcript = memory.liveTranscript();
-      const messages: ChatMessage[] = [
-        ...transcript.map(
-          (turn): ChatMessage => ({
-            role: turn.speaker === 'user' ? 'user' : 'assistant',
-            content: turn.text,
-          }),
-        ),
-      ];
-      if (input.openerReason && messages.at(-1)?.role === 'assistant') {
-        // Providers reject two assistant turns in a row; give her a cue to
-        // answer instead. The cue is never spoken and never stored.
+      // Built rather than mapped: the window can start on one of Anna's turns
+      // and an interrupted reply can leave two user turns adjacent, both of
+      // which providers reject outright. See core/llm/conversation.ts.
+      const messages = toConversation(memory.liveTranscript());
+
+      const problem = validateConversation(messages);
+      if (problem && messages.length > 0) {
+        // Should be unreachable; if it ever is not, a log beats a vendor 400.
+        sinks.trouble(`Skipping a malformed turn (${problem}).`);
+      }
+
+      if (messages.length === 0 || messages.at(-1)?.role === 'assistant') {
+        // Every provider requires the list to end with a user turn. When Anna
+        // is opening, or the transcript is empty, give her a cue to answer.
+        // The cue is never spoken and never stored.
         messages.push({ role: 'user', content: '(they have not said anything)' });
       }
 

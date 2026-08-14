@@ -139,6 +139,13 @@ export class MemoryStore {
     return rows.map(toTurn);
   }
 
+  countTurnsInSession(sessionId: string): number {
+    const row = this.#db
+      .prepare('SELECT COUNT(*) AS n FROM turns WHERE session_id = ?')
+      .get(sessionId) as unknown as { n: number };
+    return row.n;
+  }
+
   countTurns(): number {
     const row = this.#db.prepare('SELECT COUNT(*) AS n FROM turns').get() as unknown as { n: number };
     return row.n;

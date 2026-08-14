@@ -120,6 +120,17 @@ export class Memory {
     return this.#store.turnsInSession(this.#sessionId, limit);
   }
 
+  /**
+   * Turns in the current conversation.
+   *
+   * Counted from the store rather than from `liveTranscript().length`, which is
+   * capped at 24 — so the prompt used to claim "24 turns" forever once a
+   * conversation got long, and ran a second full query to say it.
+   */
+  turnCount(): number {
+    return this.#store.countTurnsInSession(this.#sessionId);
+  }
+
   runningSummary(): string | undefined {
     return this.#store.latestSummary()?.text;
   }
