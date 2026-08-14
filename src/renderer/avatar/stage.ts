@@ -23,6 +23,7 @@ import {
   PointLight,
   Scene,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -126,7 +127,8 @@ export async function loadVrm(url: string): Promise<VRM> {
  */
 export function frameFullBody(camera: PerspectiveCamera, vrm: VRM): void {
   const head = vrm.humanoid?.getNormalizedBoneNode('head');
-  const height = head ? Math.max(1.0, head.getWorldPosition(camera.position.clone()).y * 1.12) : 1.6;
+  // Head height plus a bit for the skull above the bone.
+  const height = head ? Math.max(1.0, head.getWorldPosition(new Vector3()).y * 1.12) : 1.6;
 
   const vertical = (camera.fov * Math.PI) / 180;
   // Fit the full height plus 12% headroom into the frame.
