@@ -59,7 +59,11 @@ export class SynthesisGovernor {
    * a semaphore quietly stops limiting anything.
    */
   async acquire(): Promise<() => void> {
-    if (this.#inFlight >= this.#limit) {
+    // A loop, not an if: `reportRateLimit` can lower the ceiling while callers
+    // are already queued, and a single check would let every one of them
+    // through on the next release — straight back into the 429 we just learned
+    // about.
+    while (this.#inFlight >= this.#limit) {
       await new Promise<void>((resolve) => this.#waiting.push(resolve));
     }
     this.#inFlight += 1;

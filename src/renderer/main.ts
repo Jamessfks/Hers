@@ -274,19 +274,50 @@ async function boot(): Promise<void> {
   const microphone = new Microphone({
     onUtterance: (audio, mimeType) =>
       window.anna.sense({ kind: 'user-audio', audio, mimeType, at: Date.now() }),
-    // Reported the instant speech is detected, before the utterance ends, so
-    // main can cut Anna off mid-sentence rather than after it.
+    // Reported once speech is confirmed rather than on the first loud sample,
+    // so a keystroke or a chair does not cut her off with nothing following.
     onSpeechStarted: () =>
       window.anna.sense({ kind: 'user-speech', text: '', final: false, at: Date.now() }),
+    isSelfSpeaking: () => player.speaking,
   });
-  if (config.senses.microphone) await microphone.start();
 
   const vision = new Vision({
     intervalSeconds: config.senses.cameraIntervalSeconds,
     onFrame: (jpegBase64) =>
       window.anna.sense({ kind: 'camera-frame', jpegBase64, at: Date.now() }),
   });
-  if (config.senses.camera) await vision.start();
+
+  /**
+   * Start and stop the sensors to match the settings, now and whenever they
+   * change.
+   *
+   * These used to be started once at boot and never revisited, so turning the
+   * camera on mid-session did nothing until a relaunch — and turning it *off*
+   * left the green light on and frames flowing over IPC, with the main process
+   * quietly discarding them. For a permission the user just revoked, that is
+   * the worst possible behaviour.
+   */
+  async function applySenses(next: AnnaConfig): Promise<void> {
+    try {
+      if (next.senses.microphone) await microphone.start();
+      else microphone.stop();
+    } catch (error) {
+      showTrouble(error instanceof Error ? error.message : 'The microphone would not start.');
+    }
+
+    try {
+      if (next.senses.camera) await vision.start();
+      else vision.stop();
+    } catch (error) {
+      showTrouble(error instanceof Error ? error.message : 'The camera would not start.');
+    }
+  }
+
+  window.anna.onConfigChanged((next) => {
+    config = next;
+    void applySenses(next);
+  });
+  await applySenses(config);
 
   requestAnimationFrame(frame);
 }

@@ -64,3 +64,22 @@ test('recognises the shapes a rate limit actually arrives in', () => {
   assert.equal(isRateLimit(new Error('Invalid transcript')), false);
   assert.equal(isRateLimit(null), false);
 });
+
+test('lowering the limit does not admit already-queued waiters', async () => {
+  // A single `if` check let every queued caller through on the next release,
+  // straight back into the 429 the limit was just lowered because of.
+  const governor = new SynthesisGovernor({ limit: 2 });
+  const a = await governor.acquire();
+  const b = await governor.acquire();
+
+  let admitted = 0;
+  void governor.acquire().then(() => { admitted += 1; });
+  void governor.acquire().then(() => { admitted += 1; });
+
+  governor.reportRateLimit(); // limit is now 1
+  a();
+  b();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(admitted, 1, `limit is 1, but ${admitted} were admitted at once`);
+  assert.ok(governor.inFlight <= governor.limit);
+});

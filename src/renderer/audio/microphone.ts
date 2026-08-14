@@ -30,8 +30,18 @@ const MIN_UTTERANCE_MS = 320;
 
 export interface MicrophoneOptions {
   onUtterance(audio: Uint8Array, mimeType: string): void;
-  /** Fired as soon as speech starts, so Anna can be interrupted. */
+  /**
+   * Fired once speech is *confirmed*, so Anna can be interrupted.
+   *
+   * Deliberately not fired on the first loud sample. A keystroke, a chair or
+   * her own voice through the speakers all cross the open threshold, and the
+   * gate below discards anything shorter than MIN_UTTERANCE_MS — so firing
+   * early meant she stopped dead mid-word with no transcript ever arriving,
+   * leaving the session stuck in `listening` until the user typed.
+   */
   onSpeechStarted(): void;
+  /** True while Anna is speaking, so the room's echo of her is not a barge-in. */
+  isSelfSpeaking?(): boolean;
 }
 
 export class Microphone {
@@ -41,6 +51,7 @@ export class Microphone {
   #recorder: MediaRecorder | null = null;
   #chunks: Blob[] = [];
   #speaking = false;
+  #confirmed = false;
   #startedAt = 0;
   #silenceSince = 0;
   #raf = 0;
@@ -89,11 +100,14 @@ export class Microphone {
     const now = performance.now();
 
     if (!this.#speaking && level > OPEN_THRESHOLD) {
+      // Anna's own voice coming back through the speakers is not the user
+      // interrupting. Echo cancellation helps but does not survive volume.
+      if (this.#options.isSelfSpeaking?.()) return;
       this.#speaking = true;
+      this.#confirmed = false;
       this.#startedAt = now;
       this.#silenceSince = 0;
       this.#beginRecording(mimeType);
-      this.#options.onSpeechStarted();
       return;
     }
 
@@ -101,6 +115,12 @@ export class Microphone {
 
     if (level > CLOSE_THRESHOLD) {
       this.#silenceSince = 0;
+      // Only now is this real speech rather than a cough or a keystroke —
+      // and only now is it worth cutting Anna off.
+      if (!this.#confirmed && now - this.#startedAt >= MIN_UTTERANCE_MS) {
+        this.#confirmed = true;
+        this.#options.onSpeechStarted();
+      }
       return;
     }
 
@@ -109,7 +129,8 @@ export class Microphone {
 
     this.#speaking = false;
     const duration = now - this.#startedAt;
-    this.#endRecording(duration >= MIN_UTTERANCE_MS, mimeType);
+    this.#endRecording(this.#confirmed && duration >= MIN_UTTERANCE_MS, mimeType);
+    this.#confirmed = false;
   }
 
   #beginRecording(mimeType: string): void {

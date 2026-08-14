@@ -156,6 +156,16 @@ async function main(): Promise<void> {
   }
 
   function refresh(): void {
+    /*
+     * Stop the outgoing companion first.
+     *
+     * Any config change rebuilds this — a menu-bar toggle, a settings write, a
+     * new key. Without the barge-in the old instance keeps streaming audio and
+     * writing memory while the new one takes over, so a toggle mid-sentence
+     * gives you two Annas talking, and the new one's bargeIn() cannot stop the
+     * old one because it holds a different AbortController.
+     */
+    companion?.bargeIn();
     attention.setPolicy(config.get().presence);
     companion = buildCompanion();
   }
@@ -468,7 +478,15 @@ async function main(): Promise<void> {
     setInterval(async () => {
       if (!config.get().senses.calendar) return;
       const next = await readNextEvent();
-      if (next) situation.observe({ kind: 'calendar', ...next, at: Date.now() });
+      // Overwrite unconditionally: only reporting a hit meant a finished
+      // meeting stayed in her situation for the rest of the day, and the
+      // calendar opener re-fired about it every 45 minutes.
+      situation.observe({
+        kind: 'calendar',
+        summary: next?.summary ?? '',
+        startsInMinutes: next?.startsInMinutes ?? -1,
+        at: Date.now(),
+      });
     }, CALENDAR_POLL_MS),
   );
 
@@ -506,9 +524,13 @@ async function main(): Promise<void> {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void main();
-  });
+  /*
+   * Re-running main() would call ipcMain.handle twice — which throws — and
+   * register a second ipcMain.on(sense) listener, so every message would be
+   * answered twice. She lives in the menu bar; showing the existing window is
+   * the whole job.
+   */
+  app.on('activate', () => setVisible(true));
 }
 
 void main();

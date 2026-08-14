@@ -239,7 +239,10 @@ export class SituationTracker {
       case 'presence': {
         if (event.present) this.#lastPresentAt = event.at;
         this.#present = event.present;
-        this.#read = event.read;
+        // Only replace the visual read when this event carries one. The 20s
+        // activity poll emits presence with no `read`, which used to wipe the
+        // camera's description about twenty seconds after every 45s frame.
+        if (event.read !== undefined) this.#read = event.read;
         break;
       }
       case 'activity': {
@@ -252,7 +255,12 @@ export class SituationTracker {
         break;
       }
       case 'calendar': {
-        this.#nextEvent = { summary: event.summary, startsInMinutes: event.startsInMinutes };
+        // A negative or empty event means "nothing coming up" — which has to
+        // clear the old one, or a finished meeting is reported all day.
+        this.#nextEvent =
+          event.summary && event.startsInMinutes >= 0
+            ? { summary: event.summary, startsInMinutes: event.startsInMinutes }
+            : undefined;
         break;
       }
       case 'user-speech':
