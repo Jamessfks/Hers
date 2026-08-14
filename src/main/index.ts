@@ -51,6 +51,15 @@ async function main(): Promise<void> {
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
   const charactersDir = join(app.getPath('userData'), 'characters');
+
+  /**
+   * The bundled default, which lives beside the asar rather than inside it —
+   * it is 15MB and is never imported by code, only read as a file.
+   */
+  const defaultCharacterPath = (): string =>
+    app.isPackaged
+      ? join(process.resourcesPath, 'characters', 'anna-default.vrm')
+      : join(app.getAppPath(), 'resources', 'characters', 'anna-default.vrm');
   const store = new MemoryStore({ path: join(app.getPath('userData'), 'memory.db') });
 
   /**
@@ -232,14 +241,31 @@ async function main(): Promise<void> {
     }
   });
 
+  /**
+   * Hand the renderer the character bytes.
+   *
+   * Falls back to the bundled default when the user has not chosen one. The
+   * default is a CC0 VRoid sample — see scripts/fetch-character.mjs for why
+   * that licence and no other — and it is what makes the first run show a
+   * person rather than a placeholder. If it is absent, because the build-time
+   * fetch was skipped or offline, the renderer draws the stand-in figure.
+   */
   ipcMain.handle(IPC.characterLoad, async () => {
     const id = config.get().avatar.modelPath;
-    if (!id) return null;
-    try {
-      return await readFile(join(charactersDir, basename(id)));
-    } catch {
-      return null;
+    const candidates = id
+      ? [join(charactersDir, basename(id)), defaultCharacterPath()]
+      : [defaultCharacterPath()];
+
+    for (const path of candidates) {
+      try {
+        const bytes = await readFile(path);
+        console.log('[anna] character loaded from', path, bytes.length, 'bytes');
+        return bytes;
+      } catch (error) {
+        console.log('[anna] no character at', path, String(error).slice(0, 80));
+      }
     }
+    return null;
   });
 
   // -- Settings window and menu bar ----------------------------------------

@@ -224,9 +224,10 @@ async function boot(): Promise<void> {
   });
   window.anna.onTrouble(showTrouble);
 
-  // The stored character comes back as bytes, not a path: the renderer has no
-  // filesystem access, and a blob URL is the only thing the loader can take.
-  const stored = config.avatar.modelPath ? await window.anna.loadCharacter() : null;
+  // Always ask: main answers with the chosen character, or with the bundled
+  // CC0 default, or with nothing. The renderer has no filesystem access, so
+  // bytes plus a blob URL is the only route the loader can take.
+  const stored = await window.anna.loadCharacter();
   await loadCharacter(stored ? URL.createObjectURL(new Blob([stored as BlobPart])) : '');
   trackPointer();
 
