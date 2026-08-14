@@ -41,6 +41,44 @@ const GESTURES = new Set<string>(GESTURE_NAMES);
 const EXPRESSIONS = new Set<string>(EXPRESSION_NAMES);
 const GAZE_TARGETS = new Set(['user', 'away', 'down', 'screen']);
 
+/**
+ * Every prefix of every directive name.
+ *
+ * Anna is a companion, not a chat window: she talks about brackets, arrays and
+ * code, and a naive parser treats the `[` in "I saw a [ and kept going" as an
+ * open tag and eats the rest of the sentence. Because the vocabulary is closed,
+ * we can tell the difference after a single character — the moment the
+ * fragment stops being a possible directive, it was never a directive.
+ */
+const DIRECTIVE_PREFIXES = new Set<string>(
+  [...GESTURE_NAMES, ...EXPRESSION_NAMES, 'gaze'].flatMap((name) =>
+    Array.from({ length: name.length + 1 }, (_, i) => name.slice(0, i)),
+  ),
+);
+
+/** Characters legal in the argument half of a directive, e.g. `nod x0.4`. */
+const LEGAL_ARG = /^[a-z0-9_.\s]*$/;
+
+/**
+ * Longest a `[...]` run may get before we conclude it is prose. The longest
+ * real directive is `[reach_toward_user x0.8]`; 48 leaves generous headroom
+ * while still rescuing a sentence that merely happens to contain a bracket.
+ */
+const MAX_TAG_LENGTH = 48;
+
+/**
+ * Could this partial tag body still become a valid directive?
+ *
+ * Used only at end-of-stream, to tell a genuinely truncated `[lean_i` (drop it)
+ * from a bracket the user's sentence happened to contain (speak it).
+ */
+export function couldBeDirectivePrefix(fragment: string): boolean {
+  const body = fragment.replace(/^\s+/, '').toLowerCase();
+  const split = body.search(/[\s:]/);
+  if (split === -1) return DIRECTIVE_PREFIXES.has(body);
+  return DIRECTIVE_PREFIXES.has(body.slice(0, split)) && LEGAL_ARG.test(body.slice(split + 1));
+}
+
 /** Characters that end a clause and therefore flush a chunk to the voice. */
 const CLAUSE_END = /[.!?…]|--|—/;
 /** A soft break: used only once a clause has grown past {@link SOFT_BREAK_MIN}. */
@@ -87,15 +125,26 @@ export class PerformanceParser {
           const event = toPerformanceEvent(this.#tag);
           if (event) events.push(event);
           this.#tag = null;
-        } else if (char === '[' || this.#tag.length > 40) {
-          // Never opened a real tag. Treat what we swallowed as speech so we
-          // do not silently eat the user's reply.
-          this.#speech += `[${this.#tag}`;
-          this.#tag = char === '[' ? '' : null;
-          if (this.#tag === null) this.#speech += char;
-        } else {
-          this.#tag += char;
+          continue;
         }
+
+        const grown = this.#tag + char;
+        if (grown.length <= MAX_TAG_LENGTH && char !== '\n') {
+          this.#tag = grown;
+          continue;
+        }
+
+        // Too long, or spanning a line: a directive is neither. Give the text
+        // back to the speech buffer verbatim so we never silently eat a
+        // sentence, and reprocess the current character as ordinary speech.
+        this.#speech += `[${this.#tag}`;
+        this.#tag = null;
+        if (char === '[') {
+          this.#tag = '';
+          continue;
+        }
+        this.#speech += char;
+        events.push(...this.#flushIfReady(false));
         continue;
       }
 
@@ -116,7 +165,11 @@ export class PerformanceParser {
 
   /** Call once the model stream ends. Flushes the tail. */
   end(): PerformanceEvent[] {
-    this.#tag = null; // discard any unterminated tag
+    if (this.#tag !== null) {
+      // A truncated directive is dropped; anything else was prose all along.
+      if (!couldBeDirectivePrefix(this.#tag)) this.#speech += `[${this.#tag}`;
+      this.#tag = null;
+    }
     const text = normalize(this.#speech);
     this.#speech = '';
     return text ? [{ kind: 'say', text, clauseId: this.#clauseId++ }] : [];
