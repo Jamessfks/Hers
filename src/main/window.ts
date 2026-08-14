@@ -83,9 +83,17 @@ export function createAnnaWindow(): AnnaWindow {
   window.setAlwaysOnTop(true, 'screen-saver');
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  // Excluded from screen capture by default: a companion who turns up in a
-  // shared screen during a work call is a betrayal, not a feature. Set
-  // ANNA_ALLOW_CAPTURE=1 when you actually want her in a recording or a demo.
+  /*
+   * Excluded from screen capture by default: a companion who turns up in a
+   * shared screen during a work call is a betrayal, not a feature. Set
+   * ANNA_ALLOW_CAPTURE=1 when you actually want her in a recording or a demo.
+   *
+   * Worth knowing before you debug the wrong thing: this makes her invisible to
+   * `screencapture` and to any screen-recording tool, while remaining perfectly
+   * visible on the display. A screenshot of an apparently empty panel is the
+   * expected result, not a rendering failure — that misdiagnosis has cost real
+   * time twice.
+   */
   window.setContentProtection(process.env['ANNA_ALLOW_CAPTURE'] !== '1');
 
   window.once('ready-to-show', () => window.showInactive());
