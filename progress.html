@@ -404,6 +404,13 @@
         top: 1px;
       }
 
+      /* The 6px hatch is unreadable at swatch size, so the headroom key gets a
+         flat, outlined chip instead. */
+      .legend .swatch.seg-head {
+        background: #171c22;
+        border: 1px solid #2a323c;
+      }
+
       .legend .ms {
         font-family: var(--mono);
         color: var(--ink);

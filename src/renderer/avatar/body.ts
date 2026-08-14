@@ -105,6 +105,13 @@ export class Body {
   // Gaze
   readonly #gazeTarget = new Object3D();
   #gazeMode: 'user' | 'away' | 'down' | 'screen' = 'user';
+  /** Where the person actually is, in world space. See {@link setViewer}. */
+  readonly #viewer = new Vector3(0, 1.1, 3.8);
+  /** Current and next saccade offsets, in radians of arc. */
+  readonly #saccade = new Vector3();
+  readonly #saccadeTo = new Vector3();
+  #saccadeAt = 0;
+  #saccadeProgress = 1;
 
   #time = 0;
 
@@ -114,6 +121,20 @@ export class Body {
     vrm.scene.add(this.#gazeTarget);
     if (vrm.lookAt) vrm.lookAt.target = this.#gazeTarget;
     this.#blinkAt = 1.5 + Math.random() * 2.5;
+    this.#scheduleSaccade(0);
+  }
+
+  /**
+   * Tell Anna where the person watching her is sitting.
+   *
+   * Without this she looks at a point straight out from her own head, which for
+   * a figure framed head-to-toe is well above and behind the viewer — she
+   * spends the entire conversation staring over your shoulder. Eye contact is
+   * the single cheapest thing that separates a character from a mannequin, and
+   * it is worth a parameter.
+   */
+  setViewer(position: Vector3): void {
+    this.#viewer.copy(position);
   }
 
   // -- Commands from the brain ---------------------------------------------
