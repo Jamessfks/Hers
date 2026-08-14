@@ -141,12 +141,29 @@ export function frameFullBody(camera: PerspectiveCamera, vrm: VRM): void {
  * it believes they are standing on it.
  */
 export function frameHeight(camera: PerspectiveCamera, height: number): void {
-  const HEADROOM = 1.3;
-  const framed = height * HEADROOM;
+  /*
+   * Headroom above her, and floor beneath her.
+   *
+   * The previous version put every bit of the slack above her head and none
+   * below: the visible range was exactly [0, framed], so her feet landed on the
+   * very last row of pixels. The comment above claimed "the eye needs to see a
+   * little floor" while the code guaranteed there was none — measured at
+   * exactly 0px of floor, which is why she read as standing on the bottom edge
+   * of a sheet rather than inside a box.
+   *
+   * FLOOR is the fraction of her height left visible below her feet. Small: a
+   * person in a room is close to the bottom of the frame, and every pixel spent
+   * on floor is a pixel not spent on a face that is already only ~35px tall.
+   */
+  const HEADROOM = 1.22;
+  const FLOOR = 0.07;
+  const framed = height * (HEADROOM + FLOOR);
   const vertical = (camera.fov * Math.PI) / 180;
   const distance = framed / (2 * Math.tan(vertical / 2));
 
-  camera.position.set(0, framed / 2, distance);
-  camera.lookAt(0, framed / 2, 0);
+  // Drop the centre so the visible range becomes [-floor, framed - floor].
+  const centre = framed / 2 - height * FLOOR;
+  camera.position.set(0, centre, distance);
+  camera.lookAt(0, centre, 0);
   camera.updateProjectionMatrix();
 }

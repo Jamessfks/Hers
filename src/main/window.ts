@@ -35,8 +35,18 @@ import { join } from 'node:path';
  * guessing at her silhouette on every pointer move. A panel is simply a panel:
  * clicks inside belong to her, clicks outside do not.
  */
-const WIDTH = 360;
-const HEIGHT = 560;
+/*
+ * Sized so the *stage* is bigger than it was, not just the panel.
+ *
+ * The bezel and the composer take about 32px horizontally and 90px vertically,
+ * so a 360x560 panel left a 328x470 volume — smaller than the borderless
+ * version it replaced. At that size her face is roughly 35px tall and every
+ * expression, gaze shift and viseme the renderer computes is invisible. This is
+ * the real constraint a Proto solves with a 21.5" screen and a desktop panel
+ * cannot: a full body and a readable face are in direct competition.
+ */
+const WIDTH = 420;
+const HEIGHT = 680;
 /** Gap from the screen edges, so she is not jammed into the corner. */
 const MARGIN = 28;
 

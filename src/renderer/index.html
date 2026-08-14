@@ -22,9 +22,18 @@
         because -webkit-app-region: drag swallows every event inside it.
       -->
       <div id="grip" aria-hidden="true"></div>
-      <canvas id="stage"></canvas>
 
-      <div id="subtitle" aria-live="polite"></div>
+      <!--
+        The stage is a well inside the bezel, not the whole panel. A Proto has
+        an opaque enclosure with visible walls and a floor, and nothing of the
+        room inside it; the figure stands in a lit volume. Putting the canvas
+        and the subtitle in their own container is what makes that possible.
+      -->
+      <div id="well">
+        <canvas id="stage"></canvas>
+        <div id="floor" aria-hidden="true"></div>
+        <div id="subtitle" aria-live="polite"></div>
+      </div>
 
       <div id="composer" hidden>
         <input
