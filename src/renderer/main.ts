@@ -200,6 +200,35 @@ function frame(now: number): void {
 }
 
 // ---------------------------------------------------------------------------
+// The two buttons
+// ---------------------------------------------------------------------------
+
+/*
+ * These were lost once already.
+ *
+ * They used to sit inside the block that did click-through hit-testing, and
+ * when that block was deleted — correctly, since a bounded panel is always
+ * interactive — both handlers went with it. Nothing failed: the buttons still
+ * rendered, still highlighted on hover, and did nothing at all when clicked.
+ * They live in their own section now so the next deletion has to be deliberate.
+ */
+
+document
+  .querySelector<HTMLButtonElement>('#settings')!
+  .addEventListener('click', () => window.anna.openSettings());
+
+/** How long the leaving animation runs before the window is actually hidden. */
+const LEAVE_MS = 240;
+
+document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click', () => {
+  // Fade first, hide once it finishes, so she leaves rather than blinking out.
+  appEl.dataset['leaving'] = 'true';
+  player.stop();
+  body?.silence();
+  window.setTimeout(() => window.anna.hide(), LEAVE_MS);
+});
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 
