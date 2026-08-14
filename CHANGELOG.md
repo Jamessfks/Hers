@@ -1,5 +1,76 @@
 # Changelog
 
+## 1.1.0 — 2026-08-14
+
+### The model picker was quietly broken
+
+Switching language provider kept the old provider's model. Going from Anthropic
+to OpenAI left `claude-sonnet-5` configured, so every request failed with a
+vendor error nobody would trace back to a dropdown they had touched a minute
+earlier. Model names also lived in two places — each provider and the settings
+window — free to drift apart.
+
+Now there is one catalogue, and `resolveModel` is a pure function that *cannot*
+return a model belonging to another vendor. It prefers what you last chose for
+that provider, keeps a custom or fine-tuned id if the provider offers it, and
+falls back through the catalogue. Planting the corrupt state on disk and
+launching now self-heals it.
+
+The picker also fetches your account's **real** model list — `GET /v1/models` on
+Anthropic and OpenAI, `models?pageSize` on Google — filtered to models Anna can
+actually hold a conversation through, so it no longer opens on `babbage-002`.
+Falls back to the built-in list when there is no key or no network, and says
+which one you are looking at.
+
+### The key settings are finished
+
+- **Remove** a stored key. The handler existed; nothing called it.
+- **Reveal** what you just pasted, to check it before committing.
+- **A warning when a key is in the wrong box** — three key fields and three
+  vendors with distinct prefixes makes this the most common mistake here, and
+  "401 authentication_error" is a poor way to discover it.
+- Real clickable links to each provider's key page, opened in your browser.
+- `stt.openai` could not be stored at all despite being selectable.
+
+### She reacts to you, not only to herself
+
+`BrainState` reached the renderer and died there on a CSS attribute — it never
+touched the avatar. Whether you were typing, talking, or being answered, she ran
+the identical idle loop. Every reaction she had was to her own output.
+
+Now listening, thinking and speaking each carry their own posture, gaze
+behaviour and backchannel. The numbers come from conversation analysis rather
+than taste: people hold their partner's gaze roughly three quarters of the time
+while **listening** and under half while **speaking**, so she does too, in held
+fixations rather than a constant stare. While listening she nods every ten to
+twenty seconds at low intensity, which is what listeners actually do.
+
+### Lip sync stopped being a hinge
+
+The mouth was driven by loudness with a sine drift between three shapes, so it
+opened the same way for "ee" as for "oh". It now estimates the vowel from the
+audio spectrum — F1 for how open the jaw is, F2 for tongue position, and a top
+band for fricatives, which close the mouth to a slit rather than opening it.
+Provider-agnostic, no extra latency, one extra FFT read per frame.
+
+### Tests
+
+131, up from 76. The new ones are mock-based: an injected `fetch` exercises each
+LLM adapter against recorded vendor payloads including the failure shapes — a
+mid-stream error arriving under HTTP 200, OpenAI's non-JSON `[DONE]` sentinel, a
+Gemini safety block, a 429, an offline network — none of which a live account
+will produce on demand.
+
+### Known limits, updated
+
+- Gesture *choice* is semantic but its *timing* is not: a directive fires when
+  it is parsed, while the audio for that clause arrives later. Cartesia's
+  `add_timestamps` / `add_phoneme_timestamps` on the same SSE stream would
+  anchor both gestures and visemes to the audio clock at no latency cost. That
+  is the next thing worth doing.
+- Anna's gaze aims at a fixed viewer position, not at where your head actually
+  is.
+
 ## 1.0.0 — 2026-08-14
 
 First release. Anna is a full-body AI companion in a transparent, always-on-top

@@ -156,14 +156,18 @@ boundary is where it is, is in
 
 ```bash
 npm run dev        # run with hot reload
-npm test           # 76 unit tests, no network, no mocks of our own code
+npm test           # 131 unit tests, no network
 npm run typecheck  # strict, noUncheckedIndexedAccess
 npm run build      # production bundle
 npm run dist:mac   # fetch character, build, package a .dmg
 ```
 
 Tests run on Node's built-in runner with native type stripping — no Jest, no
-ts-node, no transform step. They cover the parts where being wrong is silent:
+ts-node, no transform step. Provider adapters are tested against recorded vendor
+payloads through an injected `fetch`, which is the only way to cover the half
+that matters: a mid-stream error arriving under HTTP 200, OpenAI's non-JSON
+`[DONE]` sentinel, a Gemini safety block, a 429, an offline network. The rest
+cover the parts where being wrong is silent:
 the streaming directive parser, SSE framing across chunk boundaries, PCM frame
 alignment, memory ranking, the attention policy, and the turn loop's latency and
 ordering guarantees.
@@ -195,6 +199,12 @@ Stated plainly, because a README that implies otherwise wastes your time.
 - **She has no persistent mood.** Anna remembers what you told her, but nothing
   about how you have treated her carries between turns, so there is nothing to
   win or lose with her. Ani has an affection score; this does not.
+- **Gesture timing is not anchored to the audio.** A directive fires when it is
+  parsed; the audio for that clause arrives later, so a `[nod]` can drift off
+  its own words. Cartesia's `add_timestamps` on the same SSE stream would fix
+  this and give true phoneme visemes at no latency cost — the next thing worth
+  building.
+- **Her gaze aims at a fixed viewer position**, not at where your head is.
 
 ## Licence
 
