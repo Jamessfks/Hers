@@ -289,21 +289,31 @@ async function main(): Promise<void> {
       const { text } = await stt.transcribe(audio, mimeType);
       if (!text) return;
       situation.observe({ kind: 'user-speech', text, final: true, at: Date.now() });
-      await companion?.respondTo(text);
+      diag.startTurn('user', config.get().llm.model, text.length);
+
+      /*
+       * The same fresh-look check the typed path does.
+       *
+       * This branch used to skip it entirely, so asking "can you see me?" out
+       * loud — the most natural way anyone would ask — never took a look, while
+       * typing the identical words did. Voice is the path most likely to carry
+       * that question, so it was missing on exactly the input it was built for.
+       */
+      if (needsFreshLook(text)) {
+        diag.note('fresh-look-requested', { via: 'voice' });
+        await lookNow();
+      }
+      await currentCompanion()?.respondTo(text);
     } catch (error) {
       send(IPC.trouble, error instanceof Error ? error.message : 'I did not catch that.');
     }
   }
 
-  /**
-   * Turns a camera frame into a one-clause read of the user.
-   *
-   * The frame is used and dropped. Only the sentence reaches the situation, and
-   * only the situation reaches the model that Anna talks with.
-   */
   /** Resolvers waiting on the next camera frame. See `lookNow`. */
   let awaitingFrame: Array<() => void> = [];
-  let lastRead: { text: string; at: number } | undefined;
+  let lastRead: string | undefined;
+  /** Set for the next capture only, when the user asked her to look. */
+  let lookRequested = false;
 
   /**
    * Ask for a frame and wait for the read, briefly.
@@ -314,6 +324,7 @@ async function main(): Promise<void> {
    */
   async function lookNow(timeoutMs = 2500): Promise<void> {
     if (!config.get().senses.camera) return;
+    lookRequested = true;
     send(IPC.cameraCapture, true);
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -327,44 +338,65 @@ async function main(): Promise<void> {
     });
   }
 
+  /**
+   * Turns a camera frame into what she has seen.
+   *
+   * The frame is used and dropped. Only the sentence reaches the situation, and
+   * only the situation reaches the model that Anna talks with.
+   *
+   * Note what this deliberately does NOT do: write `present`. A dark room, a
+   * hand over the lens or a failed call is not the user leaving, and treating
+   * it as such used to silence every opener she had — including the calendar
+   * and late-night ones, which never involved the camera at all.
+   */
   async function look(jpegBase64: string): Promise<void> {
     const settings = config.get();
     const key = secrets.get(`llm.${settings.llm.provider}` as SecretName);
     if (!key || !settings.senses.camera) return;
-    const read = await describePerson({
+
+    const requested = lookRequested;
+    lookRequested = false;
+
+    const { read, distressed } = await describePerson({
       provider: settings.llm.provider,
       apiKey: key,
       jpegBase64,
+      ...(requested && { requested: true }),
     });
-    const changed = read !== null && readChanged(lastRead?.text, read);
+
+    const changed = read !== null && readChanged(lastRead, read);
     diag.note('vision-read', {
       got: read !== null,
       chars: read?.length ?? 0,
       changed,
+      distressed,
+      requested,
     });
 
-    const at = Date.now();
-    if (read) lastRead = { text: read, at };
-    situation.observe({
-      kind: 'presence',
-      present: read !== null,
-      // Only pass the read on when it says something new. Repeating the same
-      // observation every time the timer fires is how a companion turns into a
-      // smoke alarm about your posture.
-      ...(read && changed && { read }),
-      at,
-    });
+    if (read) {
+      /*
+       * `lastRead` only advances when the description actually changed.
+       *
+       * Comparing each read against the immediately previous one let slow drift
+       * through unnoticed: upright to collapsed over ten minutes is a large
+       * change made of small ones, and every individual step stayed under the
+       * similarity threshold. Comparing against the last read she *reported*
+       * means the drift accumulates until it is worth saying.
+       */
+      if (changed) lastRead = read;
+      situation.observe({
+        kind: 'presence',
+        read,
+        readChanged: changed,
+        distressed,
+        at: Date.now(),
+      });
+    }
 
-    // Release anything waiting on a fresh look.
     const waiters = awaitingFrame;
     awaitingFrame = [];
     for (const resolve of waiters) resolve();
   }
-
-  ipcMain.on(IPC.bodyReport, (_event, name: string, detail: Record<string, unknown>) => {
-    diag.note(`body:${name}`, detail);
-    if (name.startsWith('error')) console.error('[anna:body]', name, detail);
-  });
 
   ipcMain.handle(IPC.configGet, () => config.get());
   ipcMain.handle(IPC.configSet, (_event, patch) => {
