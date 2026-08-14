@@ -299,7 +299,14 @@ button[data-reveal]:hover,
   color: var(--ink);
 }
 
-button[hidden] {
+/*
+ * An id selector beats the UA stylesheet's `[hidden] { display: none }`, so
+ * every element that sets `display` needs to opt back in explicitly. Miss this
+ * and `hidden` silently does nothing — which is how the custom-model row
+ * shipped visible.
+ */
+button[hidden],
+.key-row[hidden] {
   display: none;
 }
 
