@@ -88,23 +88,40 @@ export function createAnnaWindow(): AnnaWindow {
   };
 }
 
-/** A normal, focusable window for onboarding and settings. */
-export function createSettingsWindow(parent: BrowserWindow): BrowserWindow {
+/**
+ * A normal, focusable window for onboarding and settings.
+ *
+ * Deliberately not a child of Anna's window. A child window inherits
+ * always-on-top, and a settings panel that floats above every other app while
+ * you go and fetch an API key from a browser is genuinely infuriating.
+ */
+export function createSettingsWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 720,
-    height: 640,
-    parent,
+    width: 780,
+    height: 700,
+    minWidth: 620,
+    minHeight: 520,
     show: false,
     titleBarStyle: 'hiddenInset',
+    backgroundColor: '#131318',
     webPreferences: {
-      // electron-vite emits an ESM preload as `.mjs` because this package is
-      // `type: module`. Sandbox is off, which is what makes an ESM preload legal.
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
   });
+
   window.once('ready-to-show', () => window.show());
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (devUrl) void window.loadURL(`${devUrl}/settings.html`);
+  else void window.loadFile(join(__dirname, '../renderer/settings.html'));
+
   return window;
 }

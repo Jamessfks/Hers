@@ -198,6 +198,8 @@ export const IPC = {
   memoryWipe: 'anna:memory:wipe',
   /** renderer -> main: which macOS permissions are actually granted. */
   permissions: 'anna:permissions',
+  /** main -> renderer: configuration changed somewhere else. */
+  configChanged: 'anna:config:changed',
 } as const;
 
 // ---------------------------------------------------------------------------

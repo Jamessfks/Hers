@@ -86,6 +86,18 @@ const api = {
 
   // -- settings -------------------------------------------------------------
 
+  /** Config changed in another window or from the menu bar. */
+  onConfigChanged(handler: (config: AnnaConfig) => void): () => void {
+    const listener = (_: unknown, config: AnnaConfig) => handler(config);
+    ipcRenderer.on(IPC.configChanged, listener);
+    return () => ipcRenderer.off(IPC.configChanged, listener);
+  },
+
+  /** Deep-link into the exact System Settings privacy pane. */
+  openPrivacyPane(pane: string): Promise<void> {
+    return ipcRenderer.invoke('anna:open-privacy-pane', pane);
+  },
+
   openSettings(): void {
     ipcRenderer.send(IPC.settingsOpen);
   },

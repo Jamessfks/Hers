@@ -7,7 +7,7 @@
  * the camera and microphone heard. It cannot reach a key or the disk.
  */
 
-import { BrowserWindow, app, ipcMain } from 'electron';
+import { BrowserWindow, Menu, app, ipcMain } from 'electron';
 import { basename, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
@@ -26,7 +26,9 @@ import {
   createLexicalEmbedder,
   createOpenAiEmbedder,
 } from '../core/memory/embedder.ts';
-import { createAnnaWindow } from './window.ts';
+import { createAnnaWindow, createSettingsWindow } from './window.ts';
+import { createTray } from './tray.ts';
+import { registerSettingsHandlers } from './settings-ipc.ts';
 import { readActivity, readNextEvent } from './senses/macos.ts';
 import { IPC, type SenseEvent } from '../shared/protocol.ts';
 
@@ -48,6 +50,7 @@ async function main(): Promise<void> {
 
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
+  const charactersDir = join(app.getPath('userData'), 'characters');
   const store = new MemoryStore({ path: join(app.getPath('userData'), 'memory.db') });
 
   /**
@@ -187,6 +190,7 @@ async function main(): Promise<void> {
   ipcMain.handle(IPC.configSet, (_event, patch) => {
     const next = config.update(patch);
     refresh();
+    notifySettingsChanged();
     return next;
   });
 
@@ -215,8 +219,6 @@ async function main(): Promise<void> {
    * keeps the renderer off the filesystem and keeps the character across
    * restarts.
    */
-  const charactersDir = join(app.getPath('userData'), 'characters');
-
   ipcMain.handle(IPC.characterSave, async (_event, name: string, bytes: Uint8Array) => {
     try {
       // Never trust a filename from a drag-and-drop; it is attacker-influenced.
@@ -239,6 +241,72 @@ async function main(): Promise<void> {
       return null;
     }
   });
+
+  // -- Settings window and menu bar ----------------------------------------
+
+  let settingsWindow: BrowserWindow | null = null;
+
+  function openSettings(): void {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.show();
+      settingsWindow.focus();
+      return;
+    }
+    settingsWindow = createSettingsWindow();
+    settingsWindow.on('closed', () => {
+      settingsWindow = null;
+    });
+  }
+
+  const tray = createTray({
+    window,
+    config: () => config.get(),
+    setConfig: (patch) => {
+      config.update(patch);
+      refresh();
+      notifySettingsChanged();
+    },
+    openSettings,
+    isConfigured: () => companion !== null,
+  });
+
+  /** Keep both windows in step when either one changes something. */
+  function notifySettingsChanged(): void {
+    const next = config.get();
+    for (const target of [window, settingsWindow]) {
+      if (target && !target.isDestroyed()) target.webContents.send(IPC.configChanged, next);
+    }
+    tray.refresh();
+  }
+
+  registerSettingsHandlers({
+    config,
+    secrets,
+    store,
+    charactersDir,
+    onChanged: () => {
+      refresh();
+      notifySettingsChanged();
+    },
+    openSettings,
+    parentWindow: () => settingsWindow,
+  });
+
+  // Anna has no menu of her own, but the standard edit menu is what makes
+  // copy and paste work in the key fields. Without it, pasting a key fails.
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      { role: 'windowMenu' },
+    ]),
+  );
+
+  // With a menu bar item there is no reason to keep a dock icon: she is not an
+  // app you switch to, she is just there.
+  app.dock?.hide();
+
+  if (!companion) openSettings();
 
   // -- Sensor loops ---------------------------------------------------------
 
@@ -281,9 +349,14 @@ async function main(): Promise<void> {
     await window.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
-  app.on('window-all-closed', () => {
+  app.on('before-quit', () => {
     for (const timer of timers) clearInterval(timer);
+    tray.destroy();
     store.close();
+  });
+
+  // Anna lives in the menu bar, so closing her window is "hide", not "quit".
+  app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });
 
