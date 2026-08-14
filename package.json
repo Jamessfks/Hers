@@ -1,8 +1,8 @@
 {
   "name": "anna",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Anna — an always-on AI companion who lives at the edge of your screen.",
+  "description": "Anna \u2014 an always-on AI companion who lives at the edge of your screen.",
   "author": "Zicheng Zhao",
   "license": "MIT",
   "type": "module",
@@ -41,19 +41,27 @@
     },
     "files": [
       "out/**/*",
-      "resources/**/*"
+      "resources/**/*",
+      "package.json"
     ],
     "mac": {
       "category": "public.app-category.lifestyle",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
       "extendInfo": {
         "NSCameraUsageDescription": "Anna looks up to see how you are doing. The camera is off until you turn it on, and frames are never stored.",
         "NSMicrophoneUsageDescription": "Anna listens so she can answer you out loud.",
         "NSCalendarsUsageDescription": "Anna reads your calendar so she knows what your day looks like.",
         "NSSpeechRecognitionUsageDescription": "Anna transcribes your speech so she can reply.",
-        "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps."
+        "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps.",
+        "LSUIElement": true
       }
     }
   }

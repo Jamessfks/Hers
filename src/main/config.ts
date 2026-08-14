@@ -13,6 +13,7 @@ import { app } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { merge } from '../shared/merge.ts';
 import type { AnnaConfig } from '../shared/protocol.ts';
 
 export const DEFAULT_CONFIG: AnnaConfig = {
@@ -67,15 +68,4 @@ export class Config {
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
 
-/** Deep merge, treating arrays and null as scalars. */
-export function merge<T>(base: T, patch: unknown): T {
-  if (patch === null || patch === undefined) return base;
-  if (typeof patch !== 'object' || Array.isArray(patch)) return patch as T;
-  if (typeof base !== 'object' || base === null || Array.isArray(base)) return patch as T;
-
-  const out = { ...(base as Record<string, unknown>) };
-  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
-    out[key] = merge(out[key], value);
-  }
-  return out as T;
-}
+export { merge } from '../shared/merge.ts';
