@@ -30,6 +30,9 @@ function stubLlm(reply: string, options: { firstTokenMs?: number; perChunkMs?: n
     async validateKey() {
       return { ok: true as const };
     },
+    async listModels() {
+      return [];
+    },
   };
   return { provider, seen };
 }
@@ -189,6 +192,9 @@ test('a model failure surfaces as trouble, not as a crash', async () => {
     },
     async validateKey() {
       return { ok: true as const };
+    },
+    async listModels() {
+      return [];
     },
   };
   const h = harness(failing, stubTts().provider);

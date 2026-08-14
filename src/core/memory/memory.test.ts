@@ -28,6 +28,9 @@ function stubLlm(reply: string): LlmProvider {
     async validateKey() {
       return { ok: true as const };
     },
+    async listModels() {
+      return [];
+    },
   };
 }
 
@@ -203,6 +206,9 @@ test('a failing consolidation never throws into the conversation', async () => {
     },
     async validateKey() {
       return { ok: true as const };
+    },
+    async listModels() {
+      return [];
     },
   };
   const { memory } = fixture({ llm: failing });

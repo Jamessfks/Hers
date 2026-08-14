@@ -121,6 +121,14 @@ const api = {
     return ipcRenderer.invoke(IPC.keyDelete, name);
   },
 
+  /**
+   * The models this key can use. Empty when the list could not be fetched, in
+   * which case the picker falls back to the built-in catalogue.
+   */
+  listModels(provider: string): Promise<Array<{ id: string; label: string }>> {
+    return ipcRenderer.invoke(IPC.modelsList, provider);
+  },
+
   listVoices(provider: string): Promise<VoiceOption[]> {
     return ipcRenderer.invoke(IPC.voicesList, provider);
   },

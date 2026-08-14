@@ -127,7 +127,20 @@ export type SttProviderId = 'deepgram' | 'openai';
 export type AvatarRendererId = 'vrm' | 'heygen' | 'tavus';
 
 export interface AnnaConfig {
-  llm: { provider: LlmProviderId; model: string };
+  llm: {
+    provider: LlmProviderId;
+    /** The model actually used. Always belongs to `provider`. */
+    model: string;
+    /**
+     * What was last chosen for each provider.
+     *
+     * Without this, switching provider to try something and switching back
+     * silently drops your model choice — and because the two settings live in
+     * different fields, the loss is invisible until a reply comes back from the
+     * wrong model.
+     */
+    modelByProvider?: Partial<Record<LlmProviderId, string>>;
+  };
   tts: { provider: TtsProviderId; voiceId: string };
   stt: { provider: SttProviderId };
   avatar: { renderer: AvatarRendererId; modelPath: string };
@@ -187,6 +200,8 @@ export const IPC = {
   keyValidate: 'anna:key:validate',
   /** renderer -> main: forget a stored key. */
   keyDelete: 'anna:key:delete',
+  /** renderer -> main: models this account can actually use. */
+  modelsList: 'anna:models:list',
   /** renderer -> main: voices available on the configured voice provider. */
   voicesList: 'anna:voices:list',
   /** renderer -> main: synthesise a sample line so a voice can be auditioned. */

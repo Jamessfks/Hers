@@ -13,11 +13,12 @@ import { app } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { defaultModelFor } from '../core/llm/models.ts';
 import { merge } from '../shared/merge.ts';
 import type { AnnaConfig } from '../shared/protocol.ts';
 
 export const DEFAULT_CONFIG: AnnaConfig = {
-  llm: { provider: 'anthropic', model: 'claude-sonnet-5' },
+  llm: { provider: 'anthropic', model: defaultModelFor('anthropic'), modelByProvider: {} },
   tts: { provider: 'cartesia', voiceId: '' },
   stt: { provider: 'deepgram' },
   avatar: { renderer: 'vrm', modelPath: '' },
