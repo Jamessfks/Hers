@@ -150,18 +150,22 @@ export const MAX_ATTEMPTS = 3;
 /**
  * The transitions that are allowed to happen.
  *
- * Written out rather than implied because the expensive mistake is a legal-
- * looking one: `generating -> generating` is a double submit, and it costs
- * money every time it happens rather than throwing an error someone would
- * notice.
+ * Permissive on purpose, with one edge missing. Anything may become `ready`,
+ * from any state, because a clip file on disk is the truth and the manifest is
+ * only a claim about it — a user who hand-drops a clip into a `pending` slot
+ * has produced a ready clip, and a state machine that argues with them is
+ * wrong. Re-queueing is idempotent for the same reason.
+ *
+ * The edge that is missing is `generating -> generating`, and it is the only
+ * one that matters: it is a second submit for a clip already being rendered,
+ * which is not a corrupt state but a duplicate charge, and it fails silently in
+ * every direction except this one.
  */
 export const CLIP_TRANSITIONS: Record<ClipStatus, readonly ClipStatus[]> = {
-  // 'pending -> pending' is allowed: it is what re-queuing an interrupted or
-  // orphaned attempt looks like, and it must be idempotent.
-  pending: ['pending', 'generating'],
-  generating: ['ready', 'failed', 'pending'],
-  ready: ['pending', 'generating'],
-  failed: ['pending', 'generating'],
+  pending: ['pending', 'generating', 'ready'],
+  generating: ['pending', 'ready', 'failed'],
+  ready: ['pending', 'generating', 'ready'],
+  failed: ['pending', 'generating', 'ready'],
 };
 
 export function canTransition(from: ClipStatus, to: ClipStatus): boolean {
@@ -392,13 +396,7 @@ export function reconcile(
 
     if (file) {
       if (entry.status !== 'ready' || entry.file !== file) {
-        next = {
-          ...next,
-          clips: {
-            ...next.clips,
-            [slot]: { ...entry, status: 'ready', file, job: null, error: null, updatedAt: now },
-          },
-        };
+        next = withEntry(next, slot, { status: 'ready', file, job: null, error: null }, now);
       }
       continue;
     }

@@ -74,9 +74,24 @@ export function createOpenAiStt(apiKey: string, model = 'whisper-1'): SttProvide
   };
 }
 
+/**
+ * The key-taking providers, and only those.
+ *
+ * `apple` is deliberately a thrower rather than an omission. It is built in
+ * `main/speech/apple-stt.ts`, because it spawns a process and `core/` must stay
+ * importable without a Node runtime — but leaving it out of this table would
+ * make the `Record` non-exhaustive, and then the next transcription provider
+ * someone adds compiles fine while silently having no factory. Keeping the
+ * exhaustiveness is worth one unreachable line.
+ */
 const FACTORIES: Record<SttProviderId, (key: string) => SttProvider> = {
   deepgram: createDeepgramStt,
   openai: createOpenAiStt,
+  apple: () => {
+    throw new Error(
+      'The on-device transcriber is created in the main process, not here. See main/speech/apple-stt.ts.',
+    );
+  },
 };
 
 export function createSttProvider(id: SttProviderId, apiKey: string): SttProvider {
