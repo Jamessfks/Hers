@@ -201,7 +201,9 @@ export class MemoryStore {
         queryEmbedding && fact.embedding ? Math.max(0, similarity(queryEmbedding, fact.embedding)) : 0;
       const age = Math.max(0, now - fact.lastSeenAt);
       const recency = Math.exp((-Math.LN2 * age) / RECENCY_HALF_LIFE_MS);
-      const usage = fact.recallCount / maxRecall;
+      // Log-damped: the difference between 1 and 10 recalls should matter,
+      // the difference between 100 and 1000 should not.
+      const usage = Math.log1p(fact.recallCount) / Math.log1p(maxRecall);
       const score =
         RECALL_WEIGHTS.similarity * semantic +
         RECALL_WEIGHTS.recency * recency +
@@ -214,12 +216,23 @@ export class MemoryStore {
     return scored.slice(0, limit);
   }
 
-  markRecalled(ids: readonly number[], now = Date.now()): void {
+  /**
+   * Notes that these facts were used in a turn.
+   *
+   * Deliberately does *not* touch `last_seen_at`. That column means "the last
+   * time the world confirmed this", and only {@link upsertFact} may write it.
+   * Refreshing it on retrieval creates a feedback loop that is invisible until
+   * it has ruined the product: a retrieved fact resets its own recency to 1.0,
+   * which guarantees it is retrieved again, which resets it again. The first
+   * facts learned would be pinned to the top of every recall forever, and
+   * nothing learned later could displace them.
+   */
+  markRecalled(ids: readonly number[]): void {
     if (ids.length === 0) return;
     const statement = this.#db.prepare(
-      'UPDATE facts SET recall_count = recall_count + 1, last_seen_at = ? WHERE id = ?',
+      'UPDATE facts SET recall_count = recall_count + 1 WHERE id = ?',
     );
-    for (const id of ids) statement.run(now, id);
+    for (const id of ids) statement.run(id);
   }
 
   forgetFact(id: number): void {
@@ -268,8 +281,12 @@ export class MemoryStore {
   }
 
   /**
-   * Deletes everything. Wired to a button in settings, because a companion that
-   * cannot be made to forget is a liability rather than a comfort.
+   * Deletes everything.
+   *
+   * A companion that cannot be made to forget is a liability rather than a
+   * comfort, so this exists and is tested. It has no caller yet: the settings
+   * window that should own the button is not built. Until then, deleting
+   * `memory.db` from the app's data directory is the supported route.
    */
   wipe(): void {
     this.#db.exec('DELETE FROM turns; DELETE FROM facts; DELETE FROM summaries; DELETE FROM meta;');

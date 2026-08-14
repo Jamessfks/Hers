@@ -29,6 +29,7 @@ export type SecretName =
   | 'tts.elevenlabs'
   | 'tts.hume'
   | 'stt.deepgram'
+  | 'stt.openai'
   | 'avatar.heygen'
   | 'avatar.tavus';
 

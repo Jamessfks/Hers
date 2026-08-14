@@ -15,8 +15,16 @@
 
 const OPEN_THRESHOLD = 0.035;
 const CLOSE_THRESHOLD = 0.018;
-/** Silence this long ends the utterance. Roughly one comfortable pause. */
-const HANG_MS = 850;
+/**
+ * Silence this long ends the utterance.
+ *
+ * This sits directly in front of everything else Anna does, so it is spent
+ * before the model has seen a single word. At 850ms it exceeded the entire
+ * reply budget on its own. 420ms is short enough to stay out of the way and
+ * long enough to survive the gap between clauses in ordinary speech; the
+ * hysteresis in the gate below is what makes that safe.
+ */
+const HANG_MS = 420;
 /** Ignore blips shorter than this: a cough, a keyboard, a chair. */
 const MIN_UTTERANCE_MS = 320;
 

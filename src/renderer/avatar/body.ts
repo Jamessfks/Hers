@@ -152,7 +152,16 @@ export class Body {
     }
 
     if (this.#gestures.length >= MAX_CONCURRENT_GESTURES) {
-      this.#gestures.shift();
+      // Do not drop the oldest outright, that pops. Push it into its own
+      // fade-out by moving its start time to the tail of its envelope.
+      const oldest = this.#gestures.shift();
+      if (oldest && !oldest.held) {
+        const remaining = oldest.clip.durationMs * FADE;
+        this.#gestures.push({
+          ...oldest,
+          startedAt: this.#time - (oldest.clip.durationMs - remaining) / 1000,
+        });
+      }
     }
 
     this.#gestures.push({
@@ -218,7 +227,7 @@ export class Body {
     this.#updateMouth(deltaSeconds);
     this.#updateBlink(deltaSeconds);
     this.#updateExpression(deltaSeconds);
-    this.#updateGaze();
+    this.#updateGaze(deltaSeconds);
 
     this.#vrm.update(deltaSeconds);
   }
@@ -415,30 +424,81 @@ export class Body {
     }
   }
 
-  #updateGaze(): void {
+  /**
+   * Where she is looking.
+   *
+   * Two things here are worth more than they cost.
+   *
+   * First, `user` aims at the *viewer's actual position*, not at a point in
+   * front of her own head. Those are the same thing only for a camera at head
+   * height directly ahead, which is never true of a figure framed head to toe.
+   *
+   * Second, the wander is ballistic rather than smooth. Real eyes fixate for a
+   * few hundred milliseconds and then jump; they do not drift continuously. A
+   * sine wave on the gaze target produces slowly swimming eyes, which is one of
+   * the most recognisable uncanny tells there is — and unlike a bad mesh, it
+   * survives whatever character the user loads.
+   */
+  #updateGaze(delta: number): void {
     const head = this.#bones.get('head');
     if (!head) return;
     const origin = head.getWorldPosition(new Vector3());
-    const t = this.#time;
 
-    // Saccades: eyes never rest perfectly still on a point.
-    const jitterX = Math.sin(t * 2.3) * 0.02 + Math.sin(t * 5.7) * 0.008;
-    const jitterY = Math.sin(t * 1.9) * 0.015;
+    this.#advanceSaccade(delta);
 
+    const base = new Vector3();
     switch (this.#gazeMode) {
       case 'user':
-        this.#gazeTarget.position.set(origin.x + jitterX, origin.y + jitterY, origin.z + 2.2);
+        base.copy(this.#viewer);
         break;
       case 'away':
-        this.#gazeTarget.position.set(origin.x + 1.4 + jitterX, origin.y + 0.3, origin.z + 1.2);
+        base.set(origin.x + 1.6, origin.y + 0.25, origin.z + 1.0);
         break;
       case 'down':
-        this.#gazeTarget.position.set(origin.x + jitterX, origin.y - 0.9, origin.z + 0.8);
+        base.set(origin.x + 0.1, origin.y - 0.85, origin.z + 0.7);
         break;
       case 'screen':
-        this.#gazeTarget.position.set(origin.x - 0.9, origin.y + 0.1 + jitterY, origin.z + 1.6);
+        base.set(origin.x - 1.0, origin.y - 0.05, origin.z + 1.4);
         break;
     }
+
+    // Apply the saccade as an angular offset at the distance being looked at,
+    // so a few degrees stays a few degrees whether she is looking at you or
+    // across the room.
+    const distance = Math.max(0.4, base.distanceTo(origin));
+    this.#gazeTarget.position.set(
+      base.x + this.#saccade.x * distance,
+      base.y + this.#saccade.y * distance,
+      base.z,
+    );
+  }
+
+  #advanceSaccade(delta: number): void {
+    this.#saccadeAt -= delta;
+
+    if (this.#saccadeAt <= 0 && this.#saccadeProgress >= 1) {
+      this.#scheduleSaccade(this.#time);
+      // A blink rides along with roughly one jump in six, as it does in people.
+      if (Math.random() < 0.16 && this.#blinkPhase <= 0) this.#blinkAt = 0;
+    }
+
+    if (this.#saccadeProgress < 1) {
+      // ~50ms to complete the jump: fast enough to read as ballistic.
+      this.#saccadeProgress = Math.min(1, this.#saccadeProgress + delta / 0.05);
+      const eased = this.#saccadeProgress * this.#saccadeProgress * (3 - 2 * this.#saccadeProgress);
+      this.#saccade.lerpVectors(this.#saccade, this.#saccadeTo, eased);
+    }
+  }
+
+  /** Picks the next fixation point: 3-6 degrees away, held 100-400ms. */
+  #scheduleSaccade(_now: number): void {
+    const angle = Math.random() * Math.PI * 2;
+    // Biased horizontally, because conversational gaze moves between the eyes
+    // and the mouth far more than it moves up and down.
+    const magnitude = (3 + Math.random() * 3) * (Math.PI / 180);
+    this.#saccadeTo.set(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude * 0.55, 0);
+    this.#saccadeProgress = 0;
+    this.#saccadeAt = 0.1 + Math.random() * 0.3;
   }
 }
 
