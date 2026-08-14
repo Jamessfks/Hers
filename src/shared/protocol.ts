@@ -157,6 +157,8 @@ export const IPC = {
   keyStatus: 'anna:key:status',
   /** main -> renderer: brain state changed (thinking, speaking, listening). */
   state: 'anna:state',
+  /** main -> renderer: something went wrong, phrased for a human. */
+  trouble: 'anna:trouble',
   /** renderer -> main: user clicked through to a window control. */
   window: 'anna:window',
 } as const;
