@@ -259,8 +259,26 @@ async function main(): Promise<void> {
     if (settings.stt.provider === 'apple') {
       return createAppleStt({ binaryPaths: transcriberPaths() });
     }
+
     const key = secrets.get(`stt.${settings.stt.provider}` as SecretName);
-    return key ? createSttProvider(settings.stt.provider, key) : null;
+    if (key) return createSttProvider(settings.stt.provider, key);
+
+    /*
+     * The configured transcriber has no key, so fall back to the on-device one
+     * rather than returning null.
+     *
+     * Returning null meant the microphone was silently dead: the VAD recorded,
+     * the audio crossed IPC, and the turn was dropped with nothing shown. That
+     * is the state anyone upgrading lands in — a stored `stt.provider` from
+     * before the on-device option existed wins over the new default, so their
+     * config points at a provider they never had a key for.
+     *
+     * Falling back is safe precisely because this provider needs no key and no
+     * network. Config is left alone: the user's stated preference still stands
+     * if they ever add that key.
+     */
+    diag.note('stt-fallback', { from: settings.stt.provider, to: 'apple' });
+    return createAppleStt({ binaryPaths: transcriberPaths() });
   }
 
   /** Turns a recorded utterance into a turn. */
