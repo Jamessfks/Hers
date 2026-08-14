@@ -313,6 +313,8 @@ async function boot(): Promise<void> {
     }
   }
 
+  window.anna.onCameraCapture(() => vision.captureNow());
+
   window.anna.onConfigChanged((next) => {
     config = next;
     void applySenses(next);

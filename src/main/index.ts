@@ -28,6 +28,7 @@ import {
 } from '../core/memory/embedder.ts';
 import { createAnnaWindow, createSettingsWindow } from './window.ts';
 import { Diagnostics } from './diagnostics.ts';
+import { needsFreshLook, readChanged } from '../core/senses/sight.ts';
 import { createMockLlm } from './demo/mock-llm.ts';
 import { createSayTts } from './demo/mock-tts.ts';
 import { createTray } from './tray.ts';
@@ -196,8 +197,17 @@ async function main(): Promise<void> {
     }
 
     if (sensed.kind === 'user-speech' || sensed.kind === 'user-typed') {
-      diag.startTurn('user', config.get().llm.model, sensed.text.length);
-      void companion?.respondTo(sensed.text);
+      const text = sensed.text;
+      diag.startTurn('user', config.get().llm.model, text.length);
+      void (async () => {
+        // "Can you see me?" deserves a look now, not whatever the timer caught
+        // up to forty-five seconds ago.
+        if (needsFreshLook(text)) {
+          diag.note('fresh-look-requested');
+          await lookNow();
+        }
+        await currentCompanion()?.respondTo(text);
+      })();
       return;
     }
 
@@ -236,6 +246,32 @@ async function main(): Promise<void> {
    * The frame is used and dropped. Only the sentence reaches the situation, and
    * only the situation reaches the model that Anna talks with.
    */
+  /** Resolvers waiting on the next camera frame. See `lookNow`. */
+  let awaitingFrame: Array<() => void> = [];
+  let lastRead: { text: string; at: number } | undefined;
+
+  /**
+   * Ask for a frame and wait for the read, briefly.
+   *
+   * Bounded on purpose. If the camera is off, denied, or slow, she answers
+   * without having looked rather than making the user wait — "I can't see you
+   * right now" is a fine answer; a four-second pause is not.
+   */
+  async function lookNow(timeoutMs = 2500): Promise<void> {
+    if (!config.get().senses.camera) return;
+    send(IPC.cameraCapture, true);
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        awaitingFrame = awaitingFrame.filter((r) => r !== resolve);
+        resolve();
+      }, timeoutMs);
+      awaitingFrame.push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
   async function look(jpegBase64: string): Promise<void> {
     const settings = config.get();
     const key = secrets.get(`llm.${settings.llm.provider}` as SecretName);
@@ -245,13 +281,29 @@ async function main(): Promise<void> {
       apiKey: key,
       jpegBase64,
     });
-    diag.note('vision-read', { got: read !== null, chars: read?.length ?? 0 });
+    const changed = read !== null && readChanged(lastRead?.text, read);
+    diag.note('vision-read', {
+      got: read !== null,
+      chars: read?.length ?? 0,
+      changed,
+    });
+
+    const at = Date.now();
+    if (read) lastRead = { text: read, at };
     situation.observe({
       kind: 'presence',
       present: read !== null,
-      ...(read && { read }),
-      at: Date.now(),
+      // Only pass the read on when it says something new. Repeating the same
+      // observation every time the timer fires is how a companion turns into a
+      // smoke alarm about your posture.
+      ...(read && changed && { read }),
+      at,
     });
+
+    // Release anything waiting on a fresh look.
+    const waiters = awaitingFrame;
+    awaitingFrame = [];
+    for (const resolve of waiters) resolve();
   }
 
   ipcMain.handle(IPC.configGet, () => config.get());

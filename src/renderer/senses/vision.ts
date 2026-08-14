@@ -71,6 +71,17 @@ export class Vision {
     this.#video = null;
   }
 
+  /**
+   * Take a frame now.
+   *
+   * Used when the conversation needs eyes rather than when the timer says so.
+   * No-ops when the camera is off — she says she cannot see rather than
+   * silently switching the camera on to answer a question.
+   */
+  captureNow(): void {
+    this.#capture();
+  }
+
   #capture(): void {
     const video = this.#video;
     if (!video || video.videoWidth === 0) return;

@@ -198,6 +198,18 @@ const api = {
     return () => ipcRenderer.off(IPC.demoSaid, listener);
   },
 
+  /**
+   * Anna wants to look right now.
+   *
+   * Fired when the conversation needs eyes — "can you see me?" — rather than
+   * waiting up to 45 seconds for the next scheduled frame.
+   */
+  onCameraCapture(handler: () => void): () => void {
+    const listener = () => handler();
+    ipcRenderer.on(IPC.cameraCapture, listener);
+    return () => ipcRenderer.off(IPC.cameraCapture, listener);
+  },
+
   /** Fires when she is hidden or brought back, so the body can fade. */
   onVisibility(handler: (visible: boolean) => void): () => void {
     const listener = (_: unknown, visible: boolean) => handler(visible);
