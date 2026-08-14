@@ -191,6 +191,19 @@
         line-height: 1.45;
       }
 
+      /* The shipped artefact is a measured fact too, but it is a filename rather
+         than a number, so it sits under the slab instead of inside it. */
+      .release {
+        margin: 14px 0 0;
+        font-size: 13px;
+        color: var(--ink-3);
+      }
+
+      .release .mono {
+        font-family: var(--mono);
+        color: var(--ink-2);
+      }
+
       /* --------------------------------------------------------------- table */
 
       table {
@@ -427,7 +440,24 @@
         color: var(--ink);
       }
 
-      /* ---------------------------------------------------------------- gaps */
+      /* Where the clock starts is load-bearing, so it is stated on the chart
+         rather than left to a paragraph somebody scrolls past. */
+      .budget-note {
+        margin: 22px 0 0;
+        padding-top: 18px;
+        border-top: 1px solid var(--rule);
+        font-size: 13.5px;
+        color: var(--ink-3);
+        max-width: 72ch;
+      }
+
+      .budget-note code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+
+      /* --------------------------------------------------------- list panels */
 
       .gaps {
         list-style: none;
@@ -462,6 +492,12 @@
         font-family: var(--mono);
         font-size: 12.5px;
         color: var(--ink);
+      }
+
+      /* Fixed things read as resolved rather than outstanding: same panel, the
+         headline in the accent instead of plain ink. */
+      .fixed .what {
+        color: var(--accent);
       }
 
       /* -------------------------------------------------------------- footer */
@@ -539,10 +575,11 @@
           nothing leaves the machine except the provider calls you configured.
         </p>
         <p class="status-line">
-          <span class="pill"><span class="mark" aria-hidden="true"></span>v0.1 — working vertical slice</span>
+          <span class="pill"><span class="mark" aria-hidden="true"></span>v1.0.0 — shipped</span>
           <span class="status-note">
-            Brain, memory, voice, sensors, attention policy and body are built
-            and tested end to end. She ships without a character model.
+            Persona, memory, voice, senses, attention policy, body, a settings
+            window and a menu bar item, built and tested end to end. She now
+            ships with a body of her own.
           </span>
         </p>
       </header>
@@ -552,15 +589,15 @@
           <h2 id="metrics-h">Measured now</h2>
           <p class="section-note">
             Read directly from the working tree: <code>npm test</code>,
-            <code>tsc --noEmit</code>, <code>git log</code>, and a file walk of
-            <code>src/</code>.
+            <code>tsc --noEmit</code>, <code>git log</code>, a file walk of
+            <code>src/</code>, and the contents of <code>release/</code>.
           </p>
           <dl class="metrics">
             <div class="metric">
               <dt>Tests passing</dt>
               <dd>
-                <span class="value">57<span class="of"> / 57</span></span>
-                <span class="sub">0 failing, 0 skipped. Node's built-in runner, no network.</span>
+                <span class="value">76<span class="of"> / 76</span></span>
+                <span class="sub">0 failing, 0 skipped, across 8 test files. Node's built-in runner, no network.</span>
               </dd>
             </div>
             <div class="metric">
@@ -573,25 +610,31 @@
             <div class="metric">
               <dt>TypeScript files</dt>
               <dd>
-                <span class="value">43</span>
-                <span class="sub">45 files in <code>src/</code> in total.</span>
+                <span class="value">49</span>
+                <span class="sub">53 files in <code>src/</code> in total; the rest is HTML and CSS.</span>
               </dd>
             </div>
             <div class="metric">
               <dt>Lines of source</dt>
               <dd>
-                <span class="value">7,136</span>
-                <span class="sub">6,947 of them TypeScript.</span>
+                <span class="value">9,611</span>
+                <span class="sub">8,786 of them TypeScript.</span>
               </dd>
             </div>
             <div class="metric">
               <dt>Commits</dt>
               <dd>
-                <span class="value">33</span>
-                <span class="sub">Single branch, no release tags yet.</span>
+                <span class="value">59</span>
+                <span class="sub">Single branch, first commit to shipped disk image.</span>
               </dd>
             </div>
           </dl>
+          <p class="release">
+            Packaged:
+            <span class="mono">release/Anna-1.0.0-arm64.dmg</span> at 120M, with
+            an x64 build beside it at 123M. Unsigned, so macOS asks for a
+            right-click &rarr; Open the first time.
+          </p>
         </section>
 
         <section aria-labelledby="components-h">
@@ -604,15 +647,15 @@
           <ul class="tally">
             <li>
               <span class="dot" style="background: var(--accent)" aria-hidden="true"></span>
-              <span class="count">13</span> Done
+              <span class="count">18</span> Done
             </li>
             <li>
               <span class="dot" style="border: 2px solid var(--accent)" aria-hidden="true"></span>
-              <span class="count">2</span> Partial
+              <span class="count">1</span> Partial
             </li>
             <li>
               <span class="dot" style="border: 2px solid var(--ink-3)" aria-hidden="true"></span>
-              <span class="count">2</span> Not started
+              <span class="count">1</span> Not started
             </li>
           </ul>
 
@@ -639,7 +682,9 @@
                 <td class="note">
                   Written as prohibitions with worked examples rather than
                   adjectives, plus few-shot style turns, memory, running summary
-                  and situation folded into every system prompt.
+                  and situation folded into every system prompt. One thing she
+                  does not play: if you are in real danger she drops the
+                  character.
                 </td>
               </tr>
 
@@ -668,7 +713,9 @@
                 </td>
                 <td class="note">
                   All three behind one streaming interface. SSE framing across
-                  arbitrary chunk boundaries has its own test file.
+                  arbitrary chunk boundaries has its own test file, and each
+                  provider exposes a cheap credential check for the settings
+                  window to call.
                 </td>
               </tr>
 
@@ -682,9 +729,9 @@
                 </td>
                 <td class="note">
                   SQLite through <code>node:sqlite</code>, no native addon.
-                  Recall blends similarity, recency, confidence and usage;
-                  consolidation into durable facts runs off the critical path
-                  and retries its window on failure.
+                  Recall blends similarity, recency, confidence and damped
+                  usage; consolidation into durable facts runs off the critical
+                  path and retries its window on failure.
                 </td>
               </tr>
 
@@ -708,14 +755,15 @@
                   Hearing providers &times;2
                   <span class="path">core/speech/stt.ts — deepgram, openai</span>
                 </th>
-                <td class="state state-partial">
-                  <span><span class="dot" aria-hidden="true"></span>Partial</span>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
                 </td>
                 <td class="note">
                   Both transcribe a finished utterance in the main process, by
-                  design. But <code>stt.openai</code> is missing from the
-                  <code>SecretName</code> union in <code>main/secrets.ts</code>,
-                  so only a Deepgram key can actually be stored.
+                  design. <code>stt.openai</code> was selectable but missing
+                  from the <code>SecretName</code> union, so its key could never
+                  be stored; that is fixed, and both keys are validated by
+                  sending 100ms of silence through a real transcription call.
                 </td>
               </tr>
 
@@ -728,10 +776,10 @@
                   <span><span class="dot" aria-hidden="true"></span>Done</span>
                 </td>
                 <td class="note">
-                  Off by default. One 512px JPEG every 45 seconds, never faster
-                  than 15 and never written to disk; only the sentence the model
-                  returns is kept. The capture indicator stays lit rather than
-                  blinking.
+                  Off by default. One 512px JPEG on a slow timer, never faster
+                  than 15 seconds and never written to disk; only the sentence
+                  the model returns is kept. The capture indicator stays lit
+                  rather than blinking.
                 </td>
               </tr>
 
@@ -748,6 +796,24 @@
                   window title over AppleScript, next calendar event. Every
                   reader fails soft and times out, so a denied permission makes
                   her less observant rather than broken.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Permission reporting
+                  <span class="path">main/senses/permissions.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  Sensors failing soft is correct behaviour and terrible
+                  diagnostics, so settings probes for what macOS actually
+                  granted rather than what the app asked for. Accessibility is
+                  read with <code>prompt: false</code>; calendar is counted only
+                  once that sense is switched on, because touching Calendar at
+                  all is what triggers consent.
                 </td>
               </tr>
 
@@ -799,6 +865,24 @@
 
               <tr>
                 <th scope="row">
+                  Menu bar item
+                  <span class="path">main/tray.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  A click-through window with no dock presence leaves no way to
+                  reach settings or to stop her, so: show or hide her, let her
+                  speak first, camera, microphone, Settings and Quit. The icon
+                  is a template image inlined as base64, because
+                  <code>createFromPath</code> silently yields an empty image
+                  inside a packaged <code>.asar</code>.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
                   Keys and configuration
                   <span class="path">main/secrets.ts, main/config.ts</span>
                 </th>
@@ -807,9 +891,32 @@
                 </td>
                 <td class="note">
                   Keys encrypted through Electron <code>safeStorage</code>,
-                  never written to the config file and never handed to the
-                  renderer, which can only ask for a masked status. Refuses to
-                  store rather than fall back to plaintext.
+                  never written to the config file and never handed to a
+                  renderer, which can only ask for a masked status. There is no
+                  IPC handler that returns a key, not even one just typed.
+                  Refuses to store rather than fall back to plaintext.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
+                  Settings window
+                  <span class="path">renderer/settings.ts, main/settings-ipc.ts</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  A real preferences window, and no Save button — every control
+                  writes immediately. A key is checked against the provider
+                  before it is stored, so the app cannot look configured and
+                  then go mute. Voices are listed from the account and can be
+                  auditioned on one line before choosing; characters are picked
+                  and copied into place; sense toggles report the permission
+                  macOS actually granted and deep-link to the exact System
+                  Settings pane; presence limits and quiet hours are here; and
+                  the memory inspector shows every fact she holds, each one
+                  removable on its own.
                 </td>
               </tr>
 
@@ -846,6 +953,26 @@
 
               <tr>
                 <th scope="row">
+                  Default character
+                  <span class="path">scripts/fetch-character.mjs</span>
+                </th>
+                <td class="state state-done">
+                  <span><span class="dot" aria-hidden="true"></span>Done</span>
+                </td>
+                <td class="note">
+                  She ships with a body: <code>AvatarSample_B</code>, a VRoid
+                  Studio sample released CC0 by pixiv — copyright waived, no
+                  attribution, no conditions. Fetched at build time against a
+                  pinned SHA-256 rather than committed, since a 15MB binary is a
+                  permanent tax on every clone and a pin is a stronger guarantee
+                  than a blob in history. A failed download is non-fatal: the
+                  build still succeeds and she falls back to the stand-in
+                  figure.
+                </td>
+              </tr>
+
+              <tr>
+                <th scope="row">
                   VRM body and motion
                   <span class="path">renderer/avatar/</span>
                 </th>
@@ -854,28 +981,12 @@
                 </td>
                 <td class="note">
                   Idle, gesture and speech layers composited every frame; 18
-                  gestures authored against VRM humanoid bones so they work on
-                  any character; blink, gaze, expressions and viseme motion all
-                  live, with a luminous stand-in figure until a
-                  <code>.vrm</code> is dropped on the window. No locomotion —
-                  <code>sit_down</code> holds a pose and she does not walk.
-                </td>
-              </tr>
-
-              <tr>
-                <th scope="row">
-                  Settings UI
-                  <span class="path">main/window.ts — createSettingsWindow</span>
-                </th>
-                <td class="state state-none">
-                  <span><span class="dot" aria-hidden="true"></span>Not started</span>
-                </td>
-                <td class="note">
-                  The IPC handlers behind it work — config get and set, key set,
-                  key status — but nothing calls
-                  <code>createSettingsWindow()</code> and no settings document
-                  exists. Configuration is by hand in
-                  <code>config.json</code> for now.
+                  gestures authored against VRM humanoid bones so they transfer
+                  to any character; blink, ballistic saccades, real eye contact,
+                  expressions and envelope-driven jaw all live. Any
+                  <code>.vrm</code> dropped on the window replaces her. Still no
+                  locomotion — <code>sit_down</code> holds a pose and she does
+                  not walk.
                 </td>
               </tr>
 
@@ -910,7 +1021,7 @@
             <div
               class="bar"
               role="img"
-              aria-label="Latency budget of 800 milliseconds. First token 120ms, first clause 180ms, first audio 90ms, giving 390ms typical and 410ms of headroom."
+              aria-label="Latency budget of 800 milliseconds, measured from the transcript being in hand rather than from the end of speech. First token 120ms, first clause 180ms, first audio 90ms, giving 390ms typical and 410ms of headroom."
             >
               <div class="seg-1" style="width: 15%"></div>
               <div class="seg-2" style="width: 22.5%"></div>
@@ -948,50 +1059,134 @@
                 <span class="what">Typical, against a budget of 800ms</span>
               </li>
             </ul>
+
+            <p class="budget-note">
+              The clock starts when the transcript is in hand, not at the end of
+              your speech, and that is exactly what
+              <code>companion.test.ts</code> asserts. Typing to her hits it.
+              Speaking to her does not yet: the local VAD spends 420ms deciding
+              you have stopped and transcription is a non-streaming round trip
+              on top, so real end-of-speech to first audio is nearer 1.1&ndash;1.7s.
+              Closing that needs streaming transcription with interim results.
+              The number is quoted this way everywhere in the repo rather than
+              quoted as end-to-end.
+            </p>
           </div>
+        </section>
+
+        <section aria-labelledby="fixed-h">
+          <h2 id="fixed-h">Fixed in 1.0</h2>
+          <p class="section-note">
+            Real bugs, found by a critic pass against the quality bar and by
+            writing the documentation. Each of these would have shipped
+            silently.
+          </p>
+          <ul class="gaps fixed">
+            <li>
+              <span class="what">She never made eye contact.</span>
+              <span class="why">
+                Gaze aimed straight out from her own head, which for a figure
+                framed head-to-toe is well above and behind the viewer.
+              </span>
+            </li>
+            <li>
+              <span class="what">Memory had a self-reinforcing loop.</span>
+              <span class="why">
+                Retrieval refreshed a fact's recency, which guaranteed it was
+                retrieved again — the first facts learned would have been pinned
+                to the top of every recall for the life of the install.
+              </span>
+            </li>
+            <li>
+              <span class="what">Style examples masqueraded as history.</span>
+              <span class="why">
+                A fresh install would have opened by asking how the interview
+                went. There was no interview.
+              </span>
+            </li>
+            <li>
+              <span class="what">A dropped character did not survive a restart.</span>
+              <span class="why">
+                The renderer can only make a <code>blob:</code> URL, and a blob
+                URL dies with the window. Characters are now copied into place
+                by the main process.
+              </span>
+            </li>
+            <li>
+              <span class="what"><code>null</code> could not clear a setting.</span>
+              <span class="why">
+                So quiet hours could never be switched off. Now
+                <code>null</code> clears a value and <code>undefined</code>
+                leaves it alone, with a test for each.
+              </span>
+            </li>
+            <li>
+              <span class="what">The permission probe prompted on first launch.</span>
+              <span class="why">
+                It asked for calendar access the moment settings opened, for a
+                feature that is off by default — precisely the behaviour that
+                teaches people to hit Don't Allow on reflex. It now probes only
+                once that sense is on.
+              </span>
+            </li>
+            <li>
+              <span class="what">She stood in a T-pose, then with both arms in the air.</span>
+              <span class="why">
+                The VRM humanoid rest pose is a T-pose, and the rest pose that
+                brings the arms down was documented but never applied. Applying
+                it from first principles got the sign backwards, which is how it
+                was caught. Both directions are now pinned by a test.
+              </span>
+            </li>
+          </ul>
         </section>
 
         <section aria-labelledby="gaps-h">
           <h2 id="gaps-h">Known gaps</h2>
           <p class="section-note">
             Stated plainly, because a status page that implies otherwise wastes
-            your time. This list is the README's own.
+            your time. This list is the changelog's own. The settings UI has
+            left it; the rest is still true.
           </p>
           <ul class="gaps">
             <li>
-              <span class="what">No settings UI.</span>
+              <span class="what">macOS only.</span>
               <span class="why">
-                Keys and provider choice go through IPC handlers that work, but
-                the window that calls them is not built. Configure by editing
-                <code>~/Library/Application Support/Anna/config.json</code> for
-                now.
+                Window behaviour and every sensor is AppKit-specific.
               </span>
             </li>
             <li>
-              <span class="what">The video-avatar backends are a seam, not an implementation.</span>
+              <span class="what">Speaking to her is slower than typing to her.</span>
+              <span class="why">
+                The 800ms budget is measured from the transcript being in hand,
+                and voice adds a 420ms VAD hang plus a non-streaming
+                transcription round trip on top.
+              </span>
+            </li>
+            <li>
+              <span class="what">The video-avatar backends are a seam with nothing behind them.</span>
               <span class="why">
                 <code>heygen</code> and <code>tavus</code> are valid values of
-                <code>AvatarRendererId</code> with nothing behind them.
+                <code>AvatarRendererId</code> and no more than that.
               </span>
             </li>
             <li>
-              <span class="what">No sit or stand locomotion.</span>
+              <span class="what">She has no persistent mood.</span>
+              <span class="why">
+                She remembers what you told her, but nothing about how you have
+                treated her carries between turns.
+              </span>
+            </li>
+            <li>
+              <span class="what">No locomotion.</span>
               <span class="why">
                 <code>sit_down</code> holds a pose; she does not walk.
               </span>
             </li>
             <li>
-              <span class="what">Ambient audio sensing is mic-triggered only.</span>
+              <span class="what">Unsigned build.</span>
               <span class="why">
-                She does not listen to the room when you are not talking to her,
-                by design, but that also means she cannot notice that you
-                sighed.
-              </span>
-            </li>
-            <li>
-              <span class="what">macOS only.</span>
-              <span class="why">
-                The window behaviour and every sensor is AppKit-specific.
+                macOS will need a right-click &rarr; Open on first launch.
               </span>
             </li>
           </ul>
@@ -999,7 +1194,7 @@
       </main>
 
       <footer>
-        <span>Generated <span class="mono">2026-08-14 13:25 +08</span></span>
+        <span>Generated <span class="mono">2026-08-14 14:08 +08</span></span>
         <span>Refreshes every 30 seconds</span>
         <span>Last rendered <span class="mono" id="rendered">—</span></span>
       </footer>
