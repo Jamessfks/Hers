@@ -219,6 +219,15 @@ export const IPC = {
   visibility: 'anna:visibility',
   /** main -> renderer: take a frame now, do not wait for the timer. */
   cameraCapture: 'anna:camera:capture',
+  /**
+   * renderer -> main: something went wrong in the body.
+   *
+   * The renderer's console is not reachable from a packaged app, so a failure
+   * there — a character that will not load, a WebGL context that will not
+   * create — is invisible to anyone debugging from outside. This puts it in the
+   * diagnostics file alongside everything else.
+   */
+  bodyReport: 'anna:body:report',
   /** main -> renderer: demo script spoke on the user's behalf; echo it. */
   demoSaid: 'anna:demo:said',
 } as const;

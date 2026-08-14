@@ -29,6 +29,12 @@ const troubleEl = document.querySelector<HTMLDivElement>('#trouble')!;
 const appEl = document.querySelector<HTMLDivElement>('#app')!;
 
 const stage = createStage(canvas);
+window.addEventListener('error', (event) =>
+  window.anna.report('error-uncaught', { message: String(event.message).slice(0, 200) }),
+);
+window.addEventListener('unhandledrejection', (event) =>
+  window.anna.report('error-rejection', { message: String(event.reason).slice(0, 200) }),
+);
 const player = new SpeechPlayer();
 
 let body: Body | null = null;
@@ -47,8 +53,13 @@ async function loadCharacter(path: string): Promise<void> {
     return;
   }
   try {
+    window.anna.report('character-loading', { bytes: path.length });
     const vrm = await loadVrm(path);
     stage.scene.add(vrm.scene);
+    // World matrices are stale until the scene is updated, and frameFullBody
+    // measures the head's world position — without this it can measure zero and
+    // put the camera inside her.
+    vrm.scene.updateWorldMatrix(true, true);
     frameFullBody(stage.camera, vrm);
     body = new Body(vrm);
     body.setViewer(stage.camera.position);
@@ -56,10 +67,16 @@ async function loadCharacter(path: string): Promise<void> {
     placeholder?.dispose();
     placeholder = null;
     hideTrouble();
+    window.anna.report('character-ready', {
+      meta: vrm.meta?.metaVersion ?? '?',
+      cameraZ: Math.round(stage.camera.position.z * 100) / 100,
+    });
   } catch (error) {
     placeholder = createPlaceholder(stage.scene);
     frameHeight(stage.camera, placeholder.height);
-    showTrouble(error instanceof Error ? error.message : 'That character would not load.');
+    const message = error instanceof Error ? error.message : 'That character would not load.';
+    window.anna.report('error-character', { message: message.slice(0, 200) });
+    showTrouble(message);
   }
 }
 

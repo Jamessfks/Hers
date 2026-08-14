@@ -58,6 +58,11 @@ const api = {
     return () => ipcRenderer.off(IPC.trouble, listener);
   },
 
+  /** Report a problem or a milestone from the body, for the diagnostics log. */
+  report(event: string, detail?: Record<string, unknown>): void {
+    ipcRenderer.send(IPC.bodyReport, event, detail ?? {});
+  },
+
   /** Report something the senses picked up, including the user's own words. */
   sense(event: SenseEvent): void {
     ipcRenderer.send(IPC.sense, event);

@@ -306,6 +306,11 @@ async function main(): Promise<void> {
     for (const resolve of waiters) resolve();
   }
 
+  ipcMain.on(IPC.bodyReport, (_event, name: string, detail: Record<string, unknown>) => {
+    diag.note(`body:${name}`, detail);
+    if (name.startsWith('error')) console.error('[anna:body]', name, detail);
+  });
+
   ipcMain.handle(IPC.configGet, () => config.get());
   ipcMain.handle(IPC.configSet, (_event, patch) => {
     const next = config.update(patch);
