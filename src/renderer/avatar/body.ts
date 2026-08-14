@@ -26,6 +26,7 @@ import {
   DEG_TO_RAD,
   GESTURE_CLIPS,
   HELD_GESTURES,
+  REST_POSE,
   sampleClip,
   type BoneName,
   type Pose,
@@ -245,6 +246,13 @@ export class Body {
    */
   #applyIdle(pose: Pose): void {
     const t = this.#time;
+
+    // Out of the T-pose first. Everything else is a perturbation of this.
+    for (const [bone, euler] of Object.entries(REST_POSE) as Array<
+      [BoneName, [number, number, number]]
+    >) {
+      add(pose, bone, euler);
+    }
 
     // Breathing, about 14 cycles a minute.
     const breath = Math.sin((t * Math.PI * 2) / 4.3);

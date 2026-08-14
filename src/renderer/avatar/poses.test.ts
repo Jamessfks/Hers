@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { GESTURE_NAMES } from '../../shared/protocol.ts';
-import { GESTURE_CLIPS, easeInOutCubic, sampleClip } from './poses.ts';
+import { GESTURE_CLIPS, REST_POSE, easeInOutCubic, sampleClip } from './poses.ts';
 
 test('every gesture in the protocol has a clip', () => {
   for (const name of GESTURE_NAMES) {
@@ -76,5 +76,34 @@ test('the ease is monotonic and anchored at both ends', () => {
     const value = easeInOutCubic(t);
     assert.ok(value >= previous, 'ease must not go backwards');
     previous = value;
+  }
+});
+
+test('the rest pose takes the arms out of the T-pose', () => {
+  // The VRM rest pose is a T-pose. If this regresses, Anna ships as a
+  // scarecrow — and it is the kind of thing that looks fine in a unit test
+  // suite that never renders anything.
+  const left = REST_POSE.leftUpperArm?.[2] ?? 0;
+  const right = REST_POSE.rightUpperArm?.[2] ?? 0;
+  assert.ok(left <= -55, `left arm should swing down, got ${left}°`);
+  assert.ok(right >= 55, `right arm should swing down, got ${right}°`);
+  assert.equal(Math.sign(left), -Math.sign(right), 'arms must be mirrored');
+});
+
+test('the rest pose is symmetric left to right', () => {
+  const pairs: Array<[keyof typeof REST_POSE, keyof typeof REST_POSE]> = [
+    ['leftShoulder', 'rightShoulder'],
+    ['leftUpperArm', 'rightUpperArm'],
+    ['leftLowerArm', 'rightLowerArm'],
+    ['leftHand', 'rightHand'],
+  ];
+  for (const [left, right] of pairs) {
+    const a = REST_POSE[left]!;
+    const b = REST_POSE[right]!;
+    // Summing rather than negating: assert.strictEqual distinguishes 0 from -0,
+    // so `-b[1]` on a zero would fail a comparison that is plainly correct.
+    assert.equal(a[0], b[0], `${left}/${right} pitch should match`);
+    assert.equal(a[1] + b[1], 0, `${left}/${right} yaw should mirror`);
+    assert.equal(a[2] + b[2], 0, `${left}/${right} roll should mirror`);
   }
 });

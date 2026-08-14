@@ -59,11 +59,33 @@ export interface GestureClip {
 const empty: Pose = {};
 
 /**
- * A note on the arm poses below: VRM rest pose is the T-pose, so an arm hanging
- * naturally at the side is already about -70 degrees on Z for the left arm and
- * +70 for the right. The idle layer holds that rest offset; these clips move
- * relative to it.
+ * The standing rest pose, applied underneath everything else by the idle layer.
+ *
+ * This exists because the VRM humanoid rest pose is a **T-pose**: arms straight
+ * out, palms down. That is correct as a rigging convention and absurd as a
+ * character standing in your room, so every frame starts by bringing the arms
+ * down to a human stance. Skip this and the whole product ships as a scarecrow.
+ *
+ * The numbers: a VRM's left arm extends along +X, so rotating about Z by -70°
+ * swings it down to the side; the right arm extends along -X and needs +70°.
+ * Twenty degrees off vertical is where a relaxed arm actually hangs — dead
+ * vertical reads as attention, not as ease. The slight elbow bend and forward
+ * shoulder roll keep the arms off the hips and stop the silhouette going flat.
+ *
+ * Every clip in this file is authored *relative to this pose*, which is why
+ * `wave` asks for -58 on the right upper arm: from a hanging arm, that raises
+ * it to roughly horizontal.
  */
+export const REST_POSE: Pose = {
+  leftShoulder: [0, 0, -4],
+  rightShoulder: [0, 0, 4],
+  leftUpperArm: [3, 0, -70],
+  rightUpperArm: [3, 0, 70],
+  leftLowerArm: [0, -12, -6],
+  rightLowerArm: [0, 12, 6],
+  leftHand: [0, 0, -4],
+  rightHand: [0, 0, 4],
+};
 export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
   nod: {
     durationMs: 700,
