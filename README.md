@@ -52,7 +52,26 @@ npm install
 npm run dev
 ```
 
-Then give her at least two keys — one to think with, one to speak with.
+### See it first, without a key
+
+```bash
+npm run demo
+```
+
+Scripted replies and the macOS system voice, so the whole product runs end to
+end — streaming clauses, gestures on the beat, real audio, real lip sync — with
+nothing to sign up for. Add `ANNA_DEMO_SCRIPT="hey|i bombed the interview"` to
+play a whole exchange in on its own.
+
+Both stand-ins are real implementations of `LlmProvider` and `TtsProvider`
+rather than stubs, which is what makes the demo worth having: the streaming
+path, the clause chunking, the audio scheduler and the formant-based lip sync
+are all genuinely exercised. It is the development loop too — none of that
+needed a paid request to build.
+
+### Then give her real keys
+
+Two at minimum — one to think with, one to speak with.
 
 | Purpose | Providers | Where to get a key |
 | --- | --- | --- |
@@ -155,6 +174,7 @@ boundary is where it is, is in
 ## Development
 
 ```bash
+npm run demo       # the whole thing, no API key needed
 npm run dev        # run with hot reload
 npm test           # 131 unit tests, no network
 npm run typecheck  # strict, noUncheckedIndexedAccess
