@@ -13,10 +13,38 @@
  * open. Shipping a coloured icon is the classic tell of a port.
  */
 
-import { Menu, Tray, app, nativeImage, type BrowserWindow } from 'electron';
-import { join } from 'node:path';
+import { Menu, Tray, nativeImage, type BrowserWindow } from 'electron';
 
 import type { AnnaConfig } from '../shared/protocol.ts';
+
+/**
+ * The icon, inlined rather than loaded from disk.
+ *
+ * `nativeImage.createFromPath(join(app.getAppPath(), …))` works in development
+ * and silently produces an empty image inside a packaged `.asar` — which does
+ * not throw, does not log, and leaves you with a Tray object that exists and
+ * shows nothing. It is 1.1kB of base64; the packaging problem is not worth
+ * having.
+ */
+const ICON_1X =
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA8ElEQVR4nI3SMU7EQAwF0JcFCkBE' +
+  'oqBENEtFQ80NOAAVJTUlV6HjGltQcYaVqKn2AEhIC0JkKPBI2ckky5es2N/2j8cz1NH8kxstTLjA' +
+  'XXBPeO3lRjGLojneoziFP4/crGwo44RbtFiHtcGlsmd3ZJJVfPcq3CSasH0sekdY4KCX3yqScR6W' +
+  'UR55oJa3fIJ7HEf8hUe8hUg3NX6LZW/8bCucqtxERl7oTTR84jtsHdxDUVu9haMYcafIJxyWxbVR' +
+  'OuObHrzCmkAKgZ8Q68LP3CjyMz7Dh+ESEy4nfryRuMKzv9tY4gXX25ozmsIv4w38AkYJOTKNMGt8' +
+  'AAAAAElFTkSuQmCC';
+
+const ICON_2X =
+  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAB30lEQVR4nNWWvUoDQRDHf5ekESxS' +
+  'aGGnqSxi5wtoo6WltZ1FXsQXyDMICmkUImKTNqUSEAtLbQTTCImXs7gZsrnc3e6eG8E/DMftfO7s' +
+  'zO5EVEckBJAI/RnqjmtWRHaRXJ1EHG7L2isQG7yVwEx5BxgBE6GRrGXlgqIm3y7zM89SNyMbDHq+' +
+  'J+JoQprymVAsa4nImDpBA+iLsynLu58Kr+8TQMNBJhLDAC2K01sTasm/U1G6npUW1Zg05XlGE+GN' +
+  'MzqlcAlAWw6gJzpxjlwsvJ781wsCrQRtrSbwzPzMTUqE12RFrajZ2gEGLBfhQHimrBW+UWpRRcAR' +
+  'sC/rQ+COtAZWehu6tJZX//tkoEa6wwbQBjZYfA0/gUfgy5ANBt3VKfBE8VX8ApwbAQcpRHXeMRzp' +
+  '9WvSzOBfGEH8CmqgLQ6+hYoyYL4JB5kNlDqw8c9YnAPK5FWuUyLnHIAW0h7z9nOxGQG78q9vQqUA' +
+  'skZ94GQ7+ODgi38TQJWr1UnHpwZ8EaQGlP9O8SCShV5Ub4aNQj1bAKp4aTNkQAeTa0cfVmgL3pI/' +
+  'iOQNJkNgjUDvgU4368AVxdew0j2wZQRvNe4ahKb/EDgGNjMyH8ADcJOjEwQ+c55z2qucT71ETzvA' +
+  'eec/iIua10e9zBUAAAAASUVORK5CYII=';
 
 export interface TrayDeps {
   window: BrowserWindow;
@@ -31,9 +59,14 @@ export interface TrayDeps {
 export type AnnaTray = Tray & { refresh(): void };
 
 export function createTray(deps: TrayDeps): AnnaTray {
-  const icon = nativeImage.createFromPath(
-    join(app.getAppPath(), 'resources', 'trayTemplate.png'),
-  );
+  const icon = nativeImage.createFromDataURL(`data:image/png;base64,${ICON_1X}`);
+  icon.addRepresentation({
+    scaleFactor: 2,
+    dataURL: `data:image/png;base64,${ICON_2X}`,
+  });
+  // Template images are black plus alpha; macOS recolours them for light and
+  // dark menu bars and inverts them while the menu is open. A coloured icon
+  // here is the classic tell of a port.
   icon.setTemplateImage(true);
 
   const tray = new Tray(icon);
