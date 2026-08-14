@@ -192,8 +192,11 @@ test('an unverified price gives a range and says so', () => {
     19,
   );
   assert.equal(estimate.confident, false);
-  assert.equal(estimate.low, CLIP_PRICE_ENVELOPE.low * 19);
-  assert.equal(estimate.high, CLIP_PRICE_ENVELOPE.high * 19);
+  // Rounded to cents: 0.1 * 19 is 1.9000000000000001 in binary floating point,
+  // and a warning dialogue that quotes that number is a warning nobody trusts.
+  assert.equal(estimate.low, 1.9);
+  assert.equal(estimate.high, 9.5);
+  assert.ok(estimate.low >= CLIP_PRICE_ENVELOPE.low * 19 - 0.01);
   assert.ok(estimate.high > estimate.low);
 });
 
