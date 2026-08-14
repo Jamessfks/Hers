@@ -257,3 +257,53 @@ test('usage is damped so a few incumbents cannot crowd out everything', async ()
   const spread = (hits[0]?.score ?? 0) - (hits[1]?.score ?? 0);
   assert.ok(spread < 0.1, `usage should be damped, but it opened a ${spread.toFixed(3)} gap`);
 });
+
+test('the transcript is one conversation, not every conversation', async () => {
+  // beginSession existed and nothing ever called it, so the prompt replayed
+  // messages from other days as the current conversation. Anna told a user they
+  // were "looping" because she was reading three separate runs as one.
+  let clock = 1_000_000;
+  const { store, memory } = fixture({ now: () => clock });
+
+  memory.record('user', 'monday thing');
+  memory.record('anna', 'monday reply');
+
+  clock += 3 * 60 * 60 * 1000; // three hours later
+  memory.record('user', 'tuesday thing');
+
+  assert.deepEqual(
+    memory.liveTranscript().map((turn) => turn.text),
+    ['tuesday thing'],
+    'a new session must not replay the old one',
+  );
+  assert.equal(store.countTurns(), 3, 'but nothing is lost from the record');
+});
+
+test('a short gap continues the same conversation', () => {
+  let clock = 1_000_000;
+  const { memory } = fixture({ now: () => clock });
+  memory.record('user', 'first');
+  clock += 5 * 60 * 1000; // five minutes
+  memory.record('user', 'second');
+  assert.equal(memory.liveTranscript().length, 2);
+});
+
+test('relaunching mid-conversation resumes it rather than forgetting', () => {
+  let clock = 1_000_000;
+  const store = new MemoryStore({ path: ':memory:' });
+  const first = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+  first.record('user', 'before the restart');
+
+  clock += 60_000; // a minute later, app relaunches
+  const second = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+  assert.equal(second.sessionId, first.sessionId, 'should resume the live session');
+  assert.deepEqual(
+    second.liveTranscript().map((t) => t.text),
+    ['before the restart'],
+  );
+
+  clock += 3 * 60 * 60 * 1000; // relaunch tomorrow
+  const third = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+  assert.notEqual(third.sessionId, first.sessionId, 'a long gap starts a new conversation');
+  assert.deepEqual(third.liveTranscript(), []);
+});

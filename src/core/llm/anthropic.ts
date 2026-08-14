@@ -49,7 +49,26 @@ export function createAnthropicProvider(
         signal: request.signal ?? null,
         body: JSON.stringify({
           model: request.model,
-          system: request.system,
+          /*
+           * The persona is ~4kB and identical on every turn, so it is cached
+           * rather than re-read each time.
+           *
+           * Measured on a real 10-turn session with Haiku: time to first
+           * performance event was 900-1550ms, most of it spent re-processing a
+           * prompt that had not changed. A cache hit also bills those tokens at
+           * a tenth of the input rate, which matters when the whole point is to
+           * run this on someone's own key.
+           *
+           * The breakpoint goes on the system block only. Messages change every
+           * turn, so caching them would thrash the cache for no benefit.
+           */
+          system: [
+            {
+              type: 'text',
+              text: request.system,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
           messages: request.messages,
           max_tokens: request.maxTokens ?? 400,
           temperature: request.temperature ?? 1,

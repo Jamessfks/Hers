@@ -109,6 +109,29 @@ export class MemoryStore {
     return rows.reverse().map(toTurn);
   }
 
+  /**
+   * The turns belonging to one continuous stretch of talking.
+   *
+   * This is what "the current conversation" means. `recentTurns` spans the
+   * whole history, which is right for consolidation and wrong for the prompt —
+   * replaying last Tuesday's messages as if they were this conversation is how
+   * a companion ends up accusing someone of repeating themselves.
+   */
+  turnsInSession(sessionId: string, limit = 40): Turn[] {
+    const rows = this.#db
+      .prepare('SELECT * FROM turns WHERE session_id = ? ORDER BY id DESC LIMIT ?')
+      .all(sessionId, limit) as unknown as TurnRow[];
+    return rows.reverse().map(toTurn);
+  }
+
+  /** The most recent turn of all, used to decide whether to resume a session. */
+  lastTurn(): Turn | null {
+    const row = this.#db
+      .prepare('SELECT * FROM turns ORDER BY id DESC LIMIT 1')
+      .get() as unknown as TurnRow | undefined;
+    return row ? toTurn(row) : null;
+  }
+
   turnsSince(turnId: number, limit = 500): Turn[] {
     const rows = this.#db
       .prepare('SELECT * FROM turns WHERE id > ? ORDER BY id ASC LIMIT ?')

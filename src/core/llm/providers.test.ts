@@ -385,3 +385,21 @@ test('a network failure during validation is reported, not swallowed', async () 
   // catching the throw itself.
   await assert.rejects(() => createOpenAiProvider('k', { fetch: dead }).validateKey());
 });
+
+test('anthropic caches the system prompt, which is identical every turn', async () => {
+  // The persona is ~4kB and unchanged between turns. Re-reading it is most of
+  // the measured time-to-first-token, and it is billed at full rate.
+  const { fetch, calls } = mockFetch([
+    { match: /v1\/messages/, reply: () => sse([{ data: '{"type":"message_stop"}' }]) },
+  ]);
+  const provider = createAnthropicProvider('sk-ant-test', { fetch });
+  await collect(provider.stream({ ...TURN, model: 'claude-haiku-4-5-20251001' }));
+
+  const body = calls[0]!.body as {
+    system: Array<{ type: string; text: string; cache_control?: { type: string } }>;
+    messages: unknown[];
+  };
+  assert.equal(body.system[0]?.type, 'text');
+  assert.equal(body.system[0]?.text, 'be anna');
+  assert.deepEqual(body.system[0]?.cache_control, { type: 'ephemeral' });
+});

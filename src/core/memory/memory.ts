@@ -26,6 +26,22 @@ const CONSOLIDATE_EVERY_TURNS = 12;
 /** Turns replayed verbatim into the prompt; older context comes from summaries. */
 const LIVE_TRANSCRIPT_TURNS = 24;
 
+/**
+ * A gap this long ends the conversation.
+ *
+ * `beginSession` existed and was never called by anything, so every turn since
+ * install belonged to one endless session and the prompt replayed messages from
+ * other days as the current conversation. Observed consequence: Anna telling
+ * someone they were "looping" and had said the same thing "yesterday, and the
+ * day before" — she was reading three separate test runs as one conversation.
+ *
+ * Forty-five minutes is long enough to survive lunch, a meeting or a restart
+ * mid-thought, and short enough that tomorrow morning is plainly a new
+ * conversation. What carries across the boundary is facts and the rolling
+ * summary — which is exactly what a person carries across it too.
+ */
+const SESSION_GAP_MS = 45 * 60 * 1000;
+
 const VALID_KINDS = new Set<FactKind>(['identity', 'preference', 'thread', 'event', 'pattern']);
 
 export interface MemoryOptions {
@@ -44,7 +60,8 @@ export class Memory {
   readonly #llm: LlmProvider | undefined;
   readonly #model: string;
   readonly #now: () => number;
-  #sessionId = crypto.randomUUID();
+  #sessionId: string;
+  #lastTurnAt: number;
   #turnsSinceConsolidation = 0;
   #consolidating: Promise<void> | null = null;
 
@@ -54,28 +71,53 @@ export class Memory {
     this.#llm = options.llm;
     this.#model = options.consolidationModel ?? options.llm?.suggestedModels[0] ?? '';
     this.#now = options.now ?? (() => Date.now());
+
+    // Resume rather than always starting fresh: relaunching the app in the
+    // middle of a conversation should continue it, not amnesia.
+    const last = this.#store.lastTurn();
+    const recent = last !== null && this.#now() - last.at < SESSION_GAP_MS;
+    this.#sessionId = recent ? last.sessionId : crypto.randomUUID();
+    this.#lastTurnAt = recent ? last.at : 0;
   }
 
   /** Starts a new continuous stretch of conversation. */
   beginSession(): void {
     this.#sessionId = crypto.randomUUID();
+    this.#lastTurnAt = 0;
+  }
+
+  /** The conversation currently in progress. */
+  get sessionId(): string {
+    return this.#sessionId;
   }
 
   record(speaker: 'user' | 'anna', text: string): void {
     const trimmed = text.trim();
     if (!trimmed) return;
+    const at = this.#now();
+
+    // A long silence ends the conversation and starts a new one.
+    if (this.#lastTurnAt > 0 && at - this.#lastTurnAt > SESSION_GAP_MS) this.beginSession();
+    this.#lastTurnAt = at;
+
     this.#store.appendTurn({
       speaker,
       text: trimmed,
-      at: this.#now(),
+      at,
       sessionId: this.#sessionId,
     });
     this.#turnsSinceConsolidation += 1;
   }
 
-  /** Turns to replay verbatim into the next prompt, oldest first. */
+  /**
+   * Turns to replay verbatim into the next prompt, oldest first.
+   *
+   * Scoped to the current session. Everything older reaches her through facts
+   * and the rolling summary, which is the difference between remembering a
+   * conversation and re-reading it.
+   */
   liveTranscript(limit = LIVE_TRANSCRIPT_TURNS) {
-    return this.#store.recentTurns(limit);
+    return this.#store.turnsInSession(this.#sessionId, limit);
   }
 
   runningSummary(): string | undefined {
