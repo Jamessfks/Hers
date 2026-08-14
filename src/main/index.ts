@@ -27,6 +27,7 @@ import {
   createOpenAiEmbedder,
 } from '../core/memory/embedder.ts';
 import { createAnnaWindow, createSettingsWindow } from './window.ts';
+import { Diagnostics } from './diagnostics.ts';
 import { createMockLlm } from './demo/mock-llm.ts';
 import { createSayTts } from './demo/mock-tts.ts';
 import { createTray } from './tray.ts';
@@ -53,6 +54,8 @@ async function main(): Promise<void> {
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
   const charactersDir = join(app.getPath('userData'), 'characters');
+  const diag = new Diagnostics(join(app.getPath('userData'), 'diagnostics.jsonl'));
+  if (diag.enabled) console.log('[anna] diagnostics ->', join(app.getPath('userData'), 'diagnostics.jsonl'));
 
   /**
    * Where the bundled default character might be.
@@ -125,16 +128,23 @@ async function main(): Promise<void> {
       model: settings.llm.model,
       voiceId: settings.tts.voiceId,
       sinks: {
-        perform: (event) => send(IPC.perform, event),
-        audio: (clauseId, chunk) =>
+        perform: (event) => {
+          diag.noteEvent(event.kind);
+          if (event.kind === 'turn-end') diag.endTurn();
+          send(IPC.perform, event);
+        },
+        audio: (clauseId, chunk) => {
+          if (chunk) diag.noteAudio();
           send(IPC.audio, {
             clauseId,
             pcm: chunk ? chunk.pcm : null,
             sampleRate: chunk?.sampleRate ?? 44100,
-          }),
+          });
+        },
         state: (state) => send(IPC.state, state),
         trouble: (message) => {
           console.error('[anna]', message);
+          diag.noteError(message);
           send(IPC.trouble, message);
         },
       },
@@ -176,6 +186,7 @@ async function main(): Promise<void> {
     }
 
     if (sensed.kind === 'user-speech' || sensed.kind === 'user-typed') {
+      diag.startTurn('user', config.get().llm.model, sensed.text.length);
       void companion?.respondTo(sensed.text);
       return;
     }
@@ -186,6 +197,7 @@ async function main(): Promise<void> {
     }
 
     if (sensed.kind === 'camera-frame') {
+      diag.note('camera-frame', { bytes: sensed.jpegBase64.length });
       void look(sensed.jpegBase64);
     }
   });
@@ -223,6 +235,7 @@ async function main(): Promise<void> {
       apiKey: key,
       jpegBase64,
     });
+    diag.note('vision-read', { got: read !== null, chars: read?.length ?? 0 });
     situation.observe({
       kind: 'presence',
       present: read !== null,
@@ -436,7 +449,10 @@ async function main(): Promise<void> {
     setInterval(async () => {
       if (!config.get().senses.screenActivity) return;
       const activity = await readActivity();
-      if (!activity) return;
+      if (!activity) {
+        diag.note('activity-blocked', { reason: 'accessibility denied or osascript failed' });
+        return;
+      }
       const at = Date.now();
       situation.observe({ kind: 'activity', ...activity, at });
       situation.observe({
@@ -459,7 +475,13 @@ async function main(): Promise<void> {
     setInterval(() => {
       // She does not speak first while she is hidden. See setVisible.
       if (!window.isVisible()) return;
-      void companion?.tick();
+      void (async () => {
+        const active = currentCompanion();
+        if (!active) return;
+        diag.startTurn('opener', config.get().llm.model, 0);
+        const opened = await active.tick();
+        if (!opened) diag.endTurn();
+      })();
     }, ATTENTION_TICK_MS),
   );
 
