@@ -267,7 +267,13 @@ export function createAppleStt(options: AppleSttOptions): SttProvider {
       const plan = conversionFor(mimeType);
       if (plan.kind === 'unsupported') throw new Error(plan.reason);
 
-      const binary = options.binaryPaths.find((path) => existsSync(path)) ?? options.binaryPaths[0];
+      const binary = options.binaryPaths.find((path) => existsSync(path));
+      /*
+       * Checked here rather than left to `open`, which reports a missing bundle
+       * as a raw NSCocoaErrorDomain 260 with a temp path in it. That is a
+       * sentence about Apple's file API, not about what the user should do —
+       * and "run the native build step" is something they can act on.
+       */
       if (!binary) throw new Error(describeFailure(EXIT.notInstalled, ''));
 
       /*
