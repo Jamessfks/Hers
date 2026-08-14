@@ -32,12 +32,75 @@ body {
   cursor: default;
 }
 
+/*
+ * The panel.
+ *
+ * A visible boundary between her and the desktop, because that is what makes
+ * her read as a device on the desk rather than as something loose on top of
+ * your screen. The frame is deliberately quiet: one hairline border, a soft
+ * vertical wash so she separates from any wallpaper, and a shadow doing most
+ * of the work of lifting it off the background.
+ *
+ * `inset: 0` with a border-radius on a transparent window is what gives real
+ * rounded corners — the window itself is square and fully transparent.
+ */
 #app {
   position: relative;
   width: 100%;
   height: 100%;
   display: grid;
   grid-template-rows: 1fr auto auto;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(142, 205, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(16, 17, 24, 0.62) 0%, rgba(10, 11, 16, 0.78) 100%);
+  backdrop-filter: blur(22px) saturate(1.25);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+/*
+ * The drag handle: a strip along the top edge, invisible but grabbable.
+ * Only this region is draggable — a draggable parent would swallow clicks on
+ * the input and the buttons underneath it.
+ */
+#grip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 34px;
+  -webkit-app-region: drag;
+  z-index: 5;
+}
+
+/* A faint bar so the handle is discoverable rather than a secret. */
+#grip::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 160ms ease;
+}
+
+#app:hover #grip::after {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Nothing inside the panel should be draggable except the grip. */
+#composer,
+#say,
+#settings,
+#dismiss,
+#subtitle {
+  -webkit-app-region: no-drag;
 }
 
 #stage {
@@ -86,15 +149,15 @@ body {
 #composer {
   grid-row: 3;
   grid-column: 1;
-  margin: 0 18px 18px;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 180ms ease, transform 180ms ease;
+  margin: 0 14px 14px;
+  opacity: 0.55;
+  transform: translateY(0);
+  transition: opacity 180ms ease;
 }
 
-#composer[data-visible='true'] {
+#app:hover #composer,
+#composer:focus-within {
   opacity: 1;
-  transform: translateY(0);
 }
 
 #composer {
@@ -130,13 +193,8 @@ body {
  *
  * She fades and sinks rather than blinking out. 240ms is long enough to read as
  * her leaving and short enough that it never feels like the button lagged; the
- * main process hides the window once it finishes, so nothing is left painting
- * an invisible frame.
+ * main process hides the window once it finishes.
  */
-#app {
-  transition: opacity 240ms ease, transform 240ms ease;
-}
-
 #app[data-leaving='true'] {
   opacity: 0;
   transform: translateY(14px) scale(0.985);

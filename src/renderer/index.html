@@ -16,6 +16,12 @@
       them — see setInteractive() in main.ts.
     -->
     <div id="app">
+      <!--
+        The panel. `#grip` is the only draggable region: making the whole frame
+        draggable would mean the input and the buttons could not be clicked,
+        because -webkit-app-region: drag swallows every event inside it.
+      -->
+      <div id="grip" aria-hidden="true"></div>
       <canvas id="stage"></canvas>
 
       <div id="subtitle" aria-live="polite"></div>

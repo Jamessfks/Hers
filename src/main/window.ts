@@ -22,9 +22,23 @@
 import { BrowserWindow, screen, shell } from 'electron';
 import { join } from 'node:path';
 
-/** Anna's canvas: tall and narrow, sized for a standing full-body figure. */
-const WIDTH = 420;
-const HEIGHT_RATIO = 0.92;
+/**
+ * Anna's panel.
+ *
+ * A defined medium-sized stage in the corner rather than a full-height
+ * transparent strip. The bounded form is the point: a frame around her reads as
+ * a device sitting on the desk — the Proto hologram box — where an unbounded
+ * figure over the whole screen reads as an overlay that is in the way.
+ *
+ * It also removes a whole class of problem. The full-height version had to
+ * swallow the mouse only where she happened to be drawn, hit-tested by
+ * guessing at her silhouette on every pointer move. A panel is simply a panel:
+ * clicks inside belong to her, clicks outside do not.
+ */
+const WIDTH = 360;
+const HEIGHT = 560;
+/** Gap from the screen edges, so she is not jammed into the corner. */
+const MARGIN = 28;
 
 export interface AnnaWindow {
   window: BrowserWindow;
@@ -34,17 +48,23 @@ export interface AnnaWindow {
 
 export function createAnnaWindow(): AnnaWindow {
   const display = screen.getPrimaryDisplay();
-  const height = Math.round(display.workAreaSize.height * HEIGHT_RATIO);
+  const { workArea } = display;
 
   const window = new BrowserWindow({
     width: WIDTH,
-    height,
-    x: display.workArea.x + display.workAreaSize.width - WIDTH - 24,
-    y: display.workArea.y + display.workAreaSize.height - height,
+    height: HEIGHT,
+    x: workArea.x + workArea.width - WIDTH - MARGIN,
+    y: workArea.y + workArea.height - HEIGHT - MARGIN,
+    minWidth: 260,
+    minHeight: 400,
+    // Transparent so the panel can have genuinely rounded corners; the frame
+    // itself is drawn in CSS.
     transparent: true,
     frame: false,
     hasShadow: false,
-    resizable: false,
+    // Movable and resizable: it is her space on the desk, not a fixed fixture.
+    resizable: true,
+    movable: true,
     skipTaskbar: true,
     // Do not steal focus when she appears; she is not asking for the floor.
     focusable: true,
@@ -68,10 +88,6 @@ export function createAnnaWindow(): AnnaWindow {
   // ANNA_ALLOW_CAPTURE=1 when you actually want her in a recording or a demo.
   window.setContentProtection(process.env['ANNA_ALLOW_CAPTURE'] !== '1');
 
-  // Default to click-through. The renderer turns this off while the pointer is
-  // over Anna herself or over the input bar.
-  window.setIgnoreMouseEvents(true, { forward: true });
-
   window.once('ready-to-show', () => window.showInactive());
 
   // Anything Anna links to opens in the real browser, never inside her window.
@@ -82,8 +98,13 @@ export function createAnnaWindow(): AnnaWindow {
 
   return {
     window,
-    setInteractiveRegion(hit: boolean) {
-      window.setIgnoreMouseEvents(!hit, { forward: true });
+    /**
+     * Retained for the IPC contract, but a bounded panel is always interactive.
+     * The old behaviour — swallowing the mouse only over her silhouette — was a
+     * consequence of covering half the screen, and that is no longer true.
+     */
+    setInteractiveRegion() {
+      // Intentionally empty. See the note on WIDTH.
     },
   };
 }
