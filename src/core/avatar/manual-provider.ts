@@ -99,6 +99,10 @@ export function createManualProvider(dropDir: string): VideoClipProvider {
         'utf8',
       );
 
+      // The job id *is* the slot name: there is no remote job to refer to, and
+      // a handle recovered from a manifest months later still has to find the
+      // right file. A generated id would only be a second name for the same
+      // thing, with somewhere else it could go wrong.
       return { providerId: 'manual', id: request.slot, submittedAt: Date.now() };
     },
 

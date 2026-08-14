@@ -36,6 +36,11 @@ export const EXIT = {
   timedOut: 8,
   /** Not from the helper: the shell's "no such executable". */
   notInstalled: 127,
+  /**
+   * Not an exit code at all — the helper died on a signal and never got to
+   * choose one. Negative so it can never collide with a real status.
+   */
+  killed: -1,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -175,15 +180,35 @@ export type Run = (file: string, args: string[]) => Promise<RunResult>;
  * `execFile` treats a non-zero exit as an error, which would collapse the
  * helper's carefully distinct exit codes into one thrown object and lose the
  * stderr that goes with them. Everything here is a result.
+ *
+ * The three failure shapes it hands back are genuinely different and the first
+ * draft of this conflated them: `error.code` is a *number* for a normal exit, a
+ * *string* errno when the process could not be started at all, and absent when
+ * the process was killed by a signal. Reading it as a number in all three cases
+ * turned a killed helper into `code: 0` with empty output — which the caller
+ * reads as "the room was quiet". A transcriber that TCC is executing every time
+ * would have looked exactly like a user who never speaks.
  */
 const spawn: Run = (file, args) =>
   new Promise((resolve) => {
     execFile(file, args, { maxBuffer: 1 << 20 }, (error, stdout, stderr) => {
-      const code =
-        error && typeof (error as NodeJS.ErrnoException).code === 'string'
-          ? EXIT.notInstalled // ENOENT and friends: the binary is not there.
-          : ((error as { code?: number } | null)?.code ?? 0);
-      resolve({ code, stdout, stderr });
+      if (!error) return resolve({ code: 0, stdout, stderr });
+
+      const failure = error as Error & { code?: number | string; signal?: string };
+      if (typeof failure.code === 'number') {
+        return resolve({ code: failure.code, stdout, stderr });
+      }
+      if (failure.signal) {
+        return resolve({ code: EXIT.killed, stdout, stderr: `${stderr}`.trim() });
+      }
+      resolve({
+        code: EXIT.notInstalled,
+        stdout,
+        // ENOENT is the ordinary case and its default sentence is the right
+        // one, so say nothing extra. Anything else (EACCES on a file that lost
+        // its executable bit, say) needs the errno to be diagnosable at all.
+        stderr: failure.code === 'ENOENT' ? '' : `Could not run the on-device transcriber (${failure.code}).`,
+      });
     });
   });
 

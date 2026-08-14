@@ -111,7 +111,14 @@ export interface ClipEntry {
   status: ClipStatus;
   /** File name inside the library's `clips/` directory. Set only when ready. */
   file: string | null;
-  /** Length of the finished clip. 0 until one exists. */
+  /**
+   * Length of the finished clip.
+   *
+   * 0 means "nobody measured it" rather than "empty" — a clip recovered from
+   * disk by {@link reconcile} has real bytes and no recorded duration, because
+   * reading one out of a container means decoding it. The player must fall back
+   * to the media element's own `duration` when this is 0.
+   */
   durationMs: number;
   /** In-flight job, or null. Non-null only while `status` is 'generating'. */
   job: ClipJobRef | null;
@@ -216,9 +223,16 @@ export function clipFileName(slot: ClipSlotName, extension = 'mp4'): string {
   return `${slot}.${extension.replace(/^\./, '')}`;
 }
 
-/** The slot a file on disk belongs to, or null if it is not one of ours. */
+/**
+ * The slot a file on disk belongs to, or null if it is not one of ours.
+ *
+ * Matches on the stem rather than demanding `.mp4`, because vendors hand back
+ * different containers and a user dropping in their own clips has not done
+ * anything wrong by keeping the `.webm` they were given.
+ */
 export function slotOfClipFile(fileName: string): ClipSlotName | null {
-  const stem = fileName.slice(0, fileName.lastIndexOf('.') === -1 ? undefined : fileName.lastIndexOf('.'));
+  const dot = fileName.lastIndexOf('.');
+  const stem = dot === -1 ? fileName : fileName.slice(0, dot);
   return (CLIP_SLOT_NAMES as readonly string[]).includes(stem) ? (stem as ClipSlotName) : null;
 }
 
