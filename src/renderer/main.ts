@@ -26,6 +26,7 @@ const subtitleEl = document.querySelector<HTMLDivElement>('#subtitle')!;
 const composerEl = document.querySelector<HTMLDivElement>('#composer')!;
 const inputEl = document.querySelector<HTMLInputElement>('#say')!;
 const troubleEl = document.querySelector<HTMLDivElement>('#trouble')!;
+const appEl = document.querySelector<HTMLDivElement>('#app')!;
 
 const stage = createStage(canvas);
 const player = new SpeechPlayer();
@@ -141,63 +142,15 @@ function hideTrouble(): void {
 // Input
 // ---------------------------------------------------------------------------
 
-/**
- * Click-through management.
+/*
+ * The panel is always interactive, so there is no pointer tracking any more.
  *
- * The window covers a tall strip of the screen but Anna occupies a fraction of
- * it, so the main process is told to swallow the mouse only while the pointer
- * is over her or over the composer. Anything else and the user cannot click the
- * editor behind her.
+ * The old version hit-tested the pointer against a guess at her silhouette on
+ * every mousemove, to decide whether the window should swallow the click —
+ * necessary when a transparent window covered half the screen, and pure
+ * complexity now that she lives in a bounded panel.
  */
-function trackPointer(): void {
-  let interactive = false;
-  window.addEventListener('mousemove', (event) => {
-    const overComposer = composerEl.contains(event.target as Node);
-    const overAnna = isOverCharacter(event.clientX, event.clientY);
-    const next = overComposer || overAnna;
-    if (next !== interactive) {
-      interactive = next;
-      window.anna.setInteractive(next);
-      composerEl.dataset['visible'] = next ? 'true' : 'false';
-    }
-  });
-}
 
-/**
- * Cheap hit test: the lower-centre column of the window, where a standing
- * figure is. A per-pixel alpha read would be exact but costs a GPU readback
- * every mouse move, and being wrong by a few pixels at the edge of a silhouette
- * has no consequence.
- */
-function isOverCharacter(x: number, y: number): boolean {
-  const { innerWidth: width, innerHeight: height } = window;
-  const withinX = Math.abs(x - width / 2) < width * 0.34;
-  const withinY = y > height * 0.18;
-  return withinX && withinY;
-}
-
-document
-  .querySelector<HTMLButtonElement>('#settings')!
-  .addEventListener('click', () => window.anna.openSettings());
-
-/**
- * Send her away.
- *
- * The fade runs here and the window is hidden by main once it finishes, so she
- * leaves rather than blinking out. ⌥⌘A brings her back, and so does the menu
- * bar item — the button deliberately does not quit anything.
- */
-const appEl = document.querySelector<HTMLDivElement>('#app')!;
-const LEAVE_MS = 240;
-
-document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click', () => {
-  appEl.dataset['leaving'] = 'true';
-  player.stop();
-  body?.silence();
-  window.setTimeout(() => window.anna.hide(), LEAVE_MS);
-});
-
-// She looks up the moment you start typing, not when the reply comes back.
 inputEl.addEventListener('focus', () => body?.setAttention('listening'));
 inputEl.addEventListener('input', () => body?.setAttention('listening'));
 
@@ -269,7 +222,6 @@ async function boot(): Promise<void> {
   // bytes plus a blob URL is the only route the loader can take.
   const stored = await window.anna.loadCharacter();
   await loadCharacter(stored ? URL.createObjectURL(new Blob([stored as BlobPart])) : '');
-  trackPointer();
 
   const microphone = new Microphone({
     onUtterance: (audio, mimeType) =>
