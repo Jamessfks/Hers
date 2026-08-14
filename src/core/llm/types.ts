@@ -13,6 +13,10 @@
  *    amount of animation polish recovers from that.
  */
 
+import type { ModelOption } from './models.ts';
+
+export type { ModelOption };
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -28,16 +32,39 @@ export interface CompletionRequest {
   signal?: AbortSignal;
 }
 
+/**
+ * A `fetch` implementation.
+ *
+ * Injected rather than reached for globally so the adapters can be tested
+ * against recorded vendor payloads — including the failure shapes, which is
+ * where the interesting behaviour lives and which no live account will
+ * reliably reproduce on demand.
+ */
+export type FetchLike = typeof globalThis.fetch;
+
+export interface ProviderOptions {
+  /** Override for tests, or to point at a compatible gateway. */
+  fetch?: FetchLike;
+  /** Override the API root. Used by OpenAI-compatible endpoints. */
+  baseUrl?: string;
+}
+
 export interface LlmProvider {
   readonly id: string;
   /** Human-readable name for the settings UI. */
   readonly label: string;
-  /** Models we suggest in the picker. The field stays free-text. */
+  /** Fallback list, used when the live one cannot be fetched. */
   readonly suggestedModels: readonly string[];
   /** Streams the reply as it is generated. Yields raw text deltas. */
   stream(request: CompletionRequest): AsyncIterable<string>;
   /** Cheap credential check for the onboarding screen. */
   validateKey(): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /**
+   * The models this account can actually use, newest-first as the vendor
+   * returns them. Never throws: an unreachable list degrades the picker to the
+   * built-in catalogue, which is a worse menu rather than a broken screen.
+   */
+  listModels(): Promise<ModelOption[]>;
 }
 
 export class LlmError extends Error {
