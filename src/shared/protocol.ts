@@ -102,7 +102,18 @@ export type SenseEvent =
       at: number;
     }
   | { kind: 'calendar'; summary: string; startsInMinutes: number; at: number }
-  | { kind: 'ambient'; description: string; at: number };
+  | { kind: 'ambient'; description: string; at: number }
+  /**
+   * A finished utterance, still as audio. Transcription happens in main so the
+   * renderer never needs a provider key. See core/speech/stt.ts.
+   */
+  | { kind: 'user-audio'; audio: Uint8Array; mimeType: string; at: number }
+  /**
+   * A single camera frame, JPEG, base64. Sampled on a slow timer and never
+   * stored — main sends it to the vision model and keeps only the sentence
+   * that comes back.
+   */
+  | { kind: 'camera-frame'; jpegBase64: string; at: number };
 
 export type SenseKind = SenseEvent['kind'];
 
