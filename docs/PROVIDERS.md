@@ -111,13 +111,35 @@ axes is the precise definition of a provider you do not ship.
 
 ### Hearing
 
-Two options, not three, because hearing is optional — you can always type — and
-because the interface is four lines long:
-
 | Provider | Model | Note |
 | --- | --- | --- |
-| Deepgram | `nova-3` | Default. Fastest turnaround on a finished utterance. |
-| OpenAI | `whisper-1` | For people who already have exactly one key. |
+| This Mac | `SFSpeechRecognizer` | Default. No key, no account, no network. |
+| Deepgram | `nova-3` | Better on strong accents and noisy rooms. |
+| OpenAI | `whisper-1` | Better outside English. |
+
+The default is the OS. Every other provider in this document costs money, and
+two of them are unavoidable — something has to generate the words and something
+has to say them. Hearing is the one capability macOS already does well enough,
+for free, without the audio leaving the machine, and charging a third signup for
+it is how a microphone toggle stays off forever.
+
+The accuracy gap is real but narrow, and it is the wrong thing to optimise
+first: a companion who hears you imperfectly is enormously better than one who
+cannot hear you at all. Both paid options stay one dropdown away.
+
+Two things about it are worth knowing before touching that code. It needs no
+key, which broke an assumption the main process had baked in: the transcription
+path returned early when no key was stored, which for a keyless provider
+silently swallowed every utterance. See `currentStt` in
+[`index.ts`](../src/main/index.ts).
+
+And it cannot read what the renderer records. `MediaRecorder` on macOS produces
+WebM/Opus; CoreAudio, which is what `SFSpeechRecognizer` reads through, has no
+Matroska parser at all, so `afconvert` refuses the file no matter which flags it
+is handed (`Couldn't open input file ('typ?')`). The renderer therefore decodes
+its own recording and re-emits it as 16kHz mono WAV before it crosses IPC — see
+[`wav.ts`](../src/core/speech/wav.ts). The paid providers read WebM happily, so
+that conversion falls back to the original bytes rather than failing.
 
 Transcription runs in the main process on a finished utterance rather than as a
 live socket from the renderer. A streaming socket would save a couple of hundred

@@ -27,7 +27,7 @@ two are ever contacted.
 | --- | --- | --- | --- |
 | Your words, typed or transcribed | Every turn | Your language provider | Stored verbatim in `turns` |
 | Anna's reply, one clause at a time | Every turn | Your voice provider | Spoken words stored; directives stripped |
-| One recorded utterance, as audio | Only after the local VAD hears speech | Your transcription provider | Nothing. The bytes are not written to disk |
+| One recorded utterance, as audio | Only after the local VAD hears speech — and only if you switched hearing to Deepgram or OpenAI | Your transcription provider, or nobody on the default | Nothing. On the default macOS transcribes it here, and the temp file it needs is deleted with its directory as soon as the transcript returns |
 | One 512px JPEG | At most every 15s, 45s by default, camera on only | Your language provider's vision model | Nothing. Only the one-clause description survives |
 | Sensor lines as prose | Every turn, inside the system prompt | Your language provider | Nothing beyond the turn |
 | Fact sentences | On recall and on consolidation | Your embeddings provider — or nowhere, on the lexical fallback | Vector stored in `facts.embedding` |
