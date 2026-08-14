@@ -36,14 +36,27 @@
             <select id="llm-provider" data-provider></select>
             <label class="visually-hidden" for="llm-key">Language API key</label>
             <input id="llm-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-reveal aria-label="Show the key" title="Show the key">👁</button>
             <button type="button" data-save>Check &amp; save</button>
+            <button type="button" data-forget class="danger" hidden>Remove</button>
           </div>
           <p class="key-status" data-status aria-live="polite"></p>
           <div class="key-row model-row">
             <label for="llm-model">Model</label>
-            <input id="llm-model" list="llm-models" spellcheck="false" autocomplete="off" />
-            <datalist id="llm-models"></datalist>
+            <select id="llm-model"></select>
+            <button type="button" id="llm-model-refresh" title="Re-fetch the model list">↻</button>
           </div>
+          <div class="key-row model-row" id="llm-model-custom-row" hidden>
+            <label for="llm-model-custom">Custom id</label>
+            <input
+              id="llm-model-custom"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="ft:gpt-4.1:you:something"
+            />
+          </div>
+          <p class="key-status" id="llm-model-note" aria-live="polite"></p>
         </div>
 
         <div class="key-group" data-kind="tts">
@@ -56,7 +69,9 @@
             <select id="tts-provider" data-provider></select>
             <label class="visually-hidden" for="tts-key">Voice API key</label>
             <input id="tts-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-reveal aria-label="Show the key" title="Show the key">👁</button>
             <button type="button" data-save>Check &amp; save</button>
+            <button type="button" data-forget class="danger" hidden>Remove</button>
           </div>
           <p class="key-status" data-status aria-live="polite"></p>
           <p class="provider-why" data-why></p>
@@ -77,7 +92,9 @@
             <select id="stt-provider" data-provider></select>
             <label class="visually-hidden" for="stt-key">Transcription API key</label>
             <input id="stt-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-reveal aria-label="Show the key" title="Show the key">👁</button>
             <button type="button" data-save>Check &amp; save</button>
+            <button type="button" data-forget class="danger" hidden>Remove</button>
           </div>
           <p class="key-status" data-status aria-live="polite"></p>
         </div>

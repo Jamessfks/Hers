@@ -23,6 +23,7 @@ import type { Secrets, SecretName } from './secrets.ts';
 import { createLlmProvider } from '../core/llm/index.ts';
 import { createSttProvider } from '../core/speech/stt.ts';
 import { createTtsProvider } from '../core/speech/index.ts';
+import { looksMisplaced, validateKey } from './key-validation.ts';
 import { readPermissions } from './senses/permissions.ts';
 import {
   IPC,
@@ -72,24 +73,52 @@ export function registerSettingsHandlers(deps: SettingsDeps): void {
       const trimmed = key.trim();
       if (!trimmed) return { ok: false as const, reason: 'That field is empty.' };
 
-      try {
-        const verdict = await validate(kind, provider, trimmed);
-        if (!verdict.ok) return verdict;
-        secrets.set(`${kind}.${provider}` as SecretName, trimmed);
-        deps.onChanged();
-        return { ok: true as const };
-      } catch (error) {
-        return {
-          ok: false as const,
-          reason: error instanceof Error ? error.message : 'Could not reach that provider.',
-        };
-      }
+      const verdict = await validateKey({
+        kind,
+        provider,
+        key: trimmed,
+        factories: {
+          llm: createLlmProvider,
+          tts: createTtsProvider,
+          stt: createSttProvider,
+        },
+      });
+      if (!verdict.ok) return verdict;
+
+      secrets.set(`${kind}.${provider}` as SecretName, trimmed);
+      deps.onChanged();
+      return { ok: true as const };
     },
   );
 
   ipcMain.handle(IPC.keyDelete, (_event, name: SecretName) => {
     secrets.set(name, '');
     deps.onChanged();
+  });
+
+  /** A shape warning, shown before the user commits to a round trip. */
+  ipcMain.handle('anna:key:shape', (_event, slot: string, key: string) =>
+    looksMisplaced(slot, key),
+  );
+
+  // -- models --------------------------------------------------------------
+
+  /**
+   * The models this account can actually use.
+   *
+   * Returns an empty list rather than an error when it cannot be fetched: the
+   * picker then falls back to the built-in catalogue, which is a shorter menu
+   * rather than a broken screen. A user without a key yet is the common case
+   * here, not an exception.
+   */
+  ipcMain.handle(IPC.modelsList, async (_event, provider: LlmProviderId) => {
+    const key = secrets.get(`llm.${provider}` as SecretName);
+    if (!key) return [];
+    try {
+      return await createLlmProvider(provider, key).listModels();
+    } catch {
+      return [];
+    }
   });
 
   // -- voices --------------------------------------------------------------
@@ -239,56 +268,3 @@ const PICK_OPTIONS = {
   filters: [{ name: 'VRM character', extensions: ['vrm'] }],
   properties: ['openFile' as const],
 };
-
-/** Cheapest real credential check each provider offers. */
-async function validate(
-  kind: KeyKind,
-  provider: string,
-  key: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (kind === 'llm') {
-    return createLlmProvider(provider as LlmProviderId, key).validateKey();
-  }
-
-  if (kind === 'tts') {
-    // No vendor offers a dedicated check, but every one of them lists voices,
-    // and a voice list is both a credential test and the thing the next screen
-    // needs anyway.
-    const voices = await createTtsProvider(provider as TtsProviderId, key).listVoices();
-    return voices.length > 0
-      ? { ok: true }
-      : { ok: false, reason: 'That key works, but the account has no voices on it.' };
-  }
-
-  // Transcription has no free health endpoint, so send it 100ms of silence.
-  // It costs a fraction of a cent and it is a genuine end-to-end check.
-  const silence = wavOfSilence(0.1);
-  await createSttProvider(provider as SttProviderId, key).transcribe(silence, 'audio/wav');
-  return { ok: true };
-}
-
-/** A minimal 16-bit mono WAV, used only as a credential probe. */
-function wavOfSilence(seconds: number, sampleRate = 16000): Uint8Array {
-  const samples = Math.floor(seconds * sampleRate);
-  const buffer = new ArrayBuffer(44 + samples * 2);
-  const view = new DataView(buffer);
-
-  const ascii = (offset: number, text: string): void => {
-    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
-  };
-
-  ascii(0, 'RIFF');
-  view.setUint32(4, 36 + samples * 2, true);
-  ascii(8, 'WAVEfmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  ascii(36, 'data');
-  view.setUint32(40, samples * 2, true);
-
-  return new Uint8Array(buffer);
-}
