@@ -41,6 +41,7 @@ interface Vault {
 
 export class Secrets {
   readonly #path: string;
+  readonly #undecryptable = new Set<SecretName>();
   #vault: Vault = { version: 1, entries: {} };
 
   constructor(path = join(app.getPath('userData'), 'secrets.json')) {
@@ -71,14 +72,31 @@ export class Secrets {
     const encoded = this.#vault.entries[name];
     if (!encoded) return null;
     try {
-      return safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+      const value = safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+      this.#undecryptable.delete(name);
+      return value;
     } catch {
-      // Keychain entry from another machine or a reinstalled OS. Drop it so the
-      // user is asked for the key again instead of hitting an opaque failure.
-      delete this.#vault.entries[name];
-      this.#save();
+      /*
+       * Do NOT delete the entry.
+       *
+       * This used to drop the stored key on any decrypt failure, on the theory
+       * that it must be a stale entry from another machine. That is one cause;
+       * the others are a Keychain that has not been unlocked yet, a transient
+       * Keychain error, and the app running under a different name — and in
+       * every one of those cases deleting is destroying a working credential
+       * the user pasted once and does not have to hand.
+       *
+       * A key that cannot be read today may read fine in a minute. Keep it,
+       * report it, and let the user decide to replace it.
+       */
+      this.#undecryptable.add(name);
       return null;
     }
+  }
+
+  /** Keys that are stored but could not be decrypted this session. */
+  get unreadable(): SecretName[] {
+    return [...this.#undecryptable];
   }
 
   has(name: SecretName): boolean {
@@ -92,7 +110,11 @@ export class Secrets {
       const value = this.get(name as SecretName);
       out[name] = {
         present: Boolean(value),
-        hint: value ? `••••${value.slice(-4)}` : '',
+        hint: value
+          ? `••••${value.slice(-4)}`
+          : this.#undecryptable.has(name as SecretName)
+            ? 'stored, but the Keychain would not release it'
+            : '',
       };
     }
     return out;
