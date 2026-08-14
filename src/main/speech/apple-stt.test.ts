@@ -20,6 +20,21 @@ import { encodeWav } from '../../core/speech/wav.ts';
 
 const ok = (stdout: string, stderr = ''): RunResult => ({ code: 0, stdout, stderr });
 
+/**
+ * Emulates the helper: writes the JSON result file the way `open` requires.
+ *
+ * The transcript stopped coming back on stdout when the helper moved behind
+ * `open` — see the note in apple-stt.ts about TCC and responsible processes —
+ * so a stub that only returns stdout no longer emulates anything real.
+ */
+async function writeResultFile(args: string[], transcript: string, confidence = 0.9) {
+  const out = args.find((arg) => arg.endsWith('result.json'));
+  if (out) {
+    await writeFile(out, JSON.stringify({ code: 0, transcript, confidence }));
+  }
+  return ok('');
+}
+
 /** Records what was spawned so the arguments can be asserted on. */
 function recorder(reply: (file: string, args: string[]) => RunResult): {
   run: Run;
@@ -73,8 +88,8 @@ test('an unrecognised type is refused rather than guessed at', () => {
 });
 
 test('conversion runs afconvert to 16kHz mono and hands over its output', async () => {
-  const { run, calls } = recorder((file) =>
-    file.endsWith('afconvert') ? ok('') : ok('converted words'),
+  const { run, calls } = recorder((file, args) =>
+    file.endsWith('afconvert') ? Promise.resolve(ok('')) : writeResultFile(args, 'converted words'),
   );
   const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
 
@@ -85,19 +100,25 @@ test('conversion runs afconvert to 16kHz mono and hands over its output', async 
   const [conversion, recognition] = calls;
   assert.deepEqual(conversion?.args.slice(0, 6), ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1']);
   assert.match(conversion?.args[6] ?? '', /utterance\.m4a$/);
-  // The recogniser must be given the *converted* file, not the original.
-  assert.match(recognition?.args[0] ?? '', /\.wav$/);
-  assert.equal(recognition?.args[0], conversion?.args[7]);
+  // Launched through `open`, and given the *converted* file, not the original.
+  assert.equal(recognition?.file, '/usr/bin/open');
+  const audioArg = recognition?.args.find((a) => a.endsWith('.wav'));
+  assert.equal(audioArg, conversion?.args[7]);
 });
 
 test('WAV skips afconvert entirely', async () => {
-  const { run, calls } = recorder(() => ok('already fine'));
+  const { run, calls } = recorder((_file, args) => writeResultFile(args, 'already fine'));
   const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
 
   await stt.transcribe(encodeWav(new Float32Array(16), 16000), 'audio/wav');
 
-  assert.equal(calls.length, 1);
-  assert.match(calls[0]?.args[0] ?? '', /utterance\.wav$/);
+  assert.equal(calls.length, 1, 'no conversion step for a WAV');
+  // args[0] is now `-W`, since the helper is launched through `open`.
+  assert.equal(calls[0]?.file, '/usr/bin/open');
+  assert.ok(
+    calls[0]?.args.some((arg) => arg.endsWith('utterance.wav')),
+    'the original WAV is handed over unconverted',
+  );
 });
 
 test('a failed conversion says so instead of blaming the recogniser', async () => {
