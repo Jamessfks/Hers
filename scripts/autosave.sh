@@ -18,7 +18,13 @@ while true; do
     git add -A >/dev/null 2>&1
     files=$(git diff --cached --name-only | wc -l | tr -d ' ')
     if git commit -q -m "wip(autosave): $(date '+%Y-%m-%d %H:%M:%S') — ${files} file(s)" >/dev/null 2>&1; then
-      echo "[autosave] $(date '+%H:%M:%S') committed ${files} file(s)"
+      # Push too, when there is a remote. A commit that only exists on this
+      # laptop is not a backup.
+      pushed=""
+      if git remote get-url origin >/dev/null 2>&1; then
+        git push -q origin HEAD >/dev/null 2>&1 && pushed=" + pushed"
+      fi
+      echo "[autosave] $(date '+%H:%M:%S') committed ${files} file(s)${pushed}"
     fi
   fi
   sleep "$INTERVAL"
