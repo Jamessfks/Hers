@@ -47,6 +47,7 @@ import type { ChatMessage, LlmProvider } from '../llm/types.ts';
 import { Attention, SituationTracker } from '../senses/attention.ts';
 import { Memory } from '../memory/memory.ts';
 import { PerformanceParser, spokenText } from '../persona/performance.ts';
+import { SynthesisGovernor, isRateLimit } from '../speech/governor.ts';
 import { buildSystemPrompt } from '../persona/anna.ts';
 
 /** How many clauses may be synthesised ahead of the one playing. */
@@ -83,6 +84,11 @@ export class Companion {
   /** Set while Anna is mid-turn; drives the "do not interrupt her" rule. */
   #speaking = false;
   #lastActivityAt = 0;
+  /**
+   * Shared across turns on purpose: a provider's concurrency cap applies to the
+   * account, not to a request, so what one turn learns the next must respect.
+   */
+  readonly #governor = new SynthesisGovernor();
 
   constructor(options: CompanionOptions) {
     this.#options = options;
@@ -175,7 +181,13 @@ export class Companion {
       }
 
       const parser = new PerformanceParser();
-      const pipeline = new VoicePipeline(tts, this.#options.voiceId, sinks, controller.signal);
+      const pipeline = new VoicePipeline(
+        tts,
+        this.#options.voiceId,
+        sinks,
+        controller.signal,
+        this.#governor,
+      );
       const collected: PerformanceEvent[] = [];
       let emotion: string | undefined;
       let started = false;
@@ -253,17 +265,25 @@ class VoicePipeline {
   readonly #voiceId: string;
   readonly #sinks: CompanionSinks;
   readonly #signal: AbortSignal;
+  readonly #governor: SynthesisGovernor;
   /** Ordered emission. Each clause appends itself to the chain. */
   #emitChain: Promise<void> = Promise.resolve();
   /** Resolves when clause i has finished being emitted; gates later starts. */
   readonly #emitted: Array<Promise<void>> = [];
   #pending = 0;
 
-  constructor(tts: TtsProvider, voiceId: string, sinks: CompanionSinks, signal: AbortSignal) {
+  constructor(
+    tts: TtsProvider,
+    voiceId: string,
+    sinks: CompanionSinks,
+    signal: AbortSignal,
+    governor: SynthesisGovernor,
+  ) {
     this.#tts = tts;
     this.#voiceId = voiceId;
     this.#sinks = sinks;
     this.#signal = signal;
+    this.#governor = governor;
   }
 
   enqueue(clauseId: number, text: string, emotion: string | undefined): void {
@@ -280,17 +300,7 @@ class VoicePipeline {
       try {
         await gate;
         if (this.#signal.aborted) return queue.close();
-        for await (const chunk of this.#tts.synthesize({
-          text,
-          voiceId: this.#voiceId,
-          ...(emotion && { emotion }),
-          signal: this.#signal,
-        })) {
-          if (this.#signal.aborted) break;
-          queue.push(chunk);
-        }
-      } catch (error) {
-        if (!this.#signal.aborted) this.#sinks.trouble(describe(error));
+        await this.#synthesizeInto(queue, text, emotion);
       } finally {
         queue.close();
       }
@@ -309,6 +319,46 @@ class VoicePipeline {
       }
     });
     this.#emitted.push(this.#emitChain);
+  }
+
+  /**
+   * Synthesises one clause into `queue`, retrying once if rate limited.
+   *
+   * A 429 is not a failure of the clause, it is a failure of our pacing — so we
+   * lower the limit and try that clause again rather than dropping it. Dropping
+   * it leaves a hole in the middle of a spoken sentence, which is the single
+   * most noticeable way this can break.
+   */
+  async #synthesizeInto(
+    queue: ChunkQueue,
+    text: string,
+    emotion: string | undefined,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const release = await this.#governor.acquire();
+      try {
+        for await (const chunk of this.#tts.synthesize({
+          text,
+          voiceId: this.#voiceId,
+          ...(emotion && { emotion }),
+          signal: this.#signal,
+        })) {
+          if (this.#signal.aborted) return;
+          queue.push(chunk);
+        }
+        return;
+      } catch (error) {
+        if (this.#signal.aborted) return;
+        if (isRateLimit(error) && attempt === 0) {
+          this.#governor.reportRateLimit();
+          continue;
+        }
+        this.#sinks.trouble(describe(error));
+        return;
+      } finally {
+        release();
+      }
+    }
   }
 
   get backlog(): number {
