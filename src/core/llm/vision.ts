@@ -18,19 +18,55 @@
 import type { LlmProviderId } from '../../shared/protocol.ts';
 import { tryJson } from './sse.ts';
 
-const PROMPT = `
+/**
+ * The passive look, on a timer.
+ *
+ * Narrow on purpose: posture and state only, nothing about the room, the
+ * clothes or the screen. A companion that volunteers observations about your
+ * appearance is a different and worse product.
+ *
+ * The `off:` line exists because the alternative was grepping the prose for
+ * words like "slump" and "rubbing" — which only ever matched because those
+ * words were in this prompt's own examples. Asking the model for the judgement
+ * is both more honest and far more reliable than pattern-matching its writing.
+ */
+const PASSIVE_PROMPT = `
 Look at this person the way a friend sitting across the room would.
 
-Answer with one short clause describing their posture and apparent state, in
-the third person, present tense. Examples of the register:
-  "slumped forward, rubbing their eyes"
-  "sitting up, focused"
-  "leaning back with their arms crossed"
-  "not in frame"
+Reply with exactly two lines and nothing else:
+
+state: <one short clause, third person, present tense, describing posture and
+apparent state. e.g. "slumped forward, rubbing their eyes" or "sitting up,
+focused". If the frame is empty or too dark to tell, write: not in frame>
+off: <yes or no — does this person look like they are having a hard time?
+Tired, upset, tense, defeated, in pain. Answer no if they simply look neutral
+or busy.>
 
 Do not describe the room, their clothes, their appearance, or anything on their
-screen. Do not guess at emotions you cannot see. If the frame is empty or too
-dark to tell, answer exactly: not in frame
+screen. Do not guess at emotions you cannot see.
+`.trim();
+
+/**
+ * The requested look, when the user has actually asked her to look.
+ *
+ * The passive prompt forbids describing appearance and objects, which is right
+ * for a camera sampling you every 45 seconds and useless when someone holds
+ * something up and says "look at this". Asking is consent, so the restriction
+ * lifts — but only for that turn, and only because they asked.
+ */
+const REQUESTED_PROMPT = `
+Someone has just asked you to look at them, so look properly.
+
+Reply with exactly two lines and nothing else:
+
+state: <one or two short clauses describing what you can actually see — what
+they are doing, what they are holding or showing you, anything obviously
+different about them. Third person, present tense. If the frame is empty or too
+dark, write: not in frame>
+off: <yes or no — do they look like they are having a hard time?>
+
+They asked, so it is fine to mention what they are wearing or holding. Still do
+not read anything off their screen, and do not guess at feelings you cannot see.
 `.trim();
 
 /** Vision-capable defaults, used when the conversation model is text-only. */
@@ -47,6 +83,23 @@ export interface LookRequest {
   jpegBase64: string;
   model?: string;
   signal?: AbortSignal;
+  /** True when the user asked her to look, which lifts the usual restraint. */
+  requested?: boolean;
+}
+
+export interface Look {
+  /** One clause about their state, or null when there is nobody to see. */
+  read: string | null;
+  /**
+   * The model's own judgement that they are having a hard time.
+   *
+   * A flag rather than keywords in prose. The old approach grepped the reply
+   * for 'slump', 'rubbing' and friends — words that only appeared because the
+   * prompt's own examples used them, so it matched roughly one plausible
+   * description in fifteen and missed "head down", "face in their hands" and
+   * "pinching the bridge of their nose" entirely.
+   */
+  distressed: boolean;
 }
 
 /**
@@ -54,17 +107,45 @@ export interface LookRequest {
  * unusable. Never throws: a failed look is a moment of not noticing, not an
  * error the user should hear about.
  */
-export async function describePerson(request: LookRequest): Promise<string | null> {
+export async function describePerson(request: LookRequest): Promise<Look> {
   try {
     const model = request.model ?? VISION_MODELS[request.provider];
     const text = await callVisionModel(request, model);
-    const clean = text.trim().replace(/^["']|["']$/g, '').toLowerCase();
-    if (!clean || clean.startsWith('not in frame')) return null;
-    // Guard against a model that ignores the instruction and writes an essay.
-    return clean.length > 120 ? `${clean.slice(0, 117)}…` : clean;
+    return parseLook(text);
   } catch {
-    return null;
+    return { read: null, distressed: false };
   }
+}
+
+/**
+ * Parses the two-line reply, tolerantly.
+ *
+ * Models drop the labels, add a preamble, or answer in one line. None of that
+ * should cost a look, so an unlabelled reply is treated as the state clause and
+ * a missing flag as "no".
+ */
+export function parseLook(text: string): Look {
+  const lines = text.trim().split('\n').map((line) => line.trim()).filter(Boolean);
+
+  let state = '';
+  let distressed = false;
+  for (const line of lines) {
+    const stateMatch = /^state\s*:\s*(.+)$/i.exec(line);
+    const offMatch = /^off\s*:\s*(.+)$/i.exec(line);
+    if (stateMatch?.[1]) state = stateMatch[1];
+    else if (offMatch?.[1]) distressed = /^y(es)?\b/i.test(offMatch[1].trim());
+    else if (!state) state = line;
+  }
+
+  const clean = state.replace(/^["']|["']$/g, '').trim().toLowerCase();
+  if (!clean || clean.startsWith('not in frame')) return { read: null, distressed: false };
+  // Guard against a model that ignores the instruction and writes an essay.
+  const read = clean.length > 160 ? `${clean.slice(0, 157)}…` : clean;
+  return { read, distressed };
+}
+
+function promptFor(request: LookRequest): string {
+  return request.requested ? REQUESTED_PROMPT : PASSIVE_PROMPT;
 }
 
 async function callVisionModel(request: LookRequest, model: string): Promise<string> {
@@ -81,7 +162,7 @@ async function callVisionModel(request: LookRequest, model: string): Promise<str
       },
       body: JSON.stringify({
         model,
-        max_tokens: 60,
+        max_tokens: 120,
         messages: [
           {
             role: 'user',
@@ -90,7 +171,7 @@ async function callVisionModel(request: LookRequest, model: string): Promise<str
                 type: 'image',
                 source: { type: 'base64', media_type: 'image/jpeg', data: jpegBase64 },
               },
-              { type: 'text', text: PROMPT },
+              { type: 'text', text: promptFor(request) },
             ],
           },
         ],
@@ -107,12 +188,12 @@ async function callVisionModel(request: LookRequest, model: string): Promise<str
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        max_completion_tokens: 60,
+        max_completion_tokens: 120,
         messages: [
           {
             role: 'user',
             content: [
-              { type: 'text', text: PROMPT },
+              { type: 'text', text: promptFor(request) },
               {
                 type: 'image_url',
                 image_url: { url: `data:image/jpeg;base64,${jpegBase64}`, detail: 'low' },
@@ -139,11 +220,11 @@ async function callVisionModel(request: LookRequest, model: string): Promise<str
           role: 'user',
           parts: [
             { inline_data: { mime_type: 'image/jpeg', data: jpegBase64 } },
-            { text: PROMPT },
+            { text: promptFor(request) },
           ],
         },
       ],
-      generationConfig: { maxOutputTokens: 60 },
+      generationConfig: { maxOutputTokens: 120 },
     }),
   });
   const body = tryJson<{

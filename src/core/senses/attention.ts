@@ -51,6 +51,10 @@ export interface Situation {
   present: boolean;
   /** Free-text read from the vision model, if the camera is on. */
   read?: string;
+  /** What she saw before this, when it was meaningfully different. */
+  previousRead?: string;
+  /** The vision model's judgement that they are having a hard time. */
+  distressed?: boolean;
   app?: string;
   windowTitle?: string;
   idleSeconds: number;
@@ -130,7 +134,7 @@ export class Attention {
       });
     }
 
-    if (situation.read && looksRough(situation.read)) {
+    if (situation.distressed && situation.read) {
       openers.push({
         trigger: 'looks-rough',
         priority: 90,
@@ -227,6 +231,8 @@ function minutes(milliseconds: number): number {
 export class SituationTracker {
   #present = true;
   #read: string | undefined;
+  #previousRead: string | undefined;
+  #distressed = false;
   #readAt = 0;
   #app: string | undefined;
   #windowTitle: string | undefined;
@@ -239,15 +245,29 @@ export class SituationTracker {
   observe(event: SenseEvent): void {
     switch (event.kind) {
       case 'presence': {
-        if (event.present) this.#lastPresentAt = event.at;
-        this.#present = event.present;
+        // `present` is optional precisely so the camera can leave it alone.
+        if (event.present !== undefined) {
+          if (event.present) this.#lastPresentAt = event.at;
+          this.#present = event.present;
+        }
         // Only replace the visual read when this event carries one. The 20s
         // activity poll emits presence with no `read`, which used to wipe the
         // camera's description about twenty seconds after every 45s frame.
         if (event.read !== undefined) {
+          if (event.readChanged && event.read !== this.#read) this.#previousRead = this.#read;
           this.#read = event.read;
+          /*
+           * Stamped on EVERY successful look, not only on a changed one.
+           *
+           * Refreshing it only when the description changed meant that sitting
+           * still for three minutes expired the read, and Anna started telling
+           * the model "You have not looked at them recently" while the camera
+           * carried on billing every forty-five seconds. Steady state was:
+           * paying for vision, and reporting blindness.
+           */
           this.#readAt = event.at;
         }
+        if (event.distressed !== undefined) this.#distressed = event.distressed;
         break;
       }
       case 'activity': {
@@ -289,10 +309,13 @@ export class SituationTracker {
     // A visual read expires. Describing how someone looked three minutes ago
     // as though it were now is worse than not having looked — she confidently
     // tells you that you seem tired after you have got up and made coffee.
-    const read = this.#read && now - this.#readAt < READ_STALE_MS ? this.#read : undefined;
+    const fresh = this.#read && now - this.#readAt < READ_STALE_MS;
+    const read = fresh ? this.#read : undefined;
     return {
       present: this.#present,
       ...(read && { read }),
+      ...(fresh && this.#previousRead && { previousRead: this.#previousRead }),
+      ...(fresh && this.#distressed && { distressed: true }),
       ...(this.#app && { app: this.#app }),
       ...(this.#windowTitle && { windowTitle: this.#windowTitle }),
       idleSeconds: this.#idleSeconds,
@@ -334,7 +357,12 @@ export class SituationTracker {
     if (situation.idleSeconds > 180) {
       lines.push(`They have not touched the keyboard in ${Math.round(situation.idleSeconds / 60)} minutes.`);
     }
-    if (situation.read) {
+    if (situation.read && situation.previousRead) {
+      // The change is the observation. "They look tired" is a state anyone
+      // could guess; "they were fine ten minutes ago and now they are not" is
+      // the thing a person in the room actually notices.
+      lines.push(`Earlier they were ${situation.previousRead}. Just now: ${situation.read}.`);
+    } else if (situation.read) {
       lines.push(`How they look, just now: ${situation.read}`);
     } else if (this.#read) {
       // She looked, but it was a while ago. Say so rather than presenting a

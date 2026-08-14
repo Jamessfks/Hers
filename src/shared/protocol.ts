@@ -87,10 +87,21 @@ export type SenseEvent =
   | { kind: 'user-typed'; text: string; at: number }
   | {
       kind: 'presence';
-      /** Is the user in front of the machine at all? */
-      present: boolean;
+      /**
+       * Is the user at the machine at all?
+       *
+       * Optional, because the camera must not answer it. A dark room is not an
+       * empty chair, and letting a failed look write `present: false` silenced
+       * every opener Anna had — including the calendar and late-night ones that
+       * have nothing to do with the camera.
+       */
+      present?: boolean;
       /** Free-text read of the user from the vision model, e.g. "slumped, rubbing eyes". */
       read?: string;
+      /** True when this read says something different from the last one. */
+      readChanged?: boolean;
+      /** The vision model's own judgement that they are having a hard time. */
+      distressed?: boolean;
       at: number;
     }
   | {
