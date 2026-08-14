@@ -27,6 +27,8 @@ import {
   createOpenAiEmbedder,
 } from '../core/memory/embedder.ts';
 import { createAnnaWindow, createSettingsWindow } from './window.ts';
+import { createMockLlm } from './demo/mock-llm.ts';
+import { createSayTts } from './demo/mock-tts.ts';
 import { createTray } from './tray.ts';
 import { registerSettingsHandlers } from './settings-ipc.ts';
 import { readActivity, readNextEvent } from './senses/macos.ts';
@@ -80,12 +82,26 @@ async function main(): Promise<void> {
 
   function buildCompanion(): Companion | null {
     const settings = config.get();
+
+    /**
+     * Demo mode: a scripted model and the macOS system voice, so the whole
+     * product runs end to end with no API key. Both are real implementations of
+     * their interfaces rather than stubs, so the streaming path, the clause
+     * chunking, the audio scheduler and the formant-based lip sync are all
+     * genuinely exercised — which is what makes this useful for development and
+     * not only for a demonstration. See src/main/demo/.
+     */
+    const demo = process.env['ANNA_DEMO'] === '1';
+
     const llmKey = secrets.get(`llm.${settings.llm.provider}` as SecretName);
     const ttsKey = secrets.get(`tts.${settings.tts.provider}` as SecretName);
-    if (!llmKey || !ttsKey) return null;
+    if (!demo && (!llmKey || !ttsKey)) return null;
 
-    const llm = createLlmProvider(settings.llm.provider, llmKey);
-    const tts = createTtsProvider(settings.tts.provider, ttsKey);
+    const llm = demo || !llmKey ? createMockLlm() : createLlmProvider(settings.llm.provider, llmKey);
+    const tts =
+      demo || !ttsKey
+        ? createSayTts(settings.tts.voiceId || 'Samantha')
+        : createTtsProvider(settings.tts.provider, ttsKey);
 
     // Semantic recall needs an embedding endpoint. Anthropic has none, so use
     // whichever of the other two the user happens to have a key for, and fall
@@ -376,7 +392,7 @@ async function main(): Promise<void> {
   // app you switch to, she is just there.
   app.dock?.hide();
 
-  if (!companion) openSettings();
+  if (!companion && process.env['ANNA_DEMO'] !== '1') openSettings();
 
   // -- Sensor loops ---------------------------------------------------------
 
