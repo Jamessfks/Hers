@@ -77,7 +77,7 @@ Two at minimum — one to think with, one to speak with.
 | --- | --- | --- |
 | Language | Anthropic, OpenAI, Google | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | Voice | Cartesia, ElevenLabs, Hume | [play.cartesia.ai](https://play.cartesia.ai/keys) |
-| Hearing (optional) | Deepgram, OpenAI | [console.deepgram.com](https://console.deepgram.com) |
+| Hearing | This Mac — no key needed | Built in, offline, default |
 
 Keys go in through **Settings** — from the menu bar item, the gear beside her
 composer, or ⌘,. Each one is checked with the provider before it is stored, so
