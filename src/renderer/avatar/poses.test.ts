@@ -83,10 +83,12 @@ test('the rest pose takes the arms out of the T-pose', () => {
   // The VRM rest pose is a T-pose. If this regresses, Anna ships as a
   // scarecrow — and it is the kind of thing that looks fine in a unit test
   // suite that never renders anything.
+  // +Z lowers the left arm on a normalised VRM humanoid, -Z lowers the right.
+  // Getting this backwards puts both arms in the air; it is worth an assertion.
   const left = REST_POSE.leftUpperArm?.[2] ?? 0;
   const right = REST_POSE.rightUpperArm?.[2] ?? 0;
-  assert.ok(left <= -55, `left arm should swing down, got ${left}°`);
-  assert.ok(right >= 55, `right arm should swing down, got ${right}°`);
+  assert.ok(left >= 55, `left arm should swing down, got ${left}°`);
+  assert.ok(right <= -55, `right arm should swing down, got ${right}°`);
   assert.equal(Math.sign(left), -Math.sign(right), 'arms must be mirrored');
 });
 

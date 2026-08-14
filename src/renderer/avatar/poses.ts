@@ -66,25 +66,30 @@ const empty: Pose = {};
  * character standing in your room, so every frame starts by bringing the arms
  * down to a human stance. Skip this and the whole product ships as a scarecrow.
  *
- * The numbers: a VRM's left arm extends along +X, so rotating about Z by -70°
- * swings it down to the side; the right arm extends along -X and needs +70°.
- * Twenty degrees off vertical is where a relaxed arm actually hangs — dead
- * vertical reads as attention, not as ease. The slight elbow bend and forward
- * shoulder roll keep the arms off the hips and stop the silhouette going flat.
+ * The numbers, verified against a real character rather than derived on paper:
+ * on a normalised VRM humanoid, **+Z on the left upper arm swings it down** and
+ * -Z swings it up; the right arm is mirrored. Reasoning from "the left arm
+ * points along +X, so rotate about Z" gets this exactly backwards and produces
+ * a character standing with both arms in the air, which is how this was found.
+ *
+ * 70° from the T-pose leaves the arms about twenty degrees off vertical, which
+ * is where a relaxed arm actually hangs — dead vertical reads as attention, not
+ * as ease. The slight elbow bend and shoulder roll keep the arms off the hips
+ * and stop the silhouette going flat.
  *
  * Every clip in this file is authored *relative to this pose*, which is why
  * `wave` asks for -58 on the right upper arm: from a hanging arm, that raises
  * it to roughly horizontal.
  */
 export const REST_POSE: Pose = {
-  leftShoulder: [0, 0, -4],
-  rightShoulder: [0, 0, 4],
-  leftUpperArm: [3, 0, -70],
-  rightUpperArm: [3, 0, 70],
-  leftLowerArm: [0, -12, -6],
-  rightLowerArm: [0, 12, 6],
-  leftHand: [0, 0, -4],
-  rightHand: [0, 0, 4],
+  leftShoulder: [0, 0, 4],
+  rightShoulder: [0, 0, -4],
+  leftUpperArm: [3, 0, 70],
+  rightUpperArm: [3, 0, -70],
+  leftLowerArm: [0, -12, 6],
+  rightLowerArm: [0, 12, -6],
+  leftHand: [0, 0, 4],
+  rightHand: [0, 0, -4],
 };
 export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
   nod: {
@@ -157,10 +162,10 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.35,
         pose: {
-          leftShoulder: [0, 0, -16],
-          rightShoulder: [0, 0, 16],
-          leftUpperArm: [0, 0, 14],
-          rightUpperArm: [0, 0, -14],
+          leftShoulder: [0, 0, 16],
+          rightShoulder: [0, 0, -16],
+          leftUpperArm: [0, 0, -14],
+          rightUpperArm: [0, 0, 14],
           leftLowerArm: [0, -22, 0],
           rightLowerArm: [0, 22, 0],
           head: [4, 0, 0],
@@ -169,10 +174,10 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.65,
         pose: {
-          leftShoulder: [0, 0, -14],
-          rightShoulder: [0, 0, 14],
-          leftUpperArm: [0, 0, 12],
-          rightUpperArm: [0, 0, -12],
+          leftShoulder: [0, 0, 14],
+          rightShoulder: [0, 0, -14],
+          leftUpperArm: [0, 0, -12],
+          rightUpperArm: [0, 0, 12],
           leftLowerArm: [0, -20, 0],
           rightLowerArm: [0, 20, 0],
         },
@@ -186,10 +191,10 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
     baseWeight: 1,
     keys: [
       { at: 0, pose: empty },
-      { at: 0.18, pose: { rightUpperArm: [0, 0, -58], rightLowerArm: [0, -34, -22] } },
-      { at: 0.38, pose: { rightUpperArm: [0, 0, -58], rightLowerArm: [0, -34, 12], rightHand: [0, 0, 18] } },
-      { at: 0.56, pose: { rightUpperArm: [0, 0, -58], rightLowerArm: [0, -34, -20], rightHand: [0, 0, -14] } },
-      { at: 0.74, pose: { rightUpperArm: [0, 0, -58], rightLowerArm: [0, -34, 10], rightHand: [0, 0, 14] } },
+      { at: 0.18, pose: { rightUpperArm: [0, 0, 58], rightLowerArm: [0, -34, 22] } },
+      { at: 0.38, pose: { rightUpperArm: [0, 0, 58], rightLowerArm: [0, -34, -12], rightHand: [0, 0, -18] } },
+      { at: 0.56, pose: { rightUpperArm: [0, 0, 58], rightLowerArm: [0, -34, 20], rightHand: [0, 0, 14] } },
+      { at: 0.74, pose: { rightUpperArm: [0, 0, 58], rightLowerArm: [0, -34, -10], rightHand: [0, 0, -14] } },
       { at: 1, pose: empty },
     ],
   },
@@ -199,8 +204,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
     baseWeight: 1,
     keys: [
       { at: 0, pose: empty },
-      { at: 0.25, pose: { rightUpperArm: [-38, 0, -22], rightLowerArm: [0, -14, 0] } },
-      { at: 0.6, pose: { rightUpperArm: [-42, 0, -20], rightLowerArm: [0, -10, 0] } },
+      { at: 0.25, pose: { rightUpperArm: [-38, 0, 22], rightLowerArm: [0, -14, 0] } },
+      { at: 0.6, pose: { rightUpperArm: [-42, 0, 20], rightLowerArm: [0, -10, 0] } },
       { at: 1, pose: empty },
     ],
   },
@@ -213,8 +218,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.3,
         pose: {
-          leftUpperArm: [14, 0, 6],
-          rightUpperArm: [14, 0, -6],
+          leftUpperArm: [14, 0, -6],
+          rightUpperArm: [14, 0, 6],
           leftLowerArm: [0, -46, 0],
           rightLowerArm: [0, 46, 0],
           chest: [-2, 0, 0],
@@ -223,8 +228,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.8,
         pose: {
-          leftUpperArm: [14, 0, 6],
-          rightUpperArm: [14, 0, -6],
+          leftUpperArm: [14, 0, -6],
+          rightUpperArm: [14, 0, 6],
           leftLowerArm: [0, -46, 0],
           rightLowerArm: [0, 46, 0],
           chest: [-2, 0, 0],
@@ -241,11 +246,11 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       { at: 0, pose: empty },
       {
         at: 0.28,
-        pose: { rightUpperArm: [-24, 0, -26], rightLowerArm: [0, -62, 0], head: [3, -4, 0] },
+        pose: { rightUpperArm: [-24, 0, 26], rightLowerArm: [0, -62, 0], head: [3, -4, 0] },
       },
       {
         at: 0.72,
-        pose: { rightUpperArm: [-24, 0, -26], rightLowerArm: [0, -62, 0], head: [3, -4, 0] },
+        pose: { rightUpperArm: [-24, 0, 26], rightLowerArm: [0, -62, 0], head: [3, -4, 0] },
       },
       { at: 1, pose: empty },
     ],
@@ -258,15 +263,15 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       { at: 0, pose: empty },
       {
         at: 0.22,
-        pose: { rightUpperArm: [-52, 0, -34], rightLowerArm: [0, -78, 0], head: [-8, 0, 6] },
+        pose: { rightUpperArm: [-52, 0, 34], rightLowerArm: [0, -78, 0], head: [-8, 0, 6] },
       },
       {
         at: 0.5,
-        pose: { rightUpperArm: [-50, 0, -34], rightLowerArm: [0, -78, 0], head: [-3, 0, 6], chest: [-4, 0, 0] },
+        pose: { rightUpperArm: [-50, 0, 34], rightLowerArm: [0, -78, 0], head: [-3, 0, 6], chest: [-4, 0, 0] },
       },
       {
         at: 0.72,
-        pose: { rightUpperArm: [-52, 0, -34], rightLowerArm: [0, -78, 0], head: [-8, 0, 6] },
+        pose: { rightUpperArm: [-52, 0, 34], rightLowerArm: [0, -78, 0], head: [-8, 0, 6] },
       },
       { at: 1, pose: empty },
     ],
@@ -280,8 +285,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.35,
         pose: {
-          leftUpperArm: [0, 0, 46],
-          rightUpperArm: [0, 0, -46],
+          leftUpperArm: [0, 0, -46],
+          rightUpperArm: [0, 0, 46],
           spine: [-7, 0, 0],
           chest: [-5, 0, 0],
           head: [-10, 0, 0],
@@ -290,8 +295,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.6,
         pose: {
-          leftUpperArm: [0, 0, 42],
-          rightUpperArm: [0, 0, -42],
+          leftUpperArm: [0, 0, -42],
+          rightUpperArm: [0, 0, 42],
           spine: [-6, 0, 0],
           head: [-8, 0, 0],
         },
@@ -319,7 +324,7 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.35,
         pose: {
-          rightUpperArm: [-56, 0, -18],
+          rightUpperArm: [-56, 0, 18],
           rightLowerArm: [0, -8, 0],
           rightHand: [-10, 0, 0],
           spine: [4, 0, 0],
@@ -328,7 +333,7 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
       {
         at: 0.65,
         pose: {
-          rightUpperArm: [-54, 0, -18],
+          rightUpperArm: [-54, 0, 18],
           rightLowerArm: [0, -8, 0],
           rightHand: [-8, 0, 0],
           spine: [4, 0, 0],
@@ -375,8 +380,8 @@ export const GESTURE_CLIPS: Record<GestureName, GestureClip> = {
     baseWeight: 0.6,
     keys: [
       { at: 0, pose: empty },
-      { at: 0.3, pose: { leftHand: [0, 0, 12], leftLowerArm: [0, -12, 0] } },
-      { at: 0.6, pose: { leftHand: [0, 0, -8], leftLowerArm: [0, -16, 0] } },
+      { at: 0.3, pose: { leftHand: [0, 0, -12], leftLowerArm: [0, -12, 0] } },
+      { at: 0.6, pose: { leftHand: [0, 0, 8], leftLowerArm: [0, -16, 0] } },
       { at: 1, pose: empty },
     ],
   },
