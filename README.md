@@ -47,8 +47,8 @@ the entire product.
 ## Quick start
 
 ```bash
-git clone https://github.com/Jamessfks/anna.git
-cd anna
+git clone https://github.com/Jamessfks/anna-embodied.git
+cd anna-embodied
 npm install
 npm run dev
 ```
@@ -76,8 +76,11 @@ alive, obviously not the finished article.
 are on [VRoid Hub](https://hub.vroid.com/); you can also make one in
 [VRoid Studio](https://vroid.com/en/studio) in an afternoon.
 
-Every gesture works on any VRM, because the clips are authored against the
-humanoid bone names in the VRM spec rather than baked as retargeted animation.
+Gestures are authored against the humanoid bone names in the VRM spec rather
+than baked as retargeted animation, so they transfer across characters without
+a retarget step. They are tuned against T-pose rest, which is what VRoid
+exports; an A-pose character will read the arm gestures as exaggerated until
+the rest pose is calibrated, which is not built yet.
 
 ---
 
@@ -132,7 +135,7 @@ boundary is where it is, is in
 
 ```bash
 npm run dev        # run with hot reload
-npm test           # 57 unit tests, no network, no mocks of our own code
+npm test           # 67 unit tests, no network, no mocks of our own code
 npm run typecheck  # strict, noUncheckedIndexedAccess
 npm run build      # production bundle
 npm run dist:mac   # signed .dmg
@@ -143,6 +146,14 @@ ts-node, no transform step. They cover the parts where being wrong is silent:
 the streaming directive parser, SSE framing across chunk boundaries, PCM frame
 alignment, memory ranking, the attention policy, and the turn loop's latency and
 ordering guarantees.
+
+**On the 800ms figure.** It is measured from the transcript being in hand to the
+first audio sample, and that is what the test asserts. Typing to her hits it.
+Speaking to her does not yet: the local VAD spends 420ms deciding you have
+stopped, and transcription is a non-streaming round trip on top, so real
+end-of-speech to first audio is nearer 1.1-1.7s. Closing that needs streaming
+transcription with interim results. The number is quoted this way everywhere in
+the repo rather than quoted as end-to-end.
 
 ---
 
@@ -160,6 +171,10 @@ Stated plainly, because a README that implies otherwise wastes your time.
   room when you are not talking to her, by design, but that also means she
   cannot notice that you sighed.
 - **macOS only.** The window behaviour and every sensor is AppKit-specific.
+- **Voice input is slower than the budget.** See the note under Development.
+- **She has no persistent mood.** Anna remembers what you told her, but nothing
+  about how you have treated her carries between turns, so there is nothing to
+  win or lose with her. Ani has an affection score; this does not.
 
 ## Licence
 

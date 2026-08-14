@@ -164,7 +164,7 @@ offsets written by hand in [`poses.ts`](../src/renderer/avatar/poses.ts) — 18
 gestures, procedurally interpolated. They are legible and they compose correctly
 over the idle layer, and they are not motion capture. A trained animator would
 identify the difference in about four seconds. This gap does not close with
-better engineering; it closes with a motion library we cannot licence.
+better engineering; it closes with a motion library we cannot license.
 
 **A character.** Ani ships as a designed, licensed, art-directed character with
 a name and a look. **Anna ships with no model at all** — she is a luminous

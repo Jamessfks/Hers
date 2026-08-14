@@ -2,7 +2,7 @@
 
 ## The one constraint everything else follows from
 
-Anna has to answer within about 800 milliseconds of you stopping talking.
+Anna has to answer within about 800 milliseconds of her having your words.
 
 Past roughly a second, a reply stops reading as a person thinking and starts
 reading as a machine processing. Every structural decision in this codebase is
@@ -16,7 +16,15 @@ downstream of that number, so it is worth showing where it goes:
  ~390ms  typical, leaving headroom for a bad network
 ```
 
-That only works because three things overlap rather than queue:
+That budget is measured **from the transcript being in hand**, which is what the
+test asserts. Two things sit in front of it on the voice path and are not
+covered by it: ~420ms of silence before the local VAD calls the utterance
+finished, and a non-streaming transcription round trip of 300-900ms. Real
+end-of-speech to first audio is therefore nearer 1.1-1.7s today; typing to her
+hits the 390ms figure. Closing the gap needs streaming transcription with
+interim results, described at the top of `core/speech/stt.ts`.
+
+The budget only works because three things overlap rather than queue:
 
 1. **The parser emits a clause before the sentence is finished.** Anna's first
    audio request goes out after roughly twenty tokens, not after the full reply.
@@ -152,7 +160,7 @@ The rule is that Anna degrades rather than breaks.
 
 ## Testing
 
-57 tests, no network, no mocks of our own code. They concentrate on the places
+67 tests, no network, no mocks of our own code. They concentrate on the places
 where being wrong is *silent*:
 
 - **Directive parsing** — a bad parser speaks `[teleports behind you]` out loud.
