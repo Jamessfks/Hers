@@ -70,6 +70,15 @@ presence limits, and a memory inspector.
 
 Plus a menu bar item, because an always-on app needs somewhere to live.
 
+### She can be sent away
+
+The ✕ beside her composer fades her out and hides the window. ⌥⌘A brings her
+back, as does the menu bar item. Hiding stops her mid-sentence and suppresses
+her speaking first while she is gone: a voice from something you deliberately
+dismissed is worse than no companion at all. The global shortcut exists because
+macOS silently hides menu bar items when the bar is full, and an app you can
+dismiss but not recall is a bug wearing a feature's clothes.
+
 ### A menu bar item
 
 Show or hide her, toggle proactivity, camera and microphone, open settings,

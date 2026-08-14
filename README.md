@@ -67,6 +67,12 @@ then kept in the macOS Keychain through Electron's `safeStorage`, never written
 to the config file, and never handed to the window that draws her. See
 [docs/PRIVACY.md](docs/PRIVACY.md).
 
+**Sending her away.** The ✕ beside her composer fades her out and hides the
+window; ⌥⌘A brings her back, and so does the menu bar item. Hiding is not just
+a window state — she stops mid-sentence and will not speak first while she is
+gone, because being ambushed by a voice from something you deliberately
+dismissed is the fastest way to lose trust in an always-on app.
+
 Settings also holds the voice picker (with an audition button), the character
 picker, the sense toggles — which report which macOS permissions are *actually*
 granted and deep-link to the right System Settings pane — the limits on when she
