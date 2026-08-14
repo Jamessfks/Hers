@@ -171,6 +171,21 @@ const api = {
   },
 
   /**
+   * Send her away. She stops mid-sentence, fades out, and stays quiet until
+   * she is brought back — from the menu bar or with the global shortcut.
+   */
+  hide(): void {
+    ipcRenderer.send(IPC.window, { action: 'hide', value: true });
+  },
+
+  /** Fires when she is hidden or brought back, so the body can fade. */
+  onVisibility(handler: (visible: boolean) => void): () => void {
+    const listener = (_: unknown, visible: boolean) => handler(visible);
+    ipcRenderer.on(IPC.visibility, listener);
+    return () => ipcRenderer.off(IPC.visibility, listener);
+  },
+
+  /**
    * Toggle click-through. The renderer calls this as the pointer enters and
    * leaves Anna's silhouette, so the rest of her window stays invisible to the
    * mouse.

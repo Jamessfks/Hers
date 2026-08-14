@@ -103,7 +103,8 @@ body {
   gap: 8px;
 }
 
-#settings {
+#settings,
+#dismiss {
   flex: none;
   width: 34px;
   height: 34px;
@@ -118,9 +119,28 @@ body {
   transition: color 160ms ease, border-color 160ms ease;
 }
 
-#settings:hover {
+#settings:hover,
+#dismiss:hover {
   color: var(--ink);
   border-color: rgba(142, 205, 255, 0.55);
+}
+
+/*
+ * Going away.
+ *
+ * She fades and sinks rather than blinking out. 240ms is long enough to read as
+ * her leaving and short enough that it never feels like the button lagged; the
+ * main process hides the window once it finishes, so nothing is left painting
+ * an invisible frame.
+ */
+#app {
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+#app[data-leaving='true'] {
+  opacity: 0;
+  transform: translateY(14px) scale(0.985);
+  pointer-events: none;
 }
 
 #say {

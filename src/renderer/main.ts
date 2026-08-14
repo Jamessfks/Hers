@@ -180,6 +180,23 @@ document
   .querySelector<HTMLButtonElement>('#settings')!
   .addEventListener('click', () => window.anna.openSettings());
 
+/**
+ * Send her away.
+ *
+ * The fade runs here and the window is hidden by main once it finishes, so she
+ * leaves rather than blinking out. ⌥⌘A brings her back, and so does the menu
+ * bar item — the button deliberately does not quit anything.
+ */
+const appEl = document.querySelector<HTMLDivElement>('#app')!;
+const LEAVE_MS = 240;
+
+document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click', () => {
+  appEl.dataset['leaving'] = 'true';
+  player.stop();
+  body?.silence();
+  window.setTimeout(() => window.anna.hide(), LEAVE_MS);
+});
+
 inputEl.addEventListener('keydown', async (event) => {
   if (event.key !== 'Enter') return;
   const text = inputEl.value.trim();
@@ -223,6 +240,11 @@ async function boot(): Promise<void> {
     document.body.dataset['state'] = state;
   });
   window.anna.onTrouble(showTrouble);
+  window.anna.onVisibility((visible) => {
+    // Clear the fade when she is brought back, or the window would reappear
+    // still transparent and untouchable.
+    if (visible) delete appEl.dataset['leaving'];
+  });
 
   // Always ask: main answers with the chosen character, or with the bundled
   // CC0 default, or with nothing. The renderer has no filesystem access, so

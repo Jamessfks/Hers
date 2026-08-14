@@ -48,6 +48,13 @@ const ICON_2X =
 
 export interface TrayDeps {
   window: BrowserWindow;
+  /**
+   * Show or hide her. Goes through main rather than calling `window.hide()`
+   * here, because hiding also stops her mid-sentence and suppresses her
+   * speaking first — behaviour that must not differ between the menu bar and
+   * the button on her window.
+   */
+  setVisible: (visible: boolean) => void;
   config: () => AnnaConfig;
   setConfig: (patch: Record<string, unknown>) => void;
   openSettings: () => void;
@@ -85,11 +92,8 @@ export function createTray(deps: TrayDeps): AnnaTray {
         { type: 'separator' },
         {
           label: deps.window.isVisible() ? 'Hide her' : 'Show her',
-          click: () => {
-            if (deps.window.isVisible()) deps.window.hide();
-            else deps.window.showInactive();
-            render();
-          },
+          accelerator: 'Alt+Command+A',
+          click: () => deps.setVisible(!deps.window.isVisible()),
         },
         {
           label: 'Let her speak first',

@@ -7,7 +7,7 @@
  * the camera and microphone heard. It cannot reach a key or the disk.
  */
 
-import { BrowserWindow, Menu, app, ipcMain } from 'electron';
+import { BrowserWindow, Menu, app, globalShortcut, ipcMain } from 'electron';
 import { basename, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
@@ -225,7 +225,28 @@ async function main(): Promise<void> {
 
   ipcMain.on(IPC.window, (_event, message: { action: string; value: boolean }) => {
     if (message.action === 'interactive') setInteractiveRegion(message.value);
+    if (message.action === 'hide') setVisible(false);
   });
+
+  /**
+   * Send her away, or bring her back.
+   *
+   * Hiding is not just a window state. She stops mid-sentence, because audio
+   * continuing from an invisible window is a haunting rather than a companion,
+   * and she stops speaking first while away — being ambushed by a voice from
+   * something you deliberately dismissed is the fastest way to lose someone's
+   * trust in an always-on app.
+   */
+  function setVisible(visible: boolean): void {
+    if (visible) {
+      window.showInactive();
+    } else {
+      companion?.bargeIn();
+      window.hide();
+    }
+    send(IPC.visibility, visible);
+    tray.refresh();
+  }
 
   /**
    * Character storage.
@@ -291,8 +312,22 @@ async function main(): Promise<void> {
     });
   }
 
+  /**
+   * The way back.
+   *
+   * The menu bar item is the discoverable route, but macOS silently hides menu
+   * bar items when the bar is full — which is common on a notched display — and
+   * an app you can dismiss but not recall is a bug wearing a feature's clothes.
+   * A global shortcut is the guarantee.
+   */
+  const TOGGLE_SHORTCUT = 'Alt+Command+A';
+  if (!globalShortcut.register(TOGGLE_SHORTCUT, () => setVisible(!window.isVisible()))) {
+    console.warn(`[anna] could not register ${TOGGLE_SHORTCUT}; something else owns it`);
+  }
+
   const tray = createTray({
     window,
+    setVisible,
     config: () => config.get(),
     setConfig: (patch) => {
       config.update(patch);
@@ -370,6 +405,8 @@ async function main(): Promise<void> {
 
   timers.push(
     setInterval(() => {
+      // She does not speak first while she is hidden. See setVisible.
+      if (!window.isVisible()) return;
       void companion?.tick();
     }, ATTENTION_TICK_MS),
   );
@@ -384,6 +421,7 @@ async function main(): Promise<void> {
 
   app.on('before-quit', () => {
     for (const timer of timers) clearInterval(timer);
+    globalShortcut.unregisterAll();
     tray.destroy();
     store.close();
   });

@@ -200,6 +200,8 @@ export const IPC = {
   permissions: 'anna:permissions',
   /** main -> renderer: configuration changed somewhere else. */
   configChanged: 'anna:config:changed',
+  /** main -> renderer: she was hidden or brought back. */
+  visibility: 'anna:visibility',
 } as const;
 
 // ---------------------------------------------------------------------------
