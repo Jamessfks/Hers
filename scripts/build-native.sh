@@ -52,10 +52,10 @@ DEPLOYMENT_TARGET="13.0"
 SLICES=()
 for ARCH in arm64 x86_64; do
   SLICE="$OUT_DIR/anna-transcribe-$ARCH"
-  # The Info.plist is linked into __TEXT,__info_plist rather than left beside
-  # the binary. TCC kills a process that touches speech recognition with no
-  # usage description, and a loose plist only counts inside a .app bundle —
-  # this ships as a bare file in Resources/. See native/Info.plist.
+  # The Info.plist is *also* linked into __TEXT,__info_plist, not only copied
+  # into the bundle below. TCC kills a process that touches speech recognition
+  # with no usage description it can find, and the section is what keeps the
+  # binary runnable when it is invoked directly rather than through the wrapper.
   swiftc -O \
     -target "$ARCH-apple-macos$DEPLOYMENT_TARGET" \
     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$PLIST" \
@@ -84,9 +84,17 @@ cp "$PLIST" "$APP/Contents/Info.plist"
 mv "$OUT" "$APP/Contents/MacOS/anna-transcribe"
 OUT="$APP/Contents/MacOS/anna-transcribe"
 
-# Ad-hoc signing so the embedded plist is covered by the code signature; TCC
-# ignores an Info.plist section on an unsigned binary. electron-builder re-signs
-# the whole bundle later with the real identity, which supersedes this.
-codesign --force --sign - --identifier dev.anna.companion.transcribe "$OUT"
+# Sign the *bundle*, not the executable inside it.
+#
+# Signing the inner Mach-O leaves the bundle unsigned, so nothing covers
+# Contents/Info.plist and its usage descriptions can be edited after the fact —
+# which is exactly the tampering TCC checks the signature to rule out.
+# electron-builder re-signs everything later with the real identity; this ad-hoc
+# signature is what makes a development build work.
+codesign --force --sign - --identifier dev.anna.companion.transcribe "$APP"
 
-echo "[native] built $OUT ($(lipo -archs "$OUT"))"
+# A bundle that macOS will not load is worth catching here, at the point the
+# mistake was made, rather than as a mute companion on somebody's Mac.
+codesign --verify --deep --strict "$APP"
+
+echo "[native] built $APP ($(lipo -archs "$OUT"))"

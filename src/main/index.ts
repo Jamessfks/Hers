@@ -227,16 +227,21 @@ async function main(): Promise<void> {
    * Where the on-device transcriber might be.
    *
    * Same two-world problem as the default character above: packaged it sits
-   * beside the asar as a plain executable, and in development the answer
-   * depends on how Electron was invoked. It is not inside the asar because a
-   * binary cannot be executed from an archive.
+   * beside the asar, and in development the answer depends on how Electron was
+   * invoked. It is not inside the asar because a binary cannot be executed from
+   * an archive.
+   *
+   * It is a nested .app rather than a bare executable so that its Info.plist —
+   * and the speech-recognition usage description in it — is something macOS
+   * will actually read. See scripts/build-native.sh.
    */
+  const TRANSCRIBER = join('anna-transcribe.app', 'Contents', 'MacOS', 'anna-transcribe');
   const transcriberPaths = (): string[] =>
     app.isPackaged
-      ? [join(process.resourcesPath, 'anna-transcribe')]
+      ? [join(process.resourcesPath, TRANSCRIBER)]
       : [
-          join(__dirname, '..', '..', 'native', 'build', 'anna-transcribe'),
-          join(app.getAppPath(), 'native', 'build', 'anna-transcribe'),
+          join(__dirname, '..', '..', 'native', 'build', TRANSCRIBER),
+          join(app.getAppPath(), 'native', 'build', TRANSCRIBER),
         ];
 
   /**

@@ -265,7 +265,10 @@ test('a helper killed by a signal is reported, not read as an empty room', async
 // The real thing
 // ---------------------------------------------------------------------------
 
-const BINARY = join(import.meta.dirname, '..', '..', '..', 'native', 'build', 'anna-transcribe');
+const BINARY = join(
+  import.meta.dirname,
+  '../../../native/build/anna-transcribe.app/Contents/MacOS/anna-transcribe',
+);
 
 /**
  * Opt-in, and not only because of the binary.

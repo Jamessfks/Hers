@@ -1,23 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Linked into the binary's __TEXT,__info_plist section rather than sitting in a
-  bundle beside it.
+  Used twice: linked into the helper's __TEXT,__info_plist section, and copied
+  in as the Info.plist of the .app bundle it ships inside. scripts/build-native.sh
+  does both from this one file so the two can never drift apart.
 
-  TCC does not ask nicely. A plain executable that touches a privacy-gated API
-  with no usage description is killed with SIGABRT before any of its own code
-  runs, which is what happened the first time this was built:
+  TCC does not ask nicely. A process that touches a privacy-gated API with no
+  usage description it can find is killed with SIGABRT before any of its own
+  code runs — this was the first thing that happened when the helper was built:
 
     termination namespace TCC ... "The app's Info.plist must contain an
     NSSpeechRecognitionUsageDescription key"
 
-  A loose Info.plist file only counts when the executable lives inside a proper
-  .app bundle. This helper is a single file in Resources/, so the plist has to
-  travel inside the Mach-O itself.
+  The description that actually gets used at runtime is normally Anna.app's,
+  because TCC resolves the request against the *responsible* process — the app
+  that spawned the helper, not the helper. The copies here are what make the
+  helper survivable when it is run on its own, and they are belt and braces
+  otherwise.
 
   The wording matches package.json's build.mac.extendInfo on purpose: whichever
-  of the two macOS decides to quote in the consent dialog, the user reads the
-  same sentence.
+  one macOS decides to quote in the consent dialog, the user reads the same
+  sentence.
 -->
 <plist version="1.0">
 <dict>
@@ -25,6 +28,18 @@
   <string>dev.anna.companion.transcribe</string>
   <key>CFBundleName</key>
   <string>Anna Transcriber</string>
+  <!--
+    Required for the .app wrapper to be a bundle at all. Without it macOS treats
+    the directory as an ordinary folder, which is the one outcome that would
+    make wrapping it pointless.
+  -->
+  <key>CFBundleExecutable</key>
+  <string>anna-transcribe</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <!-- No dock icon, no menu bar: it runs for 400ms and exits. -->
+  <key>LSUIElement</key>
+  <true/>
   <key>CFBundleShortVersionString</key>
   <string>1.0</string>
   <key>NSSpeechRecognitionUsageDescription</key>

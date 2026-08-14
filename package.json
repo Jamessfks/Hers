@@ -77,8 +77,8 @@
         ]
       },
       {
-        "from": "native/build/anna-transcribe",
-        "to": "anna-transcribe"
+        "from": "native/build/anna-transcribe.app",
+        "to": "anna-transcribe.app"
       }
     ]
   }
