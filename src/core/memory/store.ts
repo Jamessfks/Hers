@@ -105,19 +105,19 @@ export class MemoryStore {
   recentTurns(limit = 40): Turn[] {
     const rows = this.#db
       .prepare('SELECT * FROM turns ORDER BY id DESC LIMIT ?')
-      .all(limit) as TurnRow[];
+      .all(limit) as unknown as TurnRow[];
     return rows.reverse().map(toTurn);
   }
 
   turnsSince(turnId: number, limit = 500): Turn[] {
     const rows = this.#db
       .prepare('SELECT * FROM turns WHERE id > ? ORDER BY id ASC LIMIT ?')
-      .all(turnId, limit) as TurnRow[];
+      .all(turnId, limit) as unknown as TurnRow[];
     return rows.map(toTurn);
   }
 
   countTurns(): number {
-    const row = this.#db.prepare('SELECT COUNT(*) AS n FROM turns').get() as { n: number };
+    const row = this.#db.prepare('SELECT COUNT(*) AS n FROM turns').get() as unknown as { n: number };
     return row.n;
   }
 
@@ -129,7 +129,7 @@ export class MemoryStore {
    * and the store deliberately does not make network calls.
    */
   upsertFact(fact: Omit<Fact, 'id' | 'recallCount'> & { embedderId?: string }): number {
-    const existing = this.#db.prepare('SELECT id FROM facts WHERE text = ?').get(fact.text) as
+    const existing = this.#db.prepare('SELECT id FROM facts WHERE text = ?').get(fact.text) as unknown as
       | { id: number }
       | undefined;
 
@@ -174,7 +174,7 @@ export class MemoryStore {
             )
             .all(...kinds)
         : this.#db.prepare('SELECT * FROM facts').all()
-    ) as FactRow[];
+    ) as unknown as FactRow[];
     return rows.map(toFact);
   }
 
@@ -238,7 +238,7 @@ export class MemoryStore {
   }
 
   latestSummary(): Summary | null {
-    const row = this.#db.prepare('SELECT * FROM summaries ORDER BY id DESC LIMIT 1').get() as
+    const row = this.#db.prepare('SELECT * FROM summaries ORDER BY id DESC LIMIT 1').get() as unknown as
       | SummaryRow
       | undefined;
     return row
@@ -255,7 +255,7 @@ export class MemoryStore {
   // -- meta ----------------------------------------------------------------
 
   get(key: string): string | null {
-    const row = this.#db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
+    const row = this.#db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as unknown as
       | { value: string }
       | undefined;
     return row?.value ?? null;

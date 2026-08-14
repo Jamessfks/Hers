@@ -50,7 +50,9 @@ export function createAnnaWindow(): AnnaWindow {
     focusable: true,
     show: false,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // electron-vite emits an ESM preload as `.mjs` because this package is
+      // `type: module`. Sandbox is off, which is what makes an ESM preload legal.
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -91,7 +93,9 @@ export function createSettingsWindow(parent: BrowserWindow): BrowserWindow {
     show: false,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // electron-vite emits an ESM preload as `.mjs` because this package is
+      // `type: module`. Sandbox is off, which is what makes an ESM preload legal.
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

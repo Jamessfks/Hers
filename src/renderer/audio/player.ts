@@ -52,7 +52,9 @@ export class SpeechPlayer {
     const { context, gain } = this.#ensure();
 
     const buffer = context.createBuffer(1, pcm.length, sampleRate);
-    buffer.copyToChannel(pcm, 0);
+    // The PCM crosses an IPC boundary, so its backing buffer is typed as
+    // ArrayBufferLike; copyToChannel wants a plain ArrayBuffer view.
+    buffer.copyToChannel(pcm as Float32Array<ArrayBuffer>, 0);
 
     const source = context.createBufferSource();
     source.buffer = buffer;
