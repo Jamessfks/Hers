@@ -305,8 +305,6 @@ async function boot(): Promise<void> {
    */
   requestAnimationFrame(frame);
   void applySenses(config);
-
-  requestAnimationFrame(frame);
 }
 
 void boot();

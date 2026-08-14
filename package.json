@@ -12,12 +12,13 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "npm run build:native && electron-vite build",
+    "build:native": "bash scripts/build-native.sh",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test --disable-warning=ExperimentalWarning \"src/**/*.test.ts\"",
     "lint": "tsc --noEmit",
-    "dist:mac": "npm run fetch:character && electron-vite build && electron-builder --mac --publish never",
+    "dist:mac": "npm run fetch:character && bash scripts/build-native.sh --required && electron-vite build && electron-builder --mac --publish never",
     "fetch:character": "node scripts/fetch-character.mjs",
     "demo": "electron-vite build && ANNA_DEMO=1 electron out/main/index.js"
   },
@@ -74,6 +75,10 @@
         "filter": [
           "**/*.vrm"
         ]
+      },
+      {
+        "from": "native/build/anna-transcribe",
+        "to": "anna-transcribe"
       }
     ]
   }

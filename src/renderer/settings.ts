@@ -131,6 +131,22 @@ function keyGroup(kind: Kind): void {
     const chosen = currentProvider();
     if (why && chosen && 'why' in chosen) why.textContent = chosen.why;
 
+    /*
+     * A provider that needs no key gets no key field.
+     *
+     * Leaving the row visible and inert is the usual shortcut and it is a lie:
+     * an empty box next to "Check & save" reads as something you have not
+     * finished, and the whole point of the on-device option is that there is
+     * nothing left to do.
+     */
+    if (chosen && 'keyless' in chosen && chosen.keyless) {
+      for (const control of [input, button, reveal, forget]) control.hidden = true;
+      status.dataset['tone'] = 'good';
+      status.textContent = 'Ready. No key needed, and nothing is sent anywhere.';
+      return;
+    }
+    for (const control of [input, button, reveal]) control.hidden = false;
+
     const stored = await api.keyStatus();
     const entry = stored[`${kind}.${select.value}`];
     const present = entry?.present ?? false;
