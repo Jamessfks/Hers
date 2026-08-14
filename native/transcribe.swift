@@ -78,7 +78,24 @@ guard arguments.count >= 2 else {
 }
 
 let path = arguments[1]
-let localeId = arguments.count >= 3 ? arguments[2] : "en-US"
+
+/*
+ * An optional output file, because of how this gets launched.
+ *
+ * macOS resolves speech-recognition permission against the *responsible*
+ * process, not against this one. Spawned as an ordinary child, the responsible
+ * process is whatever launched the app — a terminal, an IDE, another tool — and
+ * TCC then looks for a usage description in *that* process's bundle, finds
+ * none, and aborts this one before its first line runs. Verified from a crash
+ * report: `responsibleProc` was the launching tool, never Anna.
+ *
+ * Launching through `open` makes launchd the parent and this bundle its own
+ * responsible process, so its own Info.plist is what TCC reads. The cost is
+ * that stdout is no longer connected to the caller, so the transcript is
+ * written to a file instead when one is given.
+ */
+let outputPath = arguments.count >= 3 && arguments[2].hasSuffix(".json") ? arguments[2] : nil
+let localeId = arguments.count >= 4 ? arguments[3] : (outputPath == nil && arguments.count >= 3 ? arguments[2] : "en-US")
 
 guard FileManager.default.fileExists(atPath: path) else {
     die(.fileMissing, "No such audio file: \(path)")
