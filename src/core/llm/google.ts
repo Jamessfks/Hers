@@ -14,7 +14,13 @@
  */
 
 import { readSse, tryJson } from './sse.ts';
-import { LlmError, type CompletionRequest, type LlmProvider } from './types.ts';
+import { MODEL_CATALOG, isConversational, rankModels, type ModelOption } from './models.ts';
+import {
+  LlmError,
+  type CompletionRequest,
+  type LlmProvider,
+  type ProviderOptions,
+} from './types.ts';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -24,17 +30,19 @@ interface GeminiChunk {
   error?: { message?: string };
 }
 
-export function createGoogleProvider(apiKey: string): LlmProvider {
+export function createGoogleProvider(apiKey: string, options: ProviderOptions = {}): LlmProvider {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const root = (options.baseUrl ?? ENDPOINT).replace(/\/$/, '');
   const headers = { 'content-type': 'application/json', 'x-goog-api-key': apiKey };
 
   return {
     id: 'google',
     label: 'Google (Gemini)',
-    suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+    suggestedModels: MODEL_CATALOG.google,
 
     async *stream(request: CompletionRequest) {
-      const url = `${ENDPOINT}/${encodeURIComponent(request.model)}:streamGenerateContent?alt=sse`;
-      const response = await fetch(url, {
+      const url = `${root}/${encodeURIComponent(request.model)}:streamGenerateContent?alt=sse`;
+      const response = await doFetch(url, {
         method: 'POST',
         headers,
         signal: request.signal ?? null,
@@ -83,9 +91,39 @@ export function createGoogleProvider(apiKey: string): LlmProvider {
     },
 
     async validateKey() {
-      const response = await fetch(`${ENDPOINT}?pageSize=1`, { headers });
+      const response = await doFetch(`${root}?pageSize=1`, { headers });
       if (response.ok) return { ok: true as const };
       return { ok: false as const, reason: await describeFailure(response) };
+    },
+
+    /**
+     * Gemini's list endpoint returns embedding and retrieval models alongside
+     * the generative ones, and names them `models/gemini-2.5-flash` while
+     * `generateContent` wants the bare id. Both are normalised here so nothing
+     * above this layer has to know.
+     */
+    async listModels(): Promise<ModelOption[]> {
+      try {
+        const response = await doFetch(`${root}?pageSize=200`, { headers });
+        if (!response.ok) return [];
+        const body = (await response.json()) as {
+          models?: Array<{
+            name?: string;
+            displayName?: string;
+            supportedGenerationMethods?: string[];
+          }>;
+        };
+        const models = (body.models ?? [])
+          .filter((entry) => entry.supportedGenerationMethods?.includes('generateContent'))
+          .map((entry) => {
+            const id = (entry.name ?? '').replace(/^models\//, '');
+            return { id, label: entry.displayName ?? id };
+          })
+          .filter((model) => model.id && isConversational('google', model.id));
+        return rankModels('google', models);
+      } catch {
+        return [];
+      }
     },
   };
 }

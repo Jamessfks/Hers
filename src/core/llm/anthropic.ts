@@ -9,9 +9,14 @@
  */
 
 import { readSse, tryJson } from './sse.ts';
-import { LlmError, type CompletionRequest, type LlmProvider } from './types.ts';
+import { MODEL_CATALOG, isConversational, rankModels, type ModelOption } from './models.ts';
+import {
+  LlmError,
+  type CompletionRequest,
+  type LlmProvider,
+  type ProviderOptions,
+} from './types.ts';
 
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 
 interface AnthropicDelta {
@@ -20,7 +25,12 @@ interface AnthropicDelta {
   error?: { message?: string };
 }
 
-export function createAnthropicProvider(apiKey: string): LlmProvider {
+export function createAnthropicProvider(
+  apiKey: string,
+  options: ProviderOptions = {},
+): LlmProvider {
+  const doFetch = options.fetch ?? globalThis.fetch;
+  const root = (options.baseUrl ?? 'https://api.anthropic.com').replace(/\/$/, '');
   const headers = {
     'content-type': 'application/json',
     'x-api-key': apiKey,
@@ -30,10 +40,10 @@ export function createAnthropicProvider(apiKey: string): LlmProvider {
   return {
     id: 'anthropic',
     label: 'Anthropic (Claude)',
-    suggestedModels: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'],
+    suggestedModels: MODEL_CATALOG.anthropic,
 
     async *stream(request: CompletionRequest) {
-      const response = await fetch(ENDPOINT, {
+      const response = await doFetch(`${root}/v1/messages`, {
         method: 'POST',
         headers,
         signal: request.signal ?? null,
@@ -63,20 +73,35 @@ export function createAnthropicProvider(apiKey: string): LlmProvider {
       }
     },
 
+    /**
+     * Checked against the models endpoint rather than by sending a message.
+     *
+     * The previous check POSTed a one-token completion: it works, but it bills
+     * the user for validating a key and it hardcodes a model name that will
+     * eventually be retired, at which point key validation starts failing for
+     * everyone with a perfectly good key. A GET is free and cannot go stale.
+     */
     async validateKey() {
-      const response = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1,
-          messages: [{ role: 'user', content: 'hi' }],
-        }),
-      });
-      // A 400 means the key authenticated and the model name was the problem,
-      // which is still a working key.
-      if (response.ok || response.status === 400) return { ok: true as const };
+      const response = await doFetch(`${root}/v1/models?limit=1`, { headers });
+      if (response.ok) return { ok: true as const };
       return { ok: false as const, reason: await describeFailure(response) };
+    },
+
+    async listModels(): Promise<ModelOption[]> {
+      try {
+        const response = await doFetch(`${root}/v1/models?limit=100`, { headers });
+        if (!response.ok) return [];
+        const body = (await response.json()) as {
+          data?: Array<{ id?: string; display_name?: string }>;
+        };
+        const models = (body.data ?? [])
+          .filter((entry): entry is { id: string; display_name?: string } => Boolean(entry.id))
+          .map((entry) => ({ id: entry.id, label: entry.display_name ?? entry.id }))
+          .filter((model) => isConversational('anthropic', model.id));
+        return rankModels('anthropic', models);
+      } catch {
+        return [];
+      }
     },
   };
 }

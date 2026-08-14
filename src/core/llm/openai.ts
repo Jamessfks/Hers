@@ -16,7 +16,13 @@
  */
 
 import { readSse, tryJson } from './sse.ts';
-import { LlmError, type CompletionRequest, type LlmProvider } from './types.ts';
+import { MODEL_CATALOG, isConversational, rankModels, type ModelOption } from './models.ts';
+import {
+  LlmError,
+  type CompletionRequest,
+  type LlmProvider,
+  type ProviderOptions,
+} from './types.ts';
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
@@ -25,20 +31,21 @@ interface OpenAiChunk {
   error?: { message?: string };
 }
 
-export function createOpenAiProvider(apiKey: string, baseUrl = DEFAULT_BASE_URL): LlmProvider {
+export function createOpenAiProvider(apiKey: string, options: ProviderOptions = {}): LlmProvider {
+  const doFetch = options.fetch ?? globalThis.fetch;
   const headers = {
     'content-type': 'application/json',
     authorization: `Bearer ${apiKey}`,
   };
-  const root = baseUrl.replace(/\/$/, '');
+  const root = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
 
   return {
     id: 'openai',
     label: 'OpenAI (or any compatible endpoint)',
-    suggestedModels: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o'],
+    suggestedModels: MODEL_CATALOG.openai,
 
     async *stream(request: CompletionRequest) {
-      const response = await fetch(`${root}/chat/completions`, {
+      const response = await doFetch(`${root}/chat/completions`, {
         method: 'POST',
         headers,
         signal: request.signal ?? null,
@@ -68,9 +75,27 @@ export function createOpenAiProvider(apiKey: string, baseUrl = DEFAULT_BASE_URL)
     },
 
     async validateKey() {
-      const response = await fetch(`${root}/models`, { headers });
+      const response = await doFetch(`${root}/models`, { headers });
       if (response.ok) return { ok: true as const };
       return { ok: false as const, reason: await describeFailure(response) };
+    },
+
+    async listModels(): Promise<ModelOption[]> {
+      try {
+        const response = await doFetch(`${root}/models`, { headers });
+        if (!response.ok) return [];
+        const body = (await response.json()) as { data?: Array<{ id?: string }> };
+        const models = (body.data ?? [])
+          .filter((entry): entry is { id: string } => Boolean(entry.id))
+          .map((entry) => ({ id: entry.id, label: entry.id }))
+          // The list endpoint returns embeddings, moderation, audio and image
+          // models alongside the chat ones. Anna can only talk through a chat
+          // model, and a picker that opens on `babbage-002` is a broken picker.
+          .filter((model) => isConversational('openai', model.id));
+        return rankModels('openai', models);
+      } catch {
+        return [];
+      }
     },
   };
 }
