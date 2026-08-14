@@ -13,7 +13,17 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-import { IPC, type AnnaConfig, type BrainState, type PerformanceEvent, type SenseEvent } from '../shared/protocol.ts';
+import {
+  IPC,
+  type AnnaConfig,
+  type BrainState,
+  type MemoryFactView,
+  type MemoryStats,
+  type PerformanceEvent,
+  type PermissionReport,
+  type SenseEvent,
+  type VoiceOption,
+} from '../shared/protocol.ts';
 
 export interface AudioMessage {
   clauseId: number;
@@ -67,6 +77,68 @@ const api = {
   /** Read the stored character back. Null when none is set. */
   loadCharacter(): Promise<Uint8Array | null> {
     return ipcRenderer.invoke(IPC.characterLoad);
+  },
+
+  /** Open a native picker for a .vrm. Returns the stored id, or null. */
+  pickCharacter(): Promise<{ id: string } | { error: string } | null> {
+    return ipcRenderer.invoke(IPC.characterPick);
+  },
+
+  // -- settings -------------------------------------------------------------
+
+  openSettings(): void {
+    ipcRenderer.send(IPC.settingsOpen);
+  },
+
+  /**
+   * Check a key with the provider, then store it if it works.
+   *
+   * Validation happens in main because the key never comes back out of main.
+   * The settings window sends a key in and gets a verdict out; it cannot read
+   * one back, even the one it just typed.
+   */
+  validateAndSetKey(
+    kind: string,
+    provider: string,
+    key: string,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    return ipcRenderer.invoke(IPC.keyValidate, kind, provider, key);
+  },
+
+  deleteKey(name: string): Promise<void> {
+    return ipcRenderer.invoke(IPC.keyDelete, name);
+  },
+
+  listVoices(provider: string): Promise<VoiceOption[]> {
+    return ipcRenderer.invoke(IPC.voicesList, provider);
+  },
+
+  /** Synthesise a sample line so a voice can be auditioned before choosing. */
+  previewVoice(
+    provider: string,
+    voiceId: string,
+  ): Promise<{ pcm: Float32Array; sampleRate: number } | { error: string }> {
+    return ipcRenderer.invoke(IPC.voicePreview, provider, voiceId);
+  },
+
+  memoryStats(): Promise<MemoryStats> {
+    return ipcRenderer.invoke(IPC.memoryStats);
+  },
+
+  memoryFacts(limit?: number): Promise<MemoryFactView[]> {
+    return ipcRenderer.invoke(IPC.memoryFacts, limit);
+  },
+
+  forgetFact(id: number): Promise<void> {
+    return ipcRenderer.invoke(IPC.memoryForget, id);
+  },
+
+  wipeMemory(): Promise<void> {
+    return ipcRenderer.invoke(IPC.memoryWipe);
+  },
+
+  permissions(): Promise<PermissionReport> {
+    return ipcRenderer.invoke(IPC.permissions);
   },
 
   getConfig(): Promise<AnnaConfig> {

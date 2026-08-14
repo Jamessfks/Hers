@@ -176,6 +176,80 @@ export const IPC = {
   characterSave: 'anna:character:save',
   /** renderer -> main: read the stored character back as bytes. */
   characterLoad: 'anna:character:load',
+  /** renderer -> main: open a native file picker for a .vrm. */
+  characterPick: 'anna:character:pick',
+
+  // -- settings window ------------------------------------------------------
+
+  /** renderer -> main: bring up the settings window. */
+  settingsOpen: 'anna:settings:open',
+  /** renderer -> main: check a key against the provider before storing it. */
+  keyValidate: 'anna:key:validate',
+  /** renderer -> main: forget a stored key. */
+  keyDelete: 'anna:key:delete',
+  /** renderer -> main: voices available on the configured voice provider. */
+  voicesList: 'anna:voices:list',
+  /** renderer -> main: synthesise a sample line so a voice can be auditioned. */
+  voicePreview: 'anna:voice:preview',
+  /** renderer -> main: counts and a sample of what Anna remembers. */
+  memoryStats: 'anna:memory:stats',
+  memoryFacts: 'anna:memory:facts',
+  memoryForget: 'anna:memory:forget',
+  memoryWipe: 'anna:memory:wipe',
+  /** renderer -> main: which macOS permissions are actually granted. */
+  permissions: 'anna:permissions',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Settings payloads
+// ---------------------------------------------------------------------------
+
+/** What kind of provider a key belongs to. Maps onto the SecretName prefix. */
+export type KeyKind = 'llm' | 'tts' | 'stt';
+
+export interface KeyStatus {
+  present: boolean;
+  /** Masked tail, e.g. "••••a91f". Never the key itself. */
+  hint: string;
+}
+
+export interface VoiceOption {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface MemoryStats {
+  turns: number;
+  facts: number;
+  /** Oldest turn timestamp, or null when memory is empty. */
+  since: number | null;
+  summary: string | null;
+}
+
+export interface MemoryFactView {
+  id: number;
+  kind: string;
+  text: string;
+  confidence: number;
+  lastSeenAt: number;
+  recallCount: number;
+}
+
+/**
+ * Granted macOS permissions, as observed rather than as declared.
+ *
+ * Checked by attempting the cheapest real read for each one. `Info.plist`
+ * entries say what an app *may* ask for; only a real call says what it actually
+ * has, and the settings screen needs the truth to explain why Anna has stopped
+ * noticing things.
+ */
+export interface PermissionReport {
+  accessibility: boolean;
+  calendar: boolean;
+  /** Camera and microphone are asked for by the renderer, not probed here. */
+  camera: 'granted' | 'denied' | 'not-determined' | 'unknown';
+  microphone: 'granted' | 'denied' | 'not-determined' | 'unknown';
+}
 
 export type BrainState = 'idle' | 'listening' | 'thinking' | 'speaking';
