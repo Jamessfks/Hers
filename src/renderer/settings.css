@@ -285,6 +285,34 @@ button.busy {
   color: var(--ink-dim);
 }
 
+/* Icon buttons: reveal, refresh. Square, quiet, same height as the field. */
+button[data-reveal],
+#llm-model-refresh {
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--ink-dim);
+}
+
+button[data-reveal]:hover,
+#llm-model-refresh:hover {
+  color: var(--ink);
+}
+
+button[hidden] {
+  display: none;
+}
+
+#llm-model {
+  flex: 1 1 220px;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 input[type='range'] {
   flex: 1 1 160px;
   accent-color: var(--accent);

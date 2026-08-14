@@ -16,7 +16,16 @@
  *     screen probes for the truth and offers the exact System Settings pane.
  */
 
-import type { AnnaConfig, MemoryFactView, PermissionReport } from '../shared/protocol.ts';
+import { MODEL_CATALOG, resolveModel, type ModelOption } from '../core/llm/models.ts';
+import type {
+  AnnaConfig,
+  LlmProviderId,
+  MemoryFactView,
+  PermissionReport,
+} from '../shared/protocol.ts';
+
+/** Sentinel option value for "let me type a model id myself". */
+const CUSTOM = '__custom__';
 
 declare global {
   interface Window {
@@ -59,11 +68,7 @@ const PROVIDERS = {
   ],
 } as const;
 
-const SUGGESTED_MODELS: Record<string, string[]> = {
-  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'],
-  openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o'],
-  google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
-};
+
 
 type Kind = keyof typeof PROVIDERS;
 
@@ -91,45 +96,78 @@ function keyGroup(kind: Kind): void {
   const select = group.querySelector<HTMLSelectElement>('[data-provider]')!;
   const input = group.querySelector<HTMLInputElement>('[data-key]')!;
   const button = group.querySelector<HTMLButtonElement>('[data-save]')!;
+  const reveal = group.querySelector<HTMLButtonElement>('[data-reveal]')!;
+  const forget = group.querySelector<HTMLButtonElement>('[data-forget]')!;
   const status = group.querySelector<HTMLParagraphElement>('[data-status]')!;
   const why = group.querySelector<HTMLParagraphElement>('[data-why]');
 
   for (const provider of PROVIDERS[kind]) {
-    const option = document.createElement('option');
-    option.value = provider.id;
-    option.textContent = provider.label;
-    select.append(option);
+    select.append(new Option(provider.label, provider.id));
   }
-
   select.value = config[kind].provider;
 
+  const currentProvider = () =>
+    PROVIDERS[kind].find((entry) => entry.id === select.value);
+
+  /** Reflects what is stored for the selected provider. */
   const describe = async (): Promise<void> => {
-    const chosen = PROVIDERS[kind].find((entry) => entry.id === select.value);
+    const chosen = currentProvider();
     if (why && chosen && 'why' in chosen) why.textContent = chosen.why;
 
     const stored = await api.keyStatus();
     const entry = stored[`${kind}.${select.value}`];
-    if (entry?.present) {
+    const present = entry?.present ?? false;
+
+    forget.hidden = !present;
+    input.placeholder = present ? 'replace key' : 'paste key';
+    input.value = '';
+    input.type = 'password';
+    reveal.textContent = '👁';
+
+    if (present) {
       status.dataset['tone'] = 'good';
-      status.textContent = `Saved and working — ${entry.hint}`;
-      input.placeholder = 'replace key';
+      status.textContent = `Saved and working — ${entry?.hint ?? ''}`;
     } else {
       delete status.dataset['tone'];
-      status.textContent = chosen ? `Needs a key. Get one at ${hostOf(chosen.url)}` : '';
-      input.placeholder = 'paste key';
+      status.replaceChildren();
+      if (chosen) {
+        status.append('Needs a key. ');
+        // A real link, opened in the actual browser by the main process. A
+        // hostname you have to retype is a hostname nobody visits.
+        const link = document.createElement('a');
+        link.href = chosen.url;
+        link.textContent = `Get one at ${hostOf(chosen.url)}`;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        status.append(link);
+      }
     }
-    input.value = '';
   };
 
+  /**
+   * Switching provider.
+   *
+   * The model has to be re-resolved here rather than carried over — this is the
+   * exact path that used to leave `claude-sonnet-5` configured against OpenAI.
+   */
   select.addEventListener('change', async () => {
     await patch({ [kind]: { provider: select.value } });
     await describe();
-    if (kind === 'llm') syncModelField();
-    if (kind === 'tts') void loadVoices();
+    if (kind === 'llm') await loadModels({ refetch: true });
+    if (kind === 'tts') await loadVoices();
     await refreshStatus();
   });
 
-  button.addEventListener('click', async () => {
+  reveal.addEventListener('click', () => {
+    // Reveal is for checking a paste, not for reading back a stored key —
+    // there is nothing in the field to reveal unless you just typed it.
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    reveal.textContent = showing ? '👁' : '🙈';
+    input.focus();
+  });
+
+  const save = async (): Promise<void> => {
     const key = input.value.trim();
     if (!key) return;
 
@@ -148,32 +186,156 @@ function keyGroup(kind: Kind): void {
 
     if (result.ok) {
       await describe();
-      if (kind === 'tts') void loadVoices();
+      if (kind === 'llm') await loadModels({ refetch: true });
+      if (kind === 'tts') await loadVoices();
     } else {
       status.dataset['tone'] = 'bad';
       status.textContent = result.reason;
     }
     await refreshStatus();
+  };
+
+  button.addEventListener('click', () => void save());
+  input.addEventListener('keydown', (event) => {
+    // Enter submits, because that is what everyone does after pasting a key.
+    if (event.key === 'Enter') void save();
   });
 
-  // Enter submits, because that is what everyone does after pasting a key.
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') button.click();
+  /**
+   * Warn about a key that is obviously in the wrong box.
+   *
+   * Three key fields on one screen and three vendors with distinct prefixes:
+   * pasting the Anthropic key into the OpenAI field is the single most common
+   * mistake here, and "401 authentication_error" is a terrible way to find out.
+   */
+  input.addEventListener('input', async () => {
+    if (!input.value.trim()) {
+      if (status.dataset['tone'] === 'bad') await describe();
+      return;
+    }
+    const warning = await api.keyShape(`${kind}.${select.value}`, input.value);
+    if (warning) {
+      status.dataset['tone'] = 'bad';
+      status.textContent = warning;
+    } else if (status.dataset['tone'] === 'bad') {
+      delete status.dataset['tone'];
+      status.textContent = '';
+    }
+  });
+
+  forget.addEventListener('click', async () => {
+    await api.deleteKey(`${kind}.${select.value}`);
+    await describe();
+    if (kind === 'llm') await loadModels({ refetch: true });
+    if (kind === 'tts') await loadVoices();
+    await refreshStatus();
   });
 
   void describe();
 }
 
-function syncModelField(): void {
-  const field = $<HTMLInputElement>('#llm-model');
-  const list = $<HTMLDataListElement>('#llm-models');
-  list.replaceChildren();
-  for (const model of SUGGESTED_MODELS[config.llm.provider] ?? []) {
-    const option = document.createElement('option');
-    option.value = model;
-    list.append(option);
+/**
+ * Populates the model picker for the current provider.
+ *
+ * This is where the original bug lived. The old version wrote
+ * `config.llm.model` straight into the field, so switching provider from
+ * Anthropic to OpenAI left `claude-sonnet-5` selected — and every request then
+ * failed with a vendor error nobody would trace back to a dropdown they had
+ * touched a minute earlier.
+ *
+ * Now the model is *resolved* rather than carried: {@link resolveModel} can
+ * never return a model belonging to another vendor, and when the live list is
+ * available the answer is always something the account actually has.
+ */
+async function loadModels(options: { refetch?: boolean } = {}): Promise<void> {
+  const select = $<HTMLSelectElement>('#llm-model');
+  const note = $('#llm-model-note');
+  const provider = config.llm.provider;
+
+  if (options.refetch) {
+    select.replaceChildren(new Option('Loading…', ''));
+    select.disabled = true;
   }
-  field.value = config.llm.model;
+
+  const live = await api.listModels(provider).catch((): ModelOption[] => []);
+  const fromCatalogue = live.length === 0;
+  const models: ModelOption[] = fromCatalogue
+    ? MODEL_CATALOG[provider].map((id) => ({ id, label: id }))
+    : live;
+
+  const chosen = resolveModel({
+    provider,
+    current: config.llm.model,
+    ...(config.llm.modelByProvider && { remembered: config.llm.modelByProvider }),
+    // An empty live list means "could not fetch", not "this account has none",
+    // so it must not constrain the choice.
+    ...(fromCatalogue ? {} : { available: models.map((model) => model.id) }),
+  });
+
+  select.replaceChildren();
+  for (const model of models) {
+    select.append(new Option(model.label, model.id));
+  }
+  // A custom or fine-tuned id the list does not include still has to be
+  // selectable, or opening settings would silently discard it.
+  if (chosen && !models.some((model) => model.id === chosen)) {
+    select.append(new Option(`${chosen} (custom)`, chosen));
+  }
+  select.append(new Option('Custom id…', CUSTOM));
+
+  select.value = chosen;
+  select.disabled = false;
+
+  note.textContent = fromCatalogue
+    ? 'Built-in list. Add a key above to see what your account can actually use.'
+    : `${live.length} ${live.length === 1 ? 'model' : 'models'} on your account.`;
+  delete note.dataset['tone'];
+
+  if (chosen !== config.llm.model) await rememberModel(chosen);
+}
+
+/** Writes the model, and remembers it for this provider. */
+async function rememberModel(model: string): Promise<void> {
+  await patch({
+    llm: {
+      model,
+      modelByProvider: { ...config.llm.modelByProvider, [config.llm.provider]: model },
+    },
+  });
+}
+
+function wireModelPicker(): void {
+  const select = $<HTMLSelectElement>('#llm-model');
+  const customRow = $<HTMLDivElement>('#llm-model-custom-row');
+  const custom = $<HTMLInputElement>('#llm-model-custom');
+
+  select.addEventListener('change', async () => {
+    if (select.value === CUSTOM) {
+      customRow.hidden = false;
+      custom.value = config.llm.model;
+      custom.focus();
+      return;
+    }
+    customRow.hidden = true;
+    await rememberModel(select.value);
+    await refreshStatus();
+  });
+
+  const commitCustom = async (): Promise<void> => {
+    const value = custom.value.trim();
+    if (!value) return;
+    await rememberModel(value);
+    await loadModels();
+    await refreshStatus();
+  };
+  custom.addEventListener('change', commitCustom);
+  custom.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') void commitCustom();
+  });
+
+  $<HTMLButtonElement>('#llm-model-refresh').addEventListener('click', () => {
+    void loadModels({ refetch: true });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +425,7 @@ function wireCharacter(): void {
   const show = (): void => {
     name.textContent = config.avatar.modelPath
       ? `Wearing ${config.avatar.modelPath}`
-      : 'Using the stand-in figure';
+      : 'Using the default character';
   };
 
   button.addEventListener('click', async () => {
@@ -568,18 +730,14 @@ async function boot(): Promise<void> {
   permissions = await api.permissions().catch(() => null);
 
   for (const kind of ['llm', 'tts', 'stt'] as const) keyGroup(kind);
-  syncModelField();
+  wireModelPicker();
   wireVoice();
   wireCharacter();
   renderToggles($('#senses'), sensesToggles());
   wirePresence();
   wireWipe();
 
-  $<HTMLInputElement>('#llm-model').addEventListener('change', (event) => {
-    void patch({ llm: { model: (event.target as HTMLInputElement).value.trim() } });
-  });
-
-  await Promise.all([loadVoices(), renderMemory(), refreshStatus()]);
+  await Promise.all([loadModels(), loadVoices(), renderMemory(), refreshStatus()]);
 
   api.onConfigChanged((next) => {
     config = next;

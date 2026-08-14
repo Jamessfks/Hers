@@ -117,6 +117,11 @@ const api = {
     return ipcRenderer.invoke(IPC.keyValidate, kind, provider, key);
   },
 
+  /** Warn about a key that looks like it belongs in a different box. */
+  keyShape(slot: string, key: string): Promise<string | null> {
+    return ipcRenderer.invoke('anna:key:shape', slot, key);
+  },
+
   deleteKey(name: string): Promise<void> {
     return ipcRenderer.invoke(IPC.keyDelete, name);
   },
