@@ -97,8 +97,34 @@ body {
   transform: translateY(0);
 }
 
+#composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#settings {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(18, 18, 22, 0.66);
+  backdrop-filter: blur(18px);
+  color: var(--ink-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+#settings:hover {
+  color: var(--ink);
+  border-color: rgba(142, 205, 255, 0.55);
+}
+
 #say {
-  width: 100%;
+  flex: 1;
   padding: 11px 15px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;

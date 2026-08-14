@@ -176,6 +176,10 @@ function isOverCharacter(x: number, y: number): boolean {
   return withinX && withinY;
 }
 
+document
+  .querySelector<HTMLButtonElement>('#settings')!
+  .addEventListener('click', () => window.anna.openSettings());
+
 inputEl.addEventListener('keydown', async (event) => {
   if (event.key !== 'Enter') return;
   const text = inputEl.value.trim();
