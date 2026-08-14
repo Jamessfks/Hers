@@ -123,7 +123,13 @@ export type SenseKind = SenseEvent['kind'];
 
 export type LlmProviderId = 'anthropic' | 'openai' | 'google';
 export type TtsProviderId = 'cartesia' | 'elevenlabs' | 'hume';
-export type SttProviderId = 'deepgram' | 'openai';
+/**
+ * `apple` is macOS's own recogniser, running offline on this machine. It is the
+ * default because it is the only one of the three that needs no account: the
+ * other two turn "she can hear you" into a second signup and a second bill,
+ * after the user has already paid for a language model and a voice.
+ */
+export type SttProviderId = 'apple' | 'deepgram' | 'openai';
 export type AvatarRendererId = 'vrm' | 'heygen' | 'tavus';
 
 export interface AnnaConfig {
