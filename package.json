@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --disable-warning=ExperimentalWarning \"src/**/*.test.ts\"",
     "lint": "tsc --noEmit",
-    "dist:mac": "electron-vite build && electron-builder --mac --publish never"
+    "dist:mac": "npm run fetch:character && electron-vite build && electron-builder --mac --publish never",
+    "fetch:character": "node scripts/fetch-character.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.5",
@@ -63,6 +64,15 @@
         "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps.",
         "LSUIElement": true
       }
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/characters",
+        "to": "characters",
+        "filter": [
+          "**/*.vrm"
+        ]
+      }
+    ]
   }
 }

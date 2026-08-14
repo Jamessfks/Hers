@@ -9,3 +9,4 @@ out/
 !.env.example
 data/
 release/
+resources/characters/
