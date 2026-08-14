@@ -62,7 +62,11 @@ export function createAnnaWindow(): AnnaWindow {
 
   window.setAlwaysOnTop(true, 'screen-saver');
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  window.setContentProtection(true);
+
+  // Excluded from screen capture by default: a companion who turns up in a
+  // shared screen during a work call is a betrayal, not a feature. Set
+  // ANNA_ALLOW_CAPTURE=1 when you actually want her in a recording or a demo.
+  window.setContentProtection(process.env['ANNA_ALLOW_CAPTURE'] !== '1');
 
   // Default to click-through. The renderer turns this off while the pointer is
   // over Anna herself or over the input bar.
