@@ -123,11 +123,18 @@ test('tracker describes the world in plain language, not telemetry', () => {
     idleSeconds: 600,
     at: AFTERNOON,
   });
-  tracker.observe({ kind: 'presence', present: true, read: 'hunched over', at: AFTERNOON });
+  // The read is taken 24 minutes in, so it is fresh when described a minute
+  // later. A 25-minute-old read is deliberately no longer reported as current.
+  tracker.observe({
+    kind: 'presence',
+    present: true,
+    read: 'hunched over',
+    at: AFTERNOON + 24 * MINUTE,
+  });
   const lines = tracker.describe(AFTERNOON + 25 * MINUTE).join('\n');
   assert.match(lines, /They have been in Xcode for 25 minutes\./);
   assert.match(lines, /have not touched the keyboard in 10 minutes/);
-  assert.match(lines, /How they look: hunched over/);
+  assert.match(lines, /How they look, just now: hunched over/);
   assert.doesNotMatch(lines, /idle_seconds|app=/);
 });
 
@@ -137,4 +144,31 @@ test('user input marks them present again', () => {
   assert.equal(tracker.snapshot(AFTERNOON, false).present, false);
   tracker.observe({ kind: 'user-typed', text: 'hey', at: AFTERNOON + MINUTE });
   assert.equal(tracker.snapshot(AFTERNOON + MINUTE, false).present, true);
+});
+
+test('a visual read expires rather than being reported as current', () => {
+  // She used to confidently say "you look tired" from an image three minutes
+  // old, after the user had got up and made coffee.
+  const tracker = new SituationTracker();
+  tracker.observe({ kind: 'presence', present: true, read: 'slumped, rubbing eyes', at: AFTERNOON });
+
+  assert.equal(tracker.snapshot(AFTERNOON + 30_000, false).read, 'slumped, rubbing eyes');
+  assert.equal(
+    tracker.snapshot(AFTERNOON + 5 * 60_000, false).read,
+    undefined,
+    'a five-minute-old read must not be presented as now',
+  );
+  assert.match(
+    tracker.describe(AFTERNOON + 5 * 60_000).join('\n'),
+    /not looked at them recently/,
+    'and she should know she has not looked',
+  );
+});
+
+test('a stale read cannot trigger the distress opener', () => {
+  const attention = new Attention({ ...POLICY });
+  const tracker = new SituationTracker();
+  tracker.observe({ kind: 'presence', present: true, read: 'head in hands', at: AFTERNOON });
+  const stale = tracker.snapshot(AFTERNOON + 6 * 60_000, false);
+  assert.equal(attention.decide(stale, AFTERNOON + 6 * 60_000), null);
 });

@@ -20,6 +20,7 @@
  */
 
 import type { SenseEvent } from '../../shared/protocol.ts';
+import { READ_STALE_MS } from './sight.ts';
 
 export type TriggerId =
   | 'returned'
@@ -226,6 +227,7 @@ function minutes(milliseconds: number): number {
 export class SituationTracker {
   #present = true;
   #read: string | undefined;
+  #readAt = 0;
   #app: string | undefined;
   #windowTitle: string | undefined;
   #idleSeconds = 0;
@@ -242,7 +244,10 @@ export class SituationTracker {
         // Only replace the visual read when this event carries one. The 20s
         // activity poll emits presence with no `read`, which used to wipe the
         // camera's description about twenty seconds after every 45s frame.
-        if (event.read !== undefined) this.#read = event.read;
+        if (event.read !== undefined) {
+          this.#read = event.read;
+          this.#readAt = event.at;
+        }
         break;
       }
       case 'activity': {
@@ -281,9 +286,13 @@ export class SituationTracker {
   }
 
   snapshot(now: number, inConversation: boolean): Situation {
+    // A visual read expires. Describing how someone looked three minutes ago
+    // as though it were now is worse than not having looked — she confidently
+    // tells you that you seem tired after you have got up and made coffee.
+    const read = this.#read && now - this.#readAt < READ_STALE_MS ? this.#read : undefined;
     return {
       present: this.#present,
-      ...(this.#read && { read: this.#read }),
+      ...(read && { read }),
       ...(this.#app && { app: this.#app }),
       ...(this.#windowTitle && { windowTitle: this.#windowTitle }),
       idleSeconds: this.#idleSeconds,
@@ -326,7 +335,11 @@ export class SituationTracker {
       lines.push(`They have not touched the keyboard in ${Math.round(situation.idleSeconds / 60)} minutes.`);
     }
     if (situation.read) {
-      lines.push(`How they look: ${situation.read}`);
+      lines.push(`How they look, just now: ${situation.read}`);
+    } else if (this.#read) {
+      // She looked, but it was a while ago. Say so rather than presenting a
+      // stale observation as current.
+      lines.push('You have not looked at them recently.');
     }
     if (situation.nextEvent) {
       lines.push(
