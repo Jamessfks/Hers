@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Linked into the binary's __TEXT,__info_plist section rather than sitting in a
+  bundle beside it.
+
+  TCC does not ask nicely. A plain executable that touches a privacy-gated API
+  with no usage description is killed with SIGABRT before any of its own code
+  runs, which is what happened the first time this was built:
+
+    termination namespace TCC ... "The app's Info.plist must contain an
+    NSSpeechRecognitionUsageDescription key"
+
+  A loose Info.plist file only counts when the executable lives inside a proper
+  .app bundle. This helper is a single file in Resources/, so the plist has to
+  travel inside the Mach-O itself.
+
+  The wording matches package.json's build.mac.extendInfo on purpose: whichever
+  of the two macOS decides to quote in the consent dialog, the user reads the
+  same sentence.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>dev.anna.companion.transcribe</string>
+  <key>CFBundleName</key>
+  <string>Anna Transcriber</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Anna transcribes your speech so she can reply. Recognition runs entirely on this Mac and nothing is sent anywhere.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Anna listens so she can answer you out loud.</string>
+</dict>
+</plist>
