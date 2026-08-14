@@ -1,0 +1,450 @@
+/*
+ * Settings.
+ *
+ * This is the one surface where Anna is an application rather than a presence,
+ * and it should look like a well-made preferences pane, not like a marketing
+ * page bolted to a companion. So: one column, generous line length, real
+ * hierarchy, and a single accent — her own glow colour — used only where
+ * something is live or focused.
+ *
+ * Two constraints worth stating because they shaped the layout. Everything here
+ * is a decision the user has to make *before* Anna works at all, so the order
+ * is the order of the onboarding, and required things say so. And every control
+ * writes immediately: there is no Save button, because a settings pane with one
+ * invites you to lose work by closing the window.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #131318;
+  --surface: #1a1a21;
+  --surface-hover: #20202a;
+  --line: #2a2a35;
+  --ink: #edeef2;
+  --ink-dim: #9a9ba8;
+  --ink-faint: #6c6d7a;
+  --accent: #8ecdff;
+  --accent-dim: #4a7fa8;
+  --good: #7bd88f;
+  --bad: #ff8b8b;
+  --radius: 10px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --------------------------------------------------------------------------
+   Title bar. `titleBarStyle: hiddenInset` leaves the traffic lights floating
+   over the content, so the header carries a matching inset.
+   -------------------------------------------------------------------------- */
+
+.titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 26px 32px 14px 86px;
+  background: linear-gradient(var(--bg) 72%, transparent);
+  -webkit-app-region: drag;
+}
+
+.titlebar h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.status {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+
+.status[data-ok='true'] {
+  color: var(--good);
+}
+
+.status[data-ok='false'] {
+  color: var(--accent);
+}
+
+main {
+  max-width: 720px;
+  padding: 0 32px 64px;
+}
+
+/* --------------------------------------------------------------------------
+   Sections
+   -------------------------------------------------------------------------- */
+
+section {
+  padding: 26px 0;
+  border-top: 1px solid var(--line);
+}
+
+section:first-of-type {
+  border-top: none;
+  padding-top: 8px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-note {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  max-width: 62ch;
+  margin-bottom: 18px;
+}
+
+.muted {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+}
+
+/* --------------------------------------------------------------------------
+   Key groups
+   -------------------------------------------------------------------------- */
+
+.key-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.key-head {
+  margin-bottom: 12px;
+}
+
+.key-head p {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+}
+
+.required,
+.optional {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.required {
+  color: var(--accent);
+  background: rgba(142, 205, 255, 0.12);
+}
+
+.optional {
+  color: var(--ink-faint);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-row + .key-row {
+  margin-top: 10px;
+}
+
+.model-row label {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  min-width: 110px;
+}
+
+.key-status {
+  font-size: 12.5px;
+  margin-top: 8px;
+  min-height: 1.2em;
+  color: var(--ink-dim);
+}
+
+.key-status[data-tone='good'] {
+  color: var(--good);
+}
+
+.key-status[data-tone='bad'] {
+  color: var(--bad);
+}
+
+.provider-why {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+  max-width: 58ch;
+}
+
+/* --------------------------------------------------------------------------
+   Controls
+   -------------------------------------------------------------------------- */
+
+input[type='text'],
+input[type='password'],
+input[type='number'],
+select {
+  background: #0f0f14;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  min-width: 0;
+  transition: border-color 140ms ease;
+}
+
+input[type='password'],
+input[type='text'] {
+  flex: 1 1 200px;
+}
+
+input[type='number'] {
+  width: 62px;
+  text-align: center;
+}
+
+select {
+  flex: 0 0 auto;
+  min-width: 150px;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: none;
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 3px rgba(142, 205, 255, 0.16);
+}
+
+button {
+  background: #262631;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #3a3a48;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.danger {
+  color: var(--bad);
+  border-color: rgba(255, 139, 139, 0.28);
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(255, 139, 139, 0.1);
+}
+
+button.busy {
+  color: var(--ink-dim);
+}
+
+input[type='range'] {
+  flex: 1 1 160px;
+  accent-color: var(--accent);
+}
+
+output {
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+}
+
+/* --------------------------------------------------------------------------
+   Toggles
+   -------------------------------------------------------------------------- */
+
+.toggles {
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  margin-bottom: 16px;
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  transition: background 140ms ease;
+}
+
+.toggle:hover {
+  background: var(--surface);
+}
+
+.toggle input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.toggle-text {
+  flex: 1;
+}
+
+.toggle-title {
+  display: block;
+  font-size: 13.5px;
+}
+
+.toggle-note {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 12px;
+  margin-top: 1px;
+}
+
+.perm {
+  font-size: 11.5px;
+  margin-left: 8px;
+}
+
+.perm[data-granted='false'] {
+  color: var(--bad);
+}
+
+.perm[data-granted='true'] {
+  color: var(--good);
+}
+
+.perm button {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  margin-left: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Memory
+   -------------------------------------------------------------------------- */
+
+.facts {
+  list-style: none;
+  display: grid;
+  gap: 1px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.facts:empty {
+  display: none;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface);
+}
+
+.fact:hover {
+  background: var(--surface-hover);
+}
+
+.fact-kind {
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  flex: none;
+  width: 74px;
+}
+
+.fact-text {
+  flex: 1;
+  font-size: 13px;
+}
+
+.fact-meta {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.fact button {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  flex: none;
+}
+
+.danger-row {
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Utility
+   -------------------------------------------------------------------------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+a {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
