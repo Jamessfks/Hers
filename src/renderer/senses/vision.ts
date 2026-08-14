@@ -34,13 +34,31 @@ export class Vision {
   #stream: MediaStream | null = null;
   #video: HTMLVideoElement | null = null;
   #timer: number | undefined;
+  #intervalSeconds: number;
 
   constructor(options: VisionOptions) {
     this.#options = options;
+    this.#intervalSeconds = Math.max(MIN_INTERVAL_SECONDS, options.intervalSeconds);
   }
 
   get running(): boolean {
     return this.#stream !== null;
+  }
+
+  /**
+   * Changes the sampling interval on a running camera.
+   *
+   * The slider in settings used to do nothing: the interval was read once at
+   * construction and `start()` returns early when already running, so dragging
+   * it only took effect after a full restart of the app.
+   */
+  setInterval(seconds: number): void {
+    const next = Math.max(MIN_INTERVAL_SECONDS, seconds);
+    if (next === this.#intervalSeconds) return;
+    this.#intervalSeconds = next;
+    if (!this.#stream) return;
+    window.clearInterval(this.#timer);
+    this.#timer = window.setInterval(() => this.#capture(), next * 1000);
   }
 
   async start(): Promise<void> {
@@ -57,8 +75,7 @@ export class Vision {
     await video.play();
     this.#video = video;
 
-    const interval = Math.max(MIN_INTERVAL_SECONDS, this.#options.intervalSeconds) * 1000;
-    this.#timer = window.setInterval(() => this.#capture(), interval);
+    this.#timer = window.setInterval(() => this.#capture(), this.#intervalSeconds * 1000);
     // Take one immediately so Anna is not blind for the first minute.
     window.setTimeout(() => this.#capture(), 1500);
   }

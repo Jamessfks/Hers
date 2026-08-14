@@ -354,6 +354,24 @@ async function main(): Promise<void> {
     const key = secrets.get(`llm.${settings.llm.provider}` as SecretName);
     if (!key || !settings.senses.camera) return;
 
+    /*
+     * Do not pay to look at an empty chair.
+     *
+     * Nothing used to gate this: the timer fired every 45 seconds regardless of
+     * whether anyone had touched the keyboard in an hour or whether the window
+     * was even on screen. That is 80 paid vision calls an hour, indefinitely,
+     * for frames of a room with nobody in it — and a camera light on someone's
+     * face while they are not there.
+     *
+     * A look the user explicitly asked for always goes through.
+     */
+    const snapshot = situation.snapshot(Date.now(), false);
+    const away = snapshot.idleSeconds > PRESENCE_IDLE_SECONDS;
+    if (!lookRequested && (away || !window.isVisible())) {
+      diag.note('vision-skipped', { away, hidden: !window.isVisible() });
+      return;
+    }
+
     const requested = lookRequested;
     lookRequested = false;
 

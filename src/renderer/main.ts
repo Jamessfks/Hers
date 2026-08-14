@@ -261,6 +261,17 @@ async function boot(): Promise<void> {
     // Clear the fade when she is brought back, or the window would reappear
     // still transparent and untouchable.
     if (visible) delete appEl.dataset['leaving'];
+
+    /*
+     * Release the camera while she is away.
+     *
+     * Dismissing her used to leave the green light on and frames flowing, which
+     * is the single worst thing this app could do: the user has explicitly sent
+     * her away and the camera stays on. Main also refuses the paid call in that
+     * state, but the light is the part that matters.
+     */
+    if (!visible) vision.stop();
+    else if (config?.senses.camera) void vision.start();
   });
 
   // Always ask: main answers with the chosen character, or with the bundled
@@ -304,6 +315,7 @@ async function boot(): Promise<void> {
     }
 
     try {
+      vision.setInterval(next.senses.cameraIntervalSeconds);
       if (next.senses.camera) await vision.start();
       else vision.stop();
     } catch (error) {
