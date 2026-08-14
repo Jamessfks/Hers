@@ -17,7 +17,9 @@ import { Memory } from '../core/memory/memory.ts';
 import { MemoryStore } from '../core/memory/store.ts';
 import { Secrets, type SecretName } from './secrets.ts';
 import { createLlmProvider } from '../core/llm/index.ts';
+import { createSttProvider } from '../core/speech/stt.ts';
 import { createTtsProvider } from '../core/speech/index.ts';
+import { describePerson } from '../core/llm/vision.ts';
 import {
   createGoogleEmbedder,
   createLexicalEmbedder,
@@ -116,16 +118,69 @@ async function main(): Promise<void> {
 
   ipcMain.on(IPC.sense, (_event, sensed: SenseEvent) => {
     situation.observe(sensed);
+
     if (sensed.kind === 'user-speech' && !sensed.final) {
-      // They started talking over her. Stop immediately; wait for the final
-      // transcript before answering.
+      // They started talking over her. Stop immediately; the transcript for
+      // what they said arrives separately, once they finish.
       companion?.bargeIn();
       return;
     }
+
     if (sensed.kind === 'user-speech' || sensed.kind === 'user-typed') {
       void companion?.respondTo(sensed.text);
+      return;
+    }
+
+    if (sensed.kind === 'user-audio') {
+      void transcribeAndRespond(sensed.audio, sensed.mimeType);
+      return;
+    }
+
+    if (sensed.kind === 'camera-frame') {
+      void look(sensed.jpegBase64);
     }
   });
+
+  /** Turns a recorded utterance into a turn. */
+  async function transcribeAndRespond(audio: Uint8Array, mimeType: string): Promise<void> {
+    const settings = config.get();
+    const key = secrets.get(`stt.${settings.stt.provider}` as SecretName);
+    if (!key) return;
+    try {
+      const { text } = await createSttProvider(settings.stt.provider, key).transcribe(
+        audio,
+        mimeType,
+      );
+      if (!text) return;
+      situation.observe({ kind: 'user-speech', text, final: true, at: Date.now() });
+      await companion?.respondTo(text);
+    } catch (error) {
+      send(IPC.trouble, error instanceof Error ? error.message : 'I did not catch that.');
+    }
+  }
+
+  /**
+   * Turns a camera frame into a one-clause read of the user.
+   *
+   * The frame is used and dropped. Only the sentence reaches the situation, and
+   * only the situation reaches the model that Anna talks with.
+   */
+  async function look(jpegBase64: string): Promise<void> {
+    const settings = config.get();
+    const key = secrets.get(`llm.${settings.llm.provider}` as SecretName);
+    if (!key || !settings.senses.camera) return;
+    const read = await describePerson({
+      provider: settings.llm.provider,
+      apiKey: key,
+      jpegBase64,
+    });
+    situation.observe({
+      kind: 'presence',
+      present: read !== null,
+      ...(read && { read }),
+      at: Date.now(),
+    });
+  }
 
   ipcMain.handle(IPC.configGet, () => config.get());
   ipcMain.handle(IPC.configSet, (_event, patch) => {
