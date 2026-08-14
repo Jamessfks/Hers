@@ -63,8 +63,25 @@ const PROVIDERS = {
     },
   ],
   stt: [
-    { id: 'deepgram', label: 'Deepgram', url: 'https://console.deepgram.com' },
-    { id: 'openai', label: 'OpenAI Whisper', url: 'https://platform.openai.com/api-keys' },
+    {
+      id: 'apple',
+      label: 'This Mac (on-device)',
+      url: '',
+      keyless: true,
+      why: 'No key, no account, no network. macOS transcribes you on this machine and the audio never leaves it. Works on a plane.',
+    },
+    {
+      id: 'deepgram',
+      label: 'Deepgram',
+      url: 'https://console.deepgram.com',
+      why: 'More accurate on strong accents and noisy rooms. Your voice is sent to Deepgram.',
+    },
+    {
+      id: 'openai',
+      label: 'OpenAI Whisper',
+      url: 'https://platform.openai.com/api-keys',
+      why: 'Best on languages other than English. Your voice is sent to OpenAI.',
+    },
   ],
 } as const;
 

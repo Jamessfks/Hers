@@ -13,6 +13,8 @@
  * VAD, and the reason so many voice UIs cut you off mid-thought.
  */
 
+import { encodeWav, mixToMono } from '../../core/speech/wav.ts';
+
 const OPEN_THRESHOLD = 0.035;
 const CLOSE_THRESHOLD = 0.018;
 /**
@@ -149,8 +151,8 @@ export class Microphone {
     recorder.onstop = async () => {
       if (!keep) return;
       const blob = new Blob(this.#chunks, { type: mimeType });
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      this.#options.onUtterance(bytes, mimeType);
+      const utterance = await toWav(await blob.arrayBuffer(), mimeType);
+      this.#options.onUtterance(utterance.bytes, utterance.mimeType);
     };
     if (recorder.state === 'recording') recorder.stop();
     this.#recorder = null;
@@ -163,4 +165,60 @@ function pickMimeType(): string {
     if (MediaRecorder.isTypeSupported(candidate)) return candidate;
   }
   return '';
+}
+
+/**
+ * What the recogniser actually wants. Speech carries nothing above 8kHz that a
+ * transcriber uses, so this is the Nyquist floor rather than a compromise, and
+ * it is a third of the bytes of the 48kHz the microphone hands us.
+ */
+const TARGET_SAMPLE_RATE = 16000;
+
+/**
+ * Turns the recording into plain PCM before it leaves the renderer.
+ *
+ * This is the seam that makes free, offline transcription possible at all.
+ * MediaRecorder on macOS gives WebM/Opus, and CoreAudio — which is what
+ * `SFSpeechRecognizer` reads through — has no Matroska parser, so `afconvert` in
+ * the main process cannot rescue it:
+ *
+ *     Error: Couldn't open input file ('typ?')
+ *
+ * The alternative was to stop using MediaRecorder and capture raw samples off a
+ * ScriptProcessorNode instead. That skips the encode/decode round trip, but it
+ * replaces a recording path that works with a deprecated node and a silent
+ * gain-zero sink to keep it pulling, for a quality difference no recogniser can
+ * hear. Decoding what MediaRecorder produced leaves the VAD and the recorder
+ * exactly as they were.
+ *
+ * `OfflineAudioContext` rather than a plain `AudioContext`: decoding needs no
+ * output device, and opening one here would take a hardware audio unit for the
+ * length of the decode while Anna may be mid-sentence on the same device.
+ *
+ * On failure the original bytes go out unchanged. Deepgram and OpenAI both read
+ * WebM happily, so a user on a paid provider must not lose their voice input
+ * because a decode the on-device path needed did not work.
+ */
+async function toWav(
+  recorded: ArrayBuffer,
+  mimeType: string,
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  // Copy first. decodeAudioData *detaches* the buffer it is handed, so reading
+  // `recorded` in the catch below would yield zero bytes — a fallback that
+  // silently sends an empty utterance is worse than no fallback at all.
+  const original = new Uint8Array(recorded.slice(0));
+  try {
+    const context = new OfflineAudioContext(1, 1, TARGET_SAMPLE_RATE);
+    const decoded = await context.decodeAudioData(recorded);
+    const channels = Array.from({ length: decoded.numberOfChannels }, (_, index) =>
+      decoded.getChannelData(index),
+    );
+    // Read the rate off the buffer rather than assuming the context imposed it.
+    // decodeAudioData is specified to resample to the context rate, and Chromium
+    // does — but a header that disagrees with its samples is a bug that presents
+    // as a chipmunk voice and an empty transcript, and this costs one property.
+    return { bytes: encodeWav(mixToMono(channels), decoded.sampleRate), mimeType: 'audio/wav' };
+  } catch {
+    return { bytes: original, mimeType };
+  }
 }

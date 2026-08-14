@@ -20,7 +20,10 @@ import type { AnnaConfig } from '../shared/protocol.ts';
 export const DEFAULT_CONFIG: AnnaConfig = {
   llm: { provider: 'anthropic', model: defaultModelFor('anthropic'), modelByProvider: {} },
   tts: { provider: 'cartesia', voiceId: '' },
-  stt: { provider: 'deepgram' },
+  // macOS's own recogniser, offline and keyless. The paid options are better on
+  // accented speech, but a default that demands a third signup before she can
+  // hear you is a default that leaves the microphone switched off forever.
+  stt: { provider: 'apple' },
   avatar: { renderer: 'vrm', modelPath: '' },
   senses: {
     // Camera and microphone start off. A companion that switches on your camera

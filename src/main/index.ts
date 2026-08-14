@@ -18,7 +18,8 @@ import { Memory } from '../core/memory/memory.ts';
 import { MemoryStore } from '../core/memory/store.ts';
 import { Secrets, type SecretName } from './secrets.ts';
 import { createLlmProvider } from '../core/llm/index.ts';
-import { createSttProvider } from '../core/speech/stt.ts';
+import { createSttProvider, type SttProvider } from '../core/speech/stt.ts';
+import { createAppleStt } from './speech/apple-stt.ts';
 import { createTtsProvider } from '../core/speech/index.ts';
 import { describePerson } from '../core/llm/vision.ts';
 import {
@@ -222,16 +223,46 @@ async function main(): Promise<void> {
     }
   });
 
+  /**
+   * Where the on-device transcriber might be.
+   *
+   * Same two-world problem as the default character above: packaged it sits
+   * beside the asar as a plain executable, and in development the answer
+   * depends on how Electron was invoked. It is not inside the asar because a
+   * binary cannot be executed from an archive.
+   */
+  const transcriberPaths = (): string[] =>
+    app.isPackaged
+      ? [join(process.resourcesPath, 'anna-transcribe')]
+      : [
+          join(__dirname, '..', '..', 'native', 'build', 'anna-transcribe'),
+          join(app.getAppPath(), 'native', 'build', 'anna-transcribe'),
+        ];
+
+  /**
+   * The transcriber for the current setting, or null if it cannot be built.
+   *
+   * The key lookup used to be unconditional, and returning early without one was
+   * correct while every option was a paid API. It is exactly wrong for the
+   * default: `apple` runs on this machine and has no account to have a key for,
+   * so the old guard would have silently swallowed every utterance — the same
+   * dead microphone this whole path exists to fix, just with a different cause.
+   */
+  function currentStt(): SttProvider | null {
+    const settings = config.get();
+    if (settings.stt.provider === 'apple') {
+      return createAppleStt({ binaryPaths: transcriberPaths() });
+    }
+    const key = secrets.get(`stt.${settings.stt.provider}` as SecretName);
+    return key ? createSttProvider(settings.stt.provider, key) : null;
+  }
+
   /** Turns a recorded utterance into a turn. */
   async function transcribeAndRespond(audio: Uint8Array, mimeType: string): Promise<void> {
-    const settings = config.get();
-    const key = secrets.get(`stt.${settings.stt.provider}` as SecretName);
-    if (!key) return;
+    const stt = currentStt();
+    if (!stt) return;
     try {
-      const { text } = await createSttProvider(settings.stt.provider, key).transcribe(
-        audio,
-        mimeType,
-      );
+      const { text } = await stt.transcribe(audio, mimeType);
       if (!text) return;
       situation.observe({ kind: 'user-speech', text, final: true, at: Date.now() });
       await companion?.respondTo(text);

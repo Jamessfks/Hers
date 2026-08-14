@@ -288,7 +288,23 @@ async function boot(): Promise<void> {
     config = next;
     void applySenses(next);
   });
-  await applySenses(config);
+
+  /*
+   * Start drawing BEFORE the sensors, and never await them.
+   *
+   * This ordering is not a preference, it is a bug fix. `getUserMedia` blocks
+   * while macOS shows its permission prompt — and if the user never answers,
+   * or the prompt is suppressed, the promise simply never settles. With the
+   * render loop behind that await, Anna's panel drew its frame and then stayed
+   * completely empty: no avatar, no placeholder, nothing, with no error to
+   * explain it. It only appeared once the camera was switched on, which is
+   * exactly when it is hardest to attribute.
+   *
+   * The body has nothing to do with the sensors. It should be on screen the
+   * instant it can be.
+   */
+  requestAnimationFrame(frame);
+  void applySenses(config);
 
   requestAnimationFrame(frame);
 }
