@@ -82,7 +82,7 @@ const TURN = { system: 'be anna', messages: [{ role: 'user' as const, content: '
 // Anthropic
 // ---------------------------------------------------------------------------
 
-test('anthropic: streams text deltas and sends the system prompt top-level', async () => {
+test('anthropic: streams text deltas and keeps the system prompt out of messages', async () => {
   const { fetch, calls } = mockFetch([
     {
       match: /v1\/messages/,
@@ -108,9 +108,9 @@ test('anthropic: streams text deltas and sends the system prompt top-level', asy
   const call = calls[0]!;
   assert.equal(call.headers['x-api-key'], 'sk-ant-test');
   assert.equal(call.headers['anthropic-version'], '2023-06-01');
-  const body = call.body as { system?: string; messages?: unknown[] };
-  assert.equal(body.system, 'be anna', 'system must be a top-level field, not a message');
-  assert.equal(body.messages?.length, 1);
+  const body = call.body as { system?: Array<{ text: string }>; messages?: unknown[] };
+  assert.equal(body.system?.[0]?.text, 'be anna', 'system is a top-level field, not a message');
+  assert.equal(body.messages?.length, 1, 'and it must not be duplicated into the turn list');
 });
 
 test('anthropic: a mid-stream error event throws rather than ending silently', async () => {
