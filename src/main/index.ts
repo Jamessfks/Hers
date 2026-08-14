@@ -231,9 +231,10 @@ async function main(): Promise<void> {
    * invoked. It is not inside the asar because a binary cannot be executed from
    * an archive.
    *
-   * It is a nested .app rather than a bare executable so that its Info.plist —
-   * and the speech-recognition usage description in it — is something macOS
-   * will actually read. See scripts/build-native.sh.
+   * It is a nested .app rather than a bare executable, which is why the path
+   * has three components. That wrapper is not what grants it speech
+   * recognition — TCC resolves that against Anna.app, as the process that
+   * spawned it. See scripts/build-native.sh for the measurement.
    */
   const TRANSCRIBER = join('anna-transcribe.app', 'Contents', 'MacOS', 'anna-transcribe');
   const transcriberPaths = (): string[] =>
