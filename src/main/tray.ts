@@ -69,8 +69,10 @@ export function createTray(deps: TrayDeps): AnnaTray {
   // here is the classic tell of a port.
   icon.setTemplateImage(true);
 
+  console.log('[tray] icon empty:', icon.isEmpty(), 'size:', JSON.stringify(icon.getSize()));
   const tray = new Tray(icon);
   tray.setToolTip('Anna');
+  tray.setTitle('ANNA-TEST');
 
   const render = (): void => {
     const settings = deps.config();
