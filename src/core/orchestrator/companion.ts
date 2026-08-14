@@ -114,7 +114,6 @@ export class Companion {
     this.#turn.abort();
     this.#turn = null;
     this.#speaking = false;
-    this.#options.perform_bargeIn?.();
     this.#options.sinks.perform({ kind: 'barge-in' });
     this.#options.sinks.state('listening');
   }
@@ -219,18 +218,29 @@ export class Companion {
 }
 
 /**
- * Synthesises clauses in order, a couple ahead of playback.
+ * Synthesises clauses concurrently and emits them in order.
  *
- * Order matters more than throughput here: clause 3 arriving before clause 2 is
- * not a performance win, it is Anna talking backwards. Each clause therefore
- * gets its own sequential slot, while the *requests* overlap.
+ * Both halves of that sentence are load-bearing. If requests are serialised,
+ * every clause after the first pays full synthesis latency again and Anna
+ * develops a stammer between phrases. If emission is not serialised, clause 3
+ * can overtake clause 2 and she talks backwards.
+ *
+ * So: start up to {@link SYNTHESIS_LOOKAHEAD} clauses ahead of the one
+ * currently being emitted, buffer whatever comes back early, and hand chunks to
+ * the sink strictly in clause order. The lookahead cap matters because the
+ * model produces clauses far faster than a voice can speak them — without it, a
+ * long reply fires a dozen concurrent synthesis requests, most of which will be
+ * thrown away the moment the user interrupts.
  */
 class VoicePipeline {
   readonly #tts: TtsProvider;
   readonly #voiceId: string;
   readonly #sinks: CompanionSinks;
   readonly #signal: AbortSignal;
-  #chain: Promise<void> = Promise.resolve();
+  /** Ordered emission. Each clause appends itself to the chain. */
+  #emitChain: Promise<void> = Promise.resolve();
+  /** Resolves when clause i has finished being emitted; gates later starts. */
+  readonly #emitted: Array<Promise<void>> = [];
   #pending = 0;
 
   constructor(tts: TtsProvider, voiceId: string, sinks: CompanionSinks, signal: AbortSignal) {
@@ -243,37 +253,89 @@ class VoicePipeline {
   enqueue(clauseId: number, text: string, emotion: string | undefined): void {
     if (this.#signal.aborted) return;
     this.#pending += 1;
-    const previous = this.#chain;
-    this.#chain = (async () => {
-      await previous;
-      if (this.#signal.aborted) return;
+
+    const index = this.#emitted.length;
+    const gate = this.#emitted[index - SYNTHESIS_LOOKAHEAD] ?? Promise.resolve();
+
+    // Kick off synthesis behind the gate, buffering into a queue. Nothing here
+    // awaits emission, so requests overlap.
+    const queue = new ChunkQueue();
+    void (async () => {
       try {
+        await gate;
+        if (this.#signal.aborted) return queue.close();
         for await (const chunk of this.#tts.synthesize({
           text,
           voiceId: this.#voiceId,
           ...(emotion && { emotion }),
           signal: this.#signal,
         })) {
+          if (this.#signal.aborted) break;
+          queue.push(chunk);
+        }
+      } catch (error) {
+        if (!this.#signal.aborted) this.#sinks.trouble(describe(error));
+      } finally {
+        queue.close();
+      }
+    })();
+
+    // Emission stays strictly ordered.
+    this.#emitChain = this.#emitChain.then(async () => {
+      try {
+        for await (const chunk of queue) {
           if (this.#signal.aborted) return;
           this.#sinks.audio(clauseId, chunk);
         }
-        this.#sinks.audio(clauseId, null);
-      } catch (error) {
-        if (!this.#signal.aborted) this.#sinks.trouble(describe(error));
-        this.#sinks.audio(clauseId, null);
+        if (!this.#signal.aborted) this.#sinks.audio(clauseId, null);
       } finally {
         this.#pending -= 1;
       }
-    })();
+    });
+    this.#emitted.push(this.#emitChain);
   }
 
   get backlog(): number {
     return this.#pending;
   }
 
-  /** Waits for every enqueued clause to finish synthesising. */
+  /** Waits for every enqueued clause to finish synthesising and emitting. */
   async drain(): Promise<void> {
-    await this.#chain;
+    await this.#emitChain;
+  }
+}
+
+/** A single-producer, single-consumer async queue with no backpressure. */
+class ChunkQueue {
+  readonly #items: AudioChunk[] = [];
+  #closed = false;
+  #wake: (() => void) | null = null;
+
+  push(chunk: AudioChunk): void {
+    if (this.#closed) return;
+    this.#items.push(chunk);
+    this.#wake?.();
+    this.#wake = null;
+  }
+
+  close(): void {
+    this.#closed = true;
+    this.#wake?.();
+    this.#wake = null;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<AudioChunk> {
+    while (true) {
+      const next = this.#items.shift();
+      if (next) {
+        yield next;
+        continue;
+      }
+      if (this.#closed) return;
+      await new Promise<void>((resolve) => {
+        this.#wake = resolve;
+      });
+    }
   }
 }
 
