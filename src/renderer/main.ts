@@ -248,6 +248,16 @@ async function boot(): Promise<void> {
     body?.setAttention(state);
   });
   window.anna.onTrouble(showTrouble);
+  window.anna.onDemoSaid((text) => {
+    // Echo the scripted line in the composer so a viewer can see both halves
+    // of the conversation, not just her side of it.
+    inputEl.value = text;
+    composerEl.dataset['visible'] = 'true';
+    body?.setAttention('listening');
+    window.setTimeout(() => {
+      inputEl.value = '';
+    }, 2000);
+  });
   window.anna.onVisibility((visible) => {
     // Clear the fade when she is brought back, or the window would reappear
     // still transparent and untouchable.

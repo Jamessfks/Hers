@@ -150,6 +150,15 @@ async function main(): Promise<void> {
     companion = buildCompanion();
   }
 
+  /**
+   * Reads the live companion.
+   *
+   * A plain `companion` reference inside a later closure gets narrowed to
+   * `never` by the launch-time null check above, and is stale anyway — the
+   * companion is rebuilt whenever a key or provider changes.
+   */
+  const currentCompanion = (): Companion | null => companion;
+
   refresh();
 
   // -- IPC ------------------------------------------------------------------
@@ -393,6 +402,31 @@ async function main(): Promise<void> {
   app.dock?.hide();
 
   if (!companion && process.env['ANNA_DEMO'] !== '1') openSettings();
+
+  /**
+   * Demo script.
+   *
+   * ANNA_DEMO_SCRIPT is a `|`-separated list of things to say to her, played in
+   * with a gap between each so a whole exchange can be watched without anyone
+   * touching the keyboard. Driving it from inside the process rather than by
+   * simulating keystrokes matters: synthetic key events go to whichever window
+   * has focus, which is a good way to type into somebody's unrelated app.
+   */
+  const script = process.env['ANNA_DEMO_SCRIPT'];
+  if (script) {
+    const lines = script.split('|').map((line) => line.trim()).filter(Boolean);
+    void (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      for (const line of lines) {
+        const active = currentCompanion();
+        if (!active) break;
+        situation.observe({ kind: 'user-typed', text: line, at: Date.now() });
+        send(IPC.demoSaid, line);
+        await active.respondTo(line);
+        await new Promise((resolve) => setTimeout(resolve, 2200));
+      }
+    })();
+  }
 
   // -- Sensor loops ---------------------------------------------------------
 

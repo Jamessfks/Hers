@@ -217,6 +217,8 @@ export const IPC = {
   configChanged: 'anna:config:changed',
   /** main -> renderer: she was hidden or brought back. */
   visibility: 'anna:visibility',
+  /** main -> renderer: demo script spoke on the user's behalf; echo it. */
+  demoSaid: 'anna:demo:said',
 } as const;
 
 // ---------------------------------------------------------------------------

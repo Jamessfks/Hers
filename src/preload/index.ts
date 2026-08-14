@@ -191,6 +191,13 @@ const api = {
     ipcRenderer.send(IPC.window, { action: 'hide', value: true });
   },
 
+  /** Demo mode only: what the script just "typed" on your behalf. */
+  onDemoSaid(handler: (text: string) => void): () => void {
+    const listener = (_: unknown, text: string) => handler(text);
+    ipcRenderer.on(IPC.demoSaid, listener);
+    return () => ipcRenderer.off(IPC.demoSaid, listener);
+  },
+
   /** Fires when she is hidden or brought back, so the body can fade. */
   onVisibility(handler: (visible: boolean) => void): () => void {
     const listener = (_: unknown, visible: boolean) => handler(visible);
