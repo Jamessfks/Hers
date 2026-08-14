@@ -64,13 +64,28 @@ test('an imminent calendar event outranks everything else', () => {
   assert.match(opener?.reason ?? '', /Demo with Ravi/);
 });
 
-test('reads distress from the vision description', () => {
+test('distress comes from the model, not from grepping its prose', () => {
+  // Keyword matching only ever worked because the words it looked for were in
+  // the vision prompt's own examples: it hit about one plausible description in
+  // fifteen, and missed "head down", "face in their hands" and "pinching the
+  // bridge of their nose" entirely. The model is asked directly now.
   const attention = new Attention({ ...POLICY });
-  const opener = attention.decide(calm({ read: 'slumped forward, rubbing their eyes' }), AFTERNOON);
+  const opener = attention.decide(
+    calm({ read: 'face in their hands', distressed: true }),
+    AFTERNOON,
+  );
   assert.equal(opener?.trigger, 'looks-rough');
 });
 
-test('a neutral vision read is not treated as distress', () => {
+test('a neutral read is not treated as distress even if it sounds gloomy', () => {
+  const attention = new Attention({ ...POLICY });
+  assert.equal(
+    attention.decide(calm({ read: 'slumped in the chair, laughing', distressed: false }), AFTERNOON),
+    null,
+  );
+});
+
+test('a read with no verdict never fires the opener', () => {
   const attention = new Attention({ ...POLICY });
   assert.equal(attention.decide(calm({ read: 'sitting upright, drinking tea' }), AFTERNOON), null);
 });
@@ -171,4 +186,51 @@ test('a stale read cannot trigger the distress opener', () => {
   tracker.observe({ kind: 'presence', present: true, read: 'head in hands', at: AFTERNOON });
   const stale = tracker.snapshot(AFTERNOON + 6 * 60_000, false);
   assert.equal(attention.decide(stale, AFTERNOON + 6 * 60_000), null);
+});
+
+test('the camera never decides whether the user is present', () => {
+  // A dark room, a hand over the lens or a failed vision call is not an empty
+  // chair. Letting the camera write `present: false` silenced every opener she
+  // had, including the calendar and late-night ones the camera never touches.
+  const tracker = new SituationTracker();
+  tracker.observe({
+    kind: 'activity',
+    app: 'Xcode',
+    windowTitle: 'a.swift',
+    idleSeconds: 3,
+    at: AFTERNOON,
+  });
+  tracker.observe({ kind: 'presence', present: true, at: AFTERNOON });
+
+  // The camera reports a read and nothing else.
+  tracker.observe({ kind: 'presence', read: 'sitting up', readChanged: true, at: AFTERNOON });
+  assert.equal(tracker.snapshot(AFTERNOON, false).present, true, 'still present');
+});
+
+test('an unchanged read still counts as having looked', () => {
+  // Refreshing the timestamp only on a *changed* read meant sitting still for
+  // three minutes expired it, and she told the model she had not looked
+  // recently while the camera carried on billing every 45 seconds.
+  const tracker = new SituationTracker();
+  tracker.observe({ kind: 'presence', read: 'sitting up, focused', readChanged: true, at: AFTERNOON });
+
+  const later = AFTERNOON + 2 * MINUTE;
+  tracker.observe({ kind: 'presence', read: 'sitting up, focused', readChanged: false, at: later });
+
+  const snap = tracker.snapshot(later + MINUTE, false);
+  assert.equal(snap.read, 'sitting up, focused', 'three minutes after the FIRST read, still fresh');
+  assert.doesNotMatch(tracker.describe(later + MINUTE).join('\n'), /not looked at them recently/);
+});
+
+test('a change is described as a change, not as a state', () => {
+  const tracker = new SituationTracker();
+  tracker.observe({ kind: 'presence', read: 'sitting up, focused', readChanged: true, at: AFTERNOON });
+  tracker.observe({
+    kind: 'presence',
+    read: 'slumped forward, head down',
+    readChanged: true,
+    at: AFTERNOON + MINUTE,
+  });
+  const lines = tracker.describe(AFTERNOON + MINUTE).join('\n');
+  assert.match(lines, /Earlier they were sitting up, focused\. Just now: slumped forward, head down\./);
 });

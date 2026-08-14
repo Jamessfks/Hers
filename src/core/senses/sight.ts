@@ -13,20 +13,48 @@
  * matters, and nothing at all on the turns where it does not.
  */
 
-/** Phrases that mean "use your eyes, now". */
+/**
+ * Phrases that mean "use your eyes, now".
+ *
+ * The first version of this list caught five of thirty-six realistic ways
+ * people ask someone to look — it missed "check this out", "watch this", "what
+ * do you think of this", "I got a haircut", "what am I holding" and "tell me
+ * what you see". Those are not exotic phrasings; they are the common ones.
+ *
+ * It stays a list of patterns rather than becoming a classifier because a wrong
+ * answer is cheap in one direction and not the other: a false positive costs
+ * one vision call, and a false negative only costs the freshness of something
+ * she was going to notice anyway.
+ */
 const SIGHT_INTENT = [
-  /\b(can|do) you see\b/i,
-  /\bwhat (do i|am i) (look|wear|doing)/i,
-  /\bhow do i look\b/i,
-  /\blook at (me|this|my)\b/i,
+  // Asking directly whether she can see.
+  /\b(can|could|do|are) you (see|watch|look)/i,
   /\bare you (watching|looking)\b/i,
-  /\bwhat colou?r\b/i,
-  /\bnotice anything\b/i,
+  /\btell me what you see\b/i,
+  /\bwhat (can|do) you see\b/i,
+
+  // Asking about themselves.
+  /\bhow do i look\b/i,
   /\bdo i look\b/i,
-  /\bmy (hair|shirt|face|outfit|room|desk)\b/i,
+  /\bwhat (do i|am i) (look|wear|doing|holding)/i,
+  /\bnotice anything\b/i,
+  /\bwhat('?s| is) different\b/i,
+  /\bmy (new )?(hair|haircut|shirt|face|outfit|glasses|room|desk)\b/i,
+  /\bi got a (haircut|new)\b/i,
   /\bcheck me out\b/i,
+
+  // Directing her attention at something.
+  /\blook at (me|this|that|my|it)\b/i,
+  /\b(check|watch) (this|that|it) out\b/i,
+  /\b(check|watch) this\b/i,
   /\bsee this\b/i,
   /\bshow(ing)? you\b/i,
+  /\bwhat do you think of (this|it|my)\b/i,
+  /\bwhat colou?r\b/i,
+
+  // Someone else in the room.
+  /\bsomeone (just )?(walked|came) in\b/i,
+  /\bwho('?s| is) (this|that|here)\b/i,
 ];
 
 /**
