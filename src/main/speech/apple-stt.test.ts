@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { tmpdir } from 'node:os';
@@ -191,6 +191,74 @@ test('an empty transcript is a normal answer', () => {
 
 test('stray log lines around the score do not confuse it', () => {
   assert.equal(parseTranscript('hi', 'some warning\nconfidence=0.5\n').confidence, 0.5);
+});
+
+// ---------------------------------------------------------------------------
+// The real spawn
+//
+// These use no injected `run`, so they cover the execFile wiring itself — the
+// part that has to tell a normal exit from a failed launch from a killed
+// process, and that got all three wrong the first time.
+// ---------------------------------------------------------------------------
+
+/** Writes an executable stand-in for the Swift helper. */
+async function fakeHelper(body: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), 'anna-fake-helper-'));
+  const path = join(dir, 'anna-transcribe');
+  await writeFile(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  return { path, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
+
+test('a real subprocess is spawned, read and parsed', async () => {
+  const helper = await fakeHelper('echo "Hello Anna, can you hear me?"\necho "confidence=0.93" >&2');
+  try {
+    const stt = createAppleStt({ binaryPaths: [helper.path] });
+    assert.deepEqual(await stt.transcribe(encodeWav(new Float32Array(8), 16000), 'audio/wav'), {
+      text: 'Hello Anna, can you hear me?',
+      confidence: 0.93,
+    });
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test('the temp file is cleaned up even when the helper fails', async () => {
+  const helper = await fakeHelper('echo "$1" > "$TMPDIR/anna-stt-lastpath"\nexit 7');
+  try {
+    const stt = createAppleStt({ binaryPaths: [helper.path] });
+    await assert.rejects(() => stt.transcribe(new Uint8Array([1]), 'audio/wav'));
+    const leaked = (await readFile(join(tmpdir(), 'anna-stt-lastpath'), 'utf8')).trim();
+    assert.ok(leaked.length > 0);
+    // Utterances are the most private thing this app touches; none may survive
+    // a failure.
+    assert.equal(existsSync(leaked), false, `the recording was left at ${leaked}`);
+  } finally {
+    await helper.cleanup();
+  }
+});
+
+test('a helper that cannot be launched is reported as missing, not as silence', async () => {
+  const stt = createAppleStt({ binaryPaths: [join(tmpdir(), 'definitely-not-here-anna')] });
+  await assert.rejects(
+    () => stt.transcribe(encodeWav(new Float32Array(8), 16000), 'audio/wav'),
+    /build:native|different transcription/,
+  );
+});
+
+test('a helper killed by a signal is reported, not read as an empty room', async () => {
+  // The TCC failure mode exactly: killed before it can print anything. Exit
+  // code is absent here, and treating that as 0 made a hard failure look like
+  // a user who never spoke.
+  const helper = await fakeHelper('kill -ABRT $$');
+  try {
+    const stt = createAppleStt({ binaryPaths: [helper.path] });
+    await assert.rejects(
+      () => stt.transcribe(encodeWav(new Float32Array(8), 16000), 'audio/wav'),
+      /permission description|stopped the transcriber/,
+    );
+  } finally {
+    await helper.cleanup();
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -144,6 +144,14 @@ export function describeFailure(code: number, stderr: string): string {
   if (said) return said;
 
   switch (code) {
+    case EXIT.killed:
+      /*
+       * Nearly always TCC. macOS kills a process that touches speech
+       * recognition without an `NSSpeechRecognitionUsageDescription` reachable
+       * from the *responsible* app, and it does it before the helper's own code
+       * runs, so there is never anything on stderr to quote.
+       */
+      return 'macOS stopped the transcriber before it could start, which usually means the app is missing its speech-recognition permission description. Reinstall Anna, or choose a different transcription provider in settings.';
     case EXIT.notInstalled:
       return 'The on-device transcriber is missing from this build. Run `npm run build:native`, or choose a different transcription provider in settings.';
     case EXIT.notAuthorized:
