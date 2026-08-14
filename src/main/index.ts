@@ -435,6 +435,7 @@ async function main(): Promise<void> {
         if (!active) break;
         situation.observe({ kind: 'user-typed', text: line, at: Date.now() });
         send(IPC.demoSaid, line);
+        diag.startTurn('user', config.get().llm.model, line.length);
         await active.respondTo(line);
         await new Promise((resolve) => setTimeout(resolve, 2200));
       }
@@ -480,7 +481,7 @@ async function main(): Promise<void> {
         if (!active) return;
         diag.startTurn('opener', config.get().llm.model, 0);
         const opened = await active.tick();
-        if (!opened) diag.endTurn();
+        if (!opened) diag.cancelTurn();
       })();
     }, ATTENTION_TICK_MS),
   );

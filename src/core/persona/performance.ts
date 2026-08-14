@@ -172,7 +172,7 @@ export class PerformanceParser {
     }
     const text = normalize(this.#speech);
     this.#speech = '';
-    return text ? [{ kind: 'say', text, clauseId: this.#clauseId++ }] : [];
+    return isSpeakable(text) ? [{ kind: 'say', text, clauseId: this.#clauseId++ }] : [];
   }
 
   #flushIfReady(atTagBoundary: boolean): PerformanceEvent[] {
@@ -195,7 +195,7 @@ export class PerformanceParser {
 
     const text = normalize(buf);
     this.#speech = '';
-    if (!text) return [];
+    if (!isSpeakable(text)) return [];
     this.#emittedFirstClause = true;
     return [{ kind: 'say', text, clauseId: this.#clauseId++ }];
   }
@@ -244,6 +244,23 @@ function parseIntensity(arg: string): number | null {
 /** Collapse the whitespace that tag removal leaves behind. */
 function normalize(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Is there anything here worth saying out loud?
+ *
+ * Removing a directive can leave a clause that is nothing but punctuation — a
+ * lone full stop after `[nod].`, or an ellipsis where she trails off. Cartesia
+ * rejects those outright:
+ *
+ *     400 Invalid transcript: Your transcript is empty or contains only
+ *         punctuation.
+ *
+ * and the whole clause is lost. They are equally useless as subtitles, so they
+ * are dropped at the parser rather than special-cased in every voice adapter.
+ */
+export function isSpeakable(text: string): boolean {
+  return /[\p{L}\p{N}]/u.test(text);
 }
 
 /**

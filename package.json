@@ -63,7 +63,8 @@
         "NSCalendarsUsageDescription": "Anna reads your calendar so she knows what your day looks like.",
         "NSSpeechRecognitionUsageDescription": "Anna transcribes your speech so she can reply.",
         "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps.",
-        "LSUIElement": true
+        "LSUIElement": true,
+        "NSCameraUseContinuityCameraDeviceType": true
       }
     },
     "extraResources": [

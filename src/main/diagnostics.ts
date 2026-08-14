@@ -81,6 +81,11 @@ export class Diagnostics {
     this.#current = null;
   }
 
+  /** Abandons the current turn without recording it. */
+  cancelTurn(): void {
+    this.#current = null;
+  }
+
   note(event: string, detail: Record<string, unknown> = {}): void {
     this.#write({ event, ...detail });
   }

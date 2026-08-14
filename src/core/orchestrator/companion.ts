@@ -159,6 +159,7 @@ export class Companion {
         memories,
         ...(memory.runningSummary() && { runningSummary: memory.runningSummary() }),
         situation: situation.describe(this.#now()),
+        turnsSoFar: memory.liveTranscript().length,
         ...(input.openerReason && { openerReason: input.openerReason }),
       });
 
@@ -166,8 +167,9 @@ export class Companion {
       // inside the system prompt: as message turns the model cannot tell them
       // from memory, and a fresh install opens by asking how the interview
       // went — an interview that never happened.
+      const transcript = memory.liveTranscript();
       const messages: ChatMessage[] = [
-        ...memory.liveTranscript().map(
+        ...transcript.map(
           (turn): ChatMessage => ({
             role: turn.speaker === 'user' ? 'user' : 'assistant',
             content: turn.text,

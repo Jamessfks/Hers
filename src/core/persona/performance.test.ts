@@ -115,3 +115,17 @@ test('couldBeDirectivePrefix distinguishes truncation from prose', () => {
   assert.equal(couldBeDirectivePrefix(' and then kept'), false);
   assert.equal(couldBeDirectivePrefix('teleports behind'), false);
 });
+
+test('a punctuation-only clause is never sent to the voice', () => {
+  // Observed: Cartesia 400 "Your transcript is empty or contains only
+  // punctuation", losing the clause. Removing a directive is what leaves these.
+  for (const text of ['[nod].', '[wave] ...', '[smirk] ?', '[nod] —']) {
+    const spoken = say(parsePerformance(text));
+    assert.deepEqual(spoken, [], `"${text}" should produce no speech`);
+  }
+});
+
+test('real words next to punctuation still speak', () => {
+  assert.equal(spokenText(parsePerformance('[nod] Yes. [smirk] Really?')), 'Yes. Really?');
+  assert.equal(spokenText(parsePerformance('3am again?')), '3am again?');
+});

@@ -38,6 +38,8 @@ export interface PersonaContext {
   situation: readonly string[];
   /** Set when Anna is the one opening the conversation. */
   openerReason?: string;
+  /** How many turns are already behind them in this conversation. */
+  turnsSoFar?: number;
 }
 
 const CHARACTER = `
@@ -188,8 +190,19 @@ export function buildSystemPrompt(context: PersonaContext): string {
   ];
 
   const who = context.userName ? `You are talking to ${context.userName}.` : '';
+  /*
+   * The transcript is the conversation you are already in.
+   *
+   * Without this, a model reads the message list as context rather than as
+   * memory and will answer "what were we talking about?" with "we weren't
+   * talking about anything" — eight turns into a conversation. Observed, on
+   * Haiku, in a real session.
+   */
+  const continuity = context.turnsSoFar
+    ? `You are already ${context.turnsSoFar} turns into this conversation. The messages you can see ARE that conversation — they happened, with this person, just now. Never tell them you have not spoken before.`
+    : 'This is the start of a conversation.';
   sections.push(
-    ['RIGHT NOW', `It is ${context.localTime}.`, who].filter(Boolean).join('\n'),
+    ['RIGHT NOW', `It is ${context.localTime}.`, who, continuity].filter(Boolean).join('\n'),
   );
 
   if (context.runningSummary) {
