@@ -11,7 +11,7 @@ import type { AnnaConfig, PerformanceEvent } from '../shared/protocol.ts';
 import { Body } from './avatar/body.ts';
 import { SpeechPlayer } from './audio/player.ts';
 import { createPlaceholder, type Placeholder } from './avatar/placeholder.ts';
-import { createStage, frameFullBody, loadVrm } from './avatar/stage.ts';
+import { createStage, frameFullBody, frameHeight, loadVrm } from './avatar/stage.ts';
 import { Microphone } from './audio/microphone.ts';
 import { Vision } from './senses/vision.ts';
 
@@ -41,6 +41,7 @@ let config: AnnaConfig | null = null;
 async function loadCharacter(path: string): Promise<void> {
   if (!path) {
     placeholder = createPlaceholder(stage.scene);
+    frameHeight(stage.camera, placeholder.height);
     showTrouble('Drop a .vrm character onto this window to give Anna a body.');
     return;
   }
@@ -55,6 +56,7 @@ async function loadCharacter(path: string): Promise<void> {
     hideTrouble();
   } catch (error) {
     placeholder = createPlaceholder(stage.scene);
+    frameHeight(stage.camera, placeholder.height);
     showTrouble(error instanceof Error ? error.message : 'That character would not load.');
   }
 }

@@ -127,14 +127,26 @@ export async function loadVrm(url: string): Promise<VRM> {
  */
 export function frameFullBody(camera: PerspectiveCamera, vrm: VRM): void {
   const head = vrm.humanoid?.getNormalizedBoneNode('head');
-  // Head height plus a bit for the skull above the bone.
+  // Head bone height plus a bit for the skull above it.
   const height = head ? Math.max(1.0, head.getWorldPosition(new Vector3()).y * 1.12) : 1.6;
+  frameHeight(camera, height);
+}
 
+/**
+ * Fits a figure of `height` metres, standing on y=0, into the frame.
+ *
+ * The headroom factor is doing real work. Solve it exactly and the character's
+ * feet sit on the bottom edge of the window, which reads as cropped even though
+ * nothing is missing — the eye needs to see a little floor under someone before
+ * it believes they are standing on it.
+ */
+export function frameHeight(camera: PerspectiveCamera, height: number): void {
+  const HEADROOM = 1.3;
+  const framed = height * HEADROOM;
   const vertical = (camera.fov * Math.PI) / 180;
-  // Fit the full height plus 12% headroom into the frame.
-  const distance = (height * 1.12) / (2 * Math.tan(vertical / 2));
+  const distance = framed / (2 * Math.tan(vertical / 2));
 
-  camera.position.set(0, height * 0.62, distance);
-  camera.lookAt(0, height * 0.55, 0);
+  camera.position.set(0, framed / 2, distance);
+  camera.lookAt(0, framed / 2, 0);
   camera.updateProjectionMatrix();
 }
