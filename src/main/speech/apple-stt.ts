@@ -18,7 +18,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -235,6 +235,26 @@ export interface AppleSttOptions {
   afconvertPath?: string;
 }
 
+interface RawResult {
+  code: number;
+  transcript?: string;
+  confidence?: number;
+  error?: string;
+}
+
+/**
+ * The `.app` around the helper binary.
+ *
+ * `open` takes a bundle, not an executable. The binary always lives at
+ * `<name>.app/Contents/MacOS/<name>`, so the bundle is two directories up —
+ * derived rather than configured, so the two cannot drift apart.
+ */
+export function bundleFor(binaryPath: string): string {
+  const marker = '.app/Contents/MacOS/';
+  const at = binaryPath.indexOf(marker);
+  return at === -1 ? binaryPath : binaryPath.slice(0, at + '.app'.length);
+}
+
 export function createAppleStt(options: AppleSttOptions): SttProvider {
   const run = options.run ?? spawn;
   const afconvert = options.afconvertPath ?? '/usr/bin/afconvert';
@@ -283,9 +303,52 @@ export function createAppleStt(options: AppleSttOptions): SttProvider {
           }
         }
 
-        const result = await run(binary, [target, locale]);
-        if (result.code !== 0) throw new Error(describeFailure(result.code, result.stderr));
-        return parseTranscript(result.stdout, result.stderr);
+        /*
+         * Launched through `open`, not spawned directly.
+         *
+         * macOS resolves speech-recognition permission against the
+         * **responsible process**, which for an ordinary child is whatever
+         * launched the app — a terminal, an IDE, a build tool. TCC then looks
+         * for `NSSpeechRecognitionUsageDescription` in *that* bundle, does not
+         * find one, and aborts the helper with SIGABRT before its first line
+         * runs. Confirmed from the crash report: `responsibleProc` was the
+         * launching tool every time, never Anna, no matter how the helper was
+         * signed or bundled.
+         *
+         * `open` hands the launch to launchd, so the helper becomes its own
+         * responsible process and its own Info.plist is what TCC reads. That
+         * also detaches it from our pipes, which is why the transcript comes
+         * back through a file rather than stdout.
+         */
+        const resultFile = join(dir, 'result.json');
+        const opened = await run('/usr/bin/open', [
+          '-W',
+          '-a',
+          bundleFor(binary),
+          '--args',
+          target,
+          resultFile,
+          locale,
+        ]);
+
+        let payload: RawResult | null = null;
+        try {
+          payload = JSON.parse(await readFile(resultFile, 'utf8')) as RawResult;
+        } catch {
+          // No result file: the helper never got far enough to write one.
+        }
+
+        if (!payload) {
+          const code = opened.code === 0 ? EXIT.killed : opened.code;
+          throw new Error(describeFailure(code, opened.stderr));
+        }
+        if (payload.code !== 0) {
+          throw new Error(payload.error ?? describeFailure(payload.code, ''));
+        }
+        return {
+          text: (payload.transcript ?? '').trim(),
+          confidence: payload.confidence ?? 1,
+        };
       } finally {
         await rm(dir, { recursive: true, force: true }).catch(() => {
           // A temp directory that outlives us is untidy, not broken, and

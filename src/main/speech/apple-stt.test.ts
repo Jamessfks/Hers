@@ -12,6 +12,7 @@ import {
   createAppleStt,
   describeFailure,
   parseTranscript,
+  bundleFor,
   type Run,
   type RunResult,
 } from './apple-stt.ts';
@@ -313,3 +314,13 @@ test(
     }
   },
 );
+
+test('bundleFor derives the .app from the binary inside it', () => {
+  // `open` takes a bundle, not an executable. Deriving it means the two cannot
+  // drift apart the way two config entries would.
+  assert.equal(
+    bundleFor('/Apps/Anna.app/Contents/Resources/anna-transcribe.app/Contents/MacOS/anna-transcribe'),
+    '/Apps/Anna.app/Contents/Resources/anna-transcribe.app',
+  );
+  assert.equal(bundleFor('/some/bare/binary'), '/some/bare/binary', 'a bare path is left alone');
+});
