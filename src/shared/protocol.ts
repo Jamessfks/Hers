@@ -72,6 +72,8 @@ export const EXPRESSION_NAMES = [
   'surprised',
   'skeptical',
   'playful',
+  'smirk',
+  'thoughtful',
   'tender',
 ] as const;
 export type ExpressionName = (typeof EXPRESSION_NAMES)[number];

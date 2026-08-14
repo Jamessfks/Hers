@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { PerformanceEvent } from '../../shared/protocol.ts';
-import { PerformanceParser, parsePerformance, spokenText } from './performance.ts';
+import {
+  PerformanceParser,
+  couldBeDirectivePrefix,
+  parsePerformance,
+  spokenText,
+} from './performance.ts';
 
 const say = (events: PerformanceEvent[]) => events.filter((e) => e.kind === 'say');
 const kinds = (events: PerformanceEvent[]) => events.map((e) => e.kind);
@@ -92,4 +97,21 @@ test('long run-on speech is broken up rather than buffered forever', () => {
 test('a stray bracket does not swallow the rest of the reply', () => {
   const events = parsePerformance('I saw a [ and then kept talking about the thing');
   assert.match(spokenText(events), /kept talking about the thing/);
+});
+
+test('a long bracketed passage is rescued as prose mid-stream', () => {
+  const text = 'I saw a [ and then kept talking about the thing for quite a while longer] ok';
+  assert.match(spokenText(parsePerformance(text)), /kept talking about the thing/);
+});
+
+test('a bracket followed by a newline is prose, not a directive', () => {
+  assert.match(spokenText(parsePerformance('array[\nindex] = 3')), /array/);
+});
+
+test('couldBeDirectivePrefix distinguishes truncation from prose', () => {
+  assert.equal(couldBeDirectivePrefix('lean_i'), true);
+  assert.equal(couldBeDirectivePrefix('ga'), true);
+  assert.equal(couldBeDirectivePrefix('nod x0.'), true);
+  assert.equal(couldBeDirectivePrefix(' and then kept'), false);
+  assert.equal(couldBeDirectivePrefix('teleports behind'), false);
 });
