@@ -246,12 +246,20 @@ export interface MemoryFactView {
  * has, and the settings screen needs the truth to explain why Anna has stopped
  * noticing things.
  */
+export type PermissionState = 'granted' | 'denied' | 'not-determined' | 'unknown';
+
 export interface PermissionReport {
+  /** Read via a non-prompting API, so this is always a real answer. */
   accessibility: boolean;
-  calendar: boolean;
+  /**
+   * Only ever probed when the calendar sense is already switched on, because
+   * the probe itself triggers the macOS consent dialog. Reported as
+   * `not-determined` otherwise.
+   */
+  calendar: PermissionState;
   /** Camera and microphone are asked for by the renderer, not probed here. */
-  camera: 'granted' | 'denied' | 'not-determined' | 'unknown';
-  microphone: 'granted' | 'denied' | 'not-determined' | 'unknown';
+  camera: PermissionState;
+  microphone: PermissionState;
 }
 
 export type BrainState = 'idle' | 'listening' | 'thinking' | 'speaking';

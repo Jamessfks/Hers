@@ -211,7 +211,9 @@ export function registerSettingsHandlers(deps: SettingsDeps): void {
 
   // -- permissions ---------------------------------------------------------
 
-  ipcMain.handle(IPC.permissions, () => readPermissions());
+  ipcMain.handle(IPC.permissions, () =>
+    readPermissions({ probeCalendar: config.get().senses.calendar }),
+  );
 
   /**
    * Deep links into the exact System Settings panes.
@@ -230,8 +232,6 @@ export function registerSettingsHandlers(deps: SettingsDeps): void {
     const url = panes[pane];
     if (url) void shell.openExternal(url);
   });
-
-  void config; // reserved: config reads go through the existing configGet handler
 }
 
 const PICK_OPTIONS = {

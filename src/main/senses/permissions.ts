@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { systemPreferences } from 'electron';
 
-import type { PermissionReport } from '../../shared/protocol.ts';
+import type { PermissionReport, PermissionState } from '../../shared/protocol.ts';
 
 const run = promisify(execFile);
 const TIMEOUT_MS = 5000;
@@ -43,6 +43,14 @@ function hasAccessibility(): boolean {
  * permission both return nothing, and reporting "denied" to someone whose
  * afternoon is simply free would send them into System Settings for no reason.
  * Counting calendars separates the two — a denied app cannot count them either.
+ *
+ * **This probe prompts.** There is no non-prompting way to ask macOS whether an
+ * app has calendar access; touching Calendar at all is what triggers consent.
+ * So it only runs once the user has already switched the calendar sense on,
+ * which is the moment they expect to be asked. Running it eagerly means the
+ * settings window pops a consent dialog the first time it opens, for a feature
+ * that is off by default — precisely the behaviour that teaches people to hit
+ * Don't Allow on reflex.
  */
 async function hasCalendar(): Promise<boolean> {
   try {
@@ -57,17 +65,21 @@ async function hasCalendar(): Promise<boolean> {
   }
 }
 
-export async function readPermissions(): Promise<PermissionReport> {
-  const [calendar] = await Promise.all([hasCalendar()]);
+export interface ProbeOptions {
+  /** Only true when the calendar sense is already enabled. See hasCalendar. */
+  probeCalendar: boolean;
+}
+
+export async function readPermissions(options: ProbeOptions): Promise<PermissionReport> {
   return {
     accessibility: hasAccessibility(),
-    calendar,
+    calendar: options.probeCalendar ? ((await hasCalendar()) ? 'granted' : 'denied') : 'not-determined',
     camera: mediaStatus('camera'),
     microphone: mediaStatus('microphone'),
   };
 }
 
-function mediaStatus(kind: 'camera' | 'microphone'): PermissionReport['camera'] {
+function mediaStatus(kind: 'camera' | 'microphone'): PermissionState {
   try {
     const status = systemPreferences.getMediaAccessStatus(kind);
     if (status === 'granted' || status === 'denied' || status === 'not-determined') return status;
