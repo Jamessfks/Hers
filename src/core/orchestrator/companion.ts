@@ -49,7 +49,7 @@ import { Attention, SituationTracker } from '../senses/attention.ts';
 import { Memory } from '../memory/memory.ts';
 import { PerformanceParser, spokenText } from '../persona/performance.ts';
 import { SynthesisGovernor, isRateLimit } from '../speech/governor.ts';
-import { buildSystemPrompt } from '../persona/anna.ts';
+import { buildSystemBlocks } from '../persona/anna.ts';
 
 /** How many clauses may be synthesised ahead of the one playing. */
 const SYNTHESIS_LOOKAHEAD = 2;
@@ -154,7 +154,7 @@ export class Companion {
 
     try {
       const memories = await memory.recall(input.userText ?? input.openerReason ?? '', 8);
-      const system = buildSystemPrompt({
+      const blocks = buildSystemBlocks({
         ...(this.#options.userName && { userName: this.#options.userName }),
         localTime: formatLocalTime(this.#now()),
         memories,
@@ -163,6 +163,7 @@ export class Companion {
         turnsSoFar: memory.turnCount(),
         ...(input.openerReason && { openerReason: input.openerReason }),
       });
+      const system = blocks.live ? `${blocks.stable}\n\n---\n\n${blocks.live}` : blocks.stable;
 
       // Only real history goes in the message list. The style examples live
       // inside the system prompt: as message turns the model cannot tell them
@@ -200,6 +201,7 @@ export class Companion {
 
       for await (const delta of llm.stream({
         system,
+        cacheableSystem: blocks.stable,
         messages,
         model: this.#options.model,
         maxTokens: 400,

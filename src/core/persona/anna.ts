@@ -190,9 +190,37 @@ claim to have a body in the world, to be able to reach them, or to be able to
 call anyone. You will not lie to them about that.
 `.trim();
 
-/** Assembles the full system prompt for a turn. */
+/**
+ * Splits the system prompt into the half that never changes and the half that
+ * changes every turn.
+ *
+ * This exists for prompt caching. The character, the rules and the style
+ * transcript are ~4kB and identical on every single turn; the time, the
+ * retrieved memories and the sensor read are different every time. Caching the
+ * whole thing caches nothing — the prefix has to match exactly, and "It is
+ * Friday 4:15pm" guarantees it never will.
+ *
+ * Measured before this split: first-event latency held at ~1050ms across an
+ * 18-turn session, with a cache breakpoint that never once hit.
+ */
+export function buildSystemBlocks(context: PersonaContext): { stable: string; live: string } {
+  return {
+    stable: [CHARACTER, HOW_SHE_TALKS, HOW_SHE_MOVES, WHAT_SHE_NOTICES, CARE, STYLE_TRANSCRIPT, FLOOR].join(
+      '\n\n---\n\n',
+    ),
+    live: liveSections(context).join('\n\n---\n\n'),
+  };
+}
+
+/** The full prompt as one string, for providers with no caching. */
 export function buildSystemPrompt(context: PersonaContext): string {
-  const sections = [
+  const { stable, live } = buildSystemBlocks(context);
+  return live ? `${stable}\n\n---\n\n${live}` : stable;
+}
+
+function liveSections(context: PersonaContext): string[] {
+  const sections: string[] = [];
+  const unusedStable = [
     CHARACTER,
     HOW_SHE_TALKS,
     HOW_SHE_MOVES,
@@ -201,6 +229,7 @@ export function buildSystemPrompt(context: PersonaContext): string {
     STYLE_TRANSCRIPT,
     FLOOR,
   ];
+  void unusedStable;
 
   const who = context.userName ? `You are talking to ${context.userName}.` : '';
   /*
@@ -258,7 +287,7 @@ export function buildSystemPrompt(context: PersonaContext): string {
     );
   }
 
-  return sections.join('\n\n---\n\n');
+  return sections;
 }
 
 /**

@@ -62,13 +62,7 @@ export function createAnthropicProvider(
            * The breakpoint goes on the system block only. Messages change every
            * turn, so caching them would thrash the cache for no benefit.
            */
-          system: [
-            {
-              type: 'text',
-              text: request.system,
-              cache_control: { type: 'ephemeral' },
-            },
-          ],
+          system: systemBlocks(request),
           messages: request.messages,
           max_tokens: request.maxTokens ?? 400,
           temperature: request.temperature ?? 1,
@@ -123,6 +117,31 @@ export function createAnthropicProvider(
       }
     },
   };
+}
+
+/**
+ * System blocks, with the cache breakpoint on the unchanging half only.
+ *
+ * A breakpoint on the whole prompt caches nothing: the prefix must match byte
+ * for byte, and the live half carries the clock, the retrieved memories and the
+ * sensor read. Splitting it means the ~4kB persona is a cache hit from the
+ * second turn onward — roughly a tenth of the input cost, and materially less
+ * time before the first token.
+ */
+function systemBlocks(request: CompletionRequest): Array<Record<string, unknown>> {
+  const stable = request.cacheableSystem;
+  if (!stable) {
+    return [{ type: 'text', text: request.system }];
+  }
+  const live = request.system.startsWith(stable)
+    ? request.system.slice(stable.length).replace(/^\n+---\n+/, '')
+    : request.system;
+
+  const blocks: Array<Record<string, unknown>> = [
+    { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
+  ];
+  if (live.trim()) blocks.push({ type: 'text', text: live });
+  return blocks;
 }
 
 async function describeFailure(response: Response): Promise<string> {

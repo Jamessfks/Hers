@@ -386,9 +386,10 @@ test('a network failure during validation is reported, not swallowed', async () 
   await assert.rejects(() => createOpenAiProvider('k', { fetch: dead }).validateKey());
 });
 
-test('anthropic caches the system prompt, which is identical every turn', async () => {
-  // The persona is ~4kB and unchanged between turns. Re-reading it is most of
-  // the measured time-to-first-token, and it is billed at full rate.
+test('anthropic sends one uncached block when the caller did not split the prompt', async () => {
+  // Caching an unsplit prompt would be worse than not caching: the live half
+  // changes every turn, so the breakpoint would never hit and every request
+  // would pay the cache-write premium for nothing.
   const { fetch, calls } = mockFetch([
     { match: /v1\/messages/, reply: () => sse([{ data: '{"type":"message_stop"}' }]) },
   ]);
@@ -397,9 +398,35 @@ test('anthropic caches the system prompt, which is identical every turn', async 
 
   const body = calls[0]!.body as {
     system: Array<{ type: string; text: string; cache_control?: { type: string } }>;
-    messages: unknown[];
   };
-  assert.equal(body.system[0]?.type, 'text');
+  assert.equal(body.system.length, 1);
   assert.equal(body.system[0]?.text, 'be anna');
-  assert.deepEqual(body.system[0]?.cache_control, { type: 'ephemeral' });
+  assert.equal(body.system[0]?.cache_control, undefined);
+});
+
+test('anthropic caches only the unchanging half of the prompt', async () => {
+  // A breakpoint on the whole prompt caches nothing: the live half carries the
+  // clock and the retrieved memories, so the prefix never matches twice.
+  const stable = 'YOU ARE ANNA. '.repeat(50);
+  const { fetch, calls } = mockFetch([
+    { match: /v1\/messages/, reply: () => sse([{ data: '{"type":"message_stop"}' }]) },
+  ]);
+  const provider = createAnthropicProvider('sk-ant-test', { fetch });
+  await collect(
+    provider.stream({
+      system: `${stable}\n\n---\n\nIt is Friday 4:15pm.`,
+      cacheableSystem: stable,
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'claude-haiku-4-5-20251001',
+    }),
+  );
+
+  const body = calls[0]!.body as {
+    system: Array<{ text: string; cache_control?: { type: string } }>;
+  };
+  assert.equal(body.system.length, 2, 'stable and live must be separate blocks');
+  assert.equal(body.system[0]?.text, stable);
+  assert.deepEqual(body.system[0]?.cache_control, { type: 'ephemeral' }, 'stable half is cached');
+  assert.equal(body.system[1]?.cache_control, undefined, 'live half must not be cached');
+  assert.match(body.system[1]?.text ?? '', /Friday 4:15pm/);
 });

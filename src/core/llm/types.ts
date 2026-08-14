@@ -23,7 +23,16 @@ export interface ChatMessage {
 }
 
 export interface CompletionRequest {
+  /** The complete system prompt. Providers without caching use only this. */
   system: string;
+  /**
+   * The unchanging prefix of `system`, if the caller split it out.
+   *
+   * Providers that support prompt caching send this as its own cached block.
+   * It must be a byte-exact prefix on every turn or the cache never hits —
+   * which is the bug this field exists to fix.
+   */
+  cacheableSystem?: string;
   messages: readonly ChatMessage[];
   model: string;
   maxTokens?: number;
