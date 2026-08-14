@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data:"
+    />
+    <title>Anna</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!--
+      The whole window is transparent and click-through. Only `#stage` and the
+      composer take pointer events, and only while the pointer is actually over
+      them — see setInteractive() in main.ts.
+    -->
+    <div id="app">
+      <canvas id="stage"></canvas>
+
+      <div id="subtitle" aria-live="polite"></div>
+
+      <div id="composer" hidden>
+        <input
+          id="say"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="say something"
+          aria-label="Talk to Anna"
+        />
+      </div>
+
+      <div id="trouble" role="status" hidden></div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
