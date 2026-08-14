@@ -66,6 +66,24 @@ done
 lipo -create -output "$OUT" "${SLICES[@]}"
 rm -f "${SLICES[@]}"
 
+# Wrap it in a real .app bundle.
+#
+# An embedded __info_plist section is documented as enough for a bare
+# executable, and it is not: macOS still aborts the process with
+#
+#   "attempted to access privacy-sensitive data without a usage description"
+#
+# even with the section present (verified 1501 bytes at the right offset) and
+# even signed with a real Developer identity. TCC attributes permissions to a
+# bundle, so the helper ships as one. The binary inside is the same file; only
+# the wrapper changes, and it costs two directories.
+APP="$OUT_DIR/anna-transcribe.app"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS"
+cp "$PLIST" "$APP/Contents/Info.plist"
+mv "$OUT" "$APP/Contents/MacOS/anna-transcribe"
+OUT="$APP/Contents/MacOS/anna-transcribe"
+
 # Ad-hoc signing so the embedded plist is covered by the code signature; TCC
 # ignores an Info.plist section on an unsigned binary. electron-builder re-signs
 # the whole bundle later with the real identity, which supersedes this.

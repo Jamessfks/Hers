@@ -109,20 +109,23 @@ Off by default, and the most constrained sensor in the app. From
 
 ## The microphone
 
-Off by default, and gated locally. Always-on transcription ships every sound in
-your room to a vendor; instead
+Off by default, gated locally, and by default transcribed on this machine.
+Always-on transcription ships every sound in your room to a vendor; instead
 [`microphone.ts`](../src/renderer/audio/microphone.ts) runs a **local
-energy-gate VAD** and audio only leaves the machine when someone actually spoke.
+energy-gate VAD**, so recording only starts when someone actually spoke — and
+the default transcriber is macOS's own, which never sends the result anywhere.
 
 - The gate is an RMS level check with hysteresis: it opens above `0.035` and
   closes below `0.018`. Two thresholds rather than one is what stops it
   flickering through the natural gaps inside a sentence.
-- An utterance ends after `HANG_MS = 850` of silence.
+- An utterance ends after `HANG_MS = 420` of silence.
 - Anything shorter than `MIN_UTTERANCE_MS = 320` is discarded and **never sent**
   — a cough, a keyboard, a chair.
-- What leaves is one utterance as a single blob, not a continuous stream. The
-  renderer has no transcription key; it hands the bytes to main over IPC and
-  main makes the call.
+- What leaves the renderer is one utterance as a single blob, not a continuous
+  stream. The renderer has no transcription key; it hands the bytes to main over
+  IPC and main does the rest. It also decodes its own recording to WAV first,
+  because the on-device recogniser cannot read the WebM that `MediaRecorder`
+  produces.
 - The barge-in signal is a `user-speech` event with `text: ''` and
   `final: false`. It carries no content — it exists purely to cut Anna off
   mid-sentence.
