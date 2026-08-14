@@ -52,6 +52,10 @@ async function main(): Promise<void> {
   const config = new Config();
   const secrets = new Secrets();
   const { window, setInteractiveRegion } = createAnnaWindow();
+  console.log('[boot] window created');
+  window.once('ready-to-show', () => console.log('[boot] ready-to-show'));
+  window.webContents.on('did-fail-load', (_e, code, desc) => console.error('[boot] load failed', code, desc));
+  window.webContents.on('render-process-gone', (_e, d) => console.error('[boot] renderer gone', d));
 
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
@@ -702,4 +706,4 @@ async function main(): Promise<void> {
   app.on('activate', () => setVisible(true));
 }
 
-void main();
+void main().catch((error) => console.error('[boot] main() threw:', error));
