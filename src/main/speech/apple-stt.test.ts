@@ -21,6 +21,16 @@ import { encodeWav } from '../../core/speech/wav.ts';
 const ok = (stdout: string, stderr = ''): RunResult => ({ code: 0, stdout, stderr });
 
 /**
+ * A helper path that exists.
+ *
+ * The provider refuses to launch a helper that is not on disk — a real check,
+ * because `open` reports a missing bundle as an NSCocoaError about a temp path
+ * rather than as "run the native build step". These tests stub `run`, so the
+ * binary is never executed; it only has to exist.
+ */
+const PRESENT_HELPER = process.execPath;
+
+/**
  * Emulates the helper: writes the JSON result file the way `open` requires.
  *
  * The transcript stopped coming back on stdout when the helper moved behind
@@ -89,7 +99,7 @@ test('conversion runs afconvert to 16kHz mono and hands over its output', async 
   const { run, calls } = recorder((file, args) =>
     file.endsWith('afconvert') ? ok('') : writeResultFile(args, 'converted words'),
   );
-  const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
+  const stt = createAppleStt({ binaryPaths: [PRESENT_HELPER], run });
 
   const result = await stt.transcribe(new Uint8Array([1, 2, 3]), 'audio/mp4');
 
@@ -106,7 +116,7 @@ test('conversion runs afconvert to 16kHz mono and hands over its output', async 
 
 test('WAV skips afconvert entirely', async () => {
   const { run, calls } = recorder((_file, args) => writeResultFile(args, 'already fine'));
-  const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
+  const stt = createAppleStt({ binaryPaths: [PRESENT_HELPER], run });
 
   await stt.transcribe(encodeWav(new Float32Array(16), 16000), 'audio/wav');
 
@@ -123,7 +133,7 @@ test('a failed conversion says so instead of blaming the recogniser', async () =
   const { run } = recorder((file) =>
     file.endsWith('afconvert') ? { code: 1, stdout: '', stderr: "Couldn't open input file" } : ok(''),
   );
-  const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
+  const stt = createAppleStt({ binaryPaths: [PRESENT_HELPER], run });
 
   await assert.rejects(
     () => stt.transcribe(new Uint8Array([1]), 'audio/mp4'),
@@ -133,7 +143,7 @@ test('a failed conversion says so instead of blaming the recogniser', async () =
 
 test('WebM never reaches a subprocess at all', async () => {
   const { run, calls } = recorder(() => ok(''));
-  const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
+  const stt = createAppleStt({ binaryPaths: [PRESENT_HELPER], run });
 
   await assert.rejects(() => stt.transcribe(new Uint8Array([1]), 'audio/webm;codecs=opus'), /WebM/);
   assert.equal(calls.length, 0);
@@ -172,7 +182,7 @@ test('the model-unavailable exit is surfaced as a rejection, not an empty transc
     stdout: '',
     stderr: 'The offline speech model for en-US is not installed.',
   }));
-  const stt = createAppleStt({ binaryPaths: ['/nowhere/anna-transcribe'], run });
+  const stt = createAppleStt({ binaryPaths: [PRESENT_HELPER], run });
 
   // Silently returning "" would look identical to a quiet room, and Anna would
   // sit there saying nothing forever with no clue why.
