@@ -49,7 +49,7 @@ the budget, the ordering, and the concurrency cap directly.
 │  Companion ─── the turn loop                                │
 │    ├── LlmProvider    anthropic │ openai │ google           │
 │    ├── TtsProvider    cartesia  │ elevenlabs │ hume         │
-│    ├── SttProvider    deepgram  │ openai                    │
+│    ├── SttProvider    apple (on-device) │ deepgram │ openai │
 │    ├── Memory         turns → facts → ranked recall         │
 │    └── Attention      whether she speaks first              │
 │                                                             │

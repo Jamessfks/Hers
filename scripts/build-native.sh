@@ -68,15 +68,28 @@ rm -f "${SLICES[@]}"
 
 # Wrap it in a real .app bundle.
 #
-# An embedded __info_plist section is documented as enough for a bare
-# executable, and it is not: macOS still aborts the process with
+# Be clear about what this does and does not fix, because the obvious theory is
+# wrong and costs an afternoon. Running the helper and being killed with
 #
 #   "attempted to access privacy-sensitive data without a usage description"
 #
-# even with the section present (verified 1501 bytes at the right offset) and
-# even signed with a real Developer identity. TCC attributes permissions to a
-# bundle, so the helper ships as one. The binary inside is the same file; only
-# the wrapper changes, and it costs two directories.
+# is *not* about the helper's own Info.plist. TCC resolves the request against
+# the **responsible process** — the app that spawned it. Measured, from the
+# crash report of a helper that carries the section and is signed:
+#
+#   procPath    = .../anna-transcribe.app/Contents/MacOS/anna-transcribe
+#   responsible = claude          <- the shell that launched it
+#   termination = TCC
+#
+# Bundling changes none of that: the bundled helper still aborts when started
+# from a terminal, because no terminal declares
+# NSSpeechRecognitionUsageDescription. What makes it work is being spawned by
+# something that does, which packaged is Anna.app via build.mac.extendInfo — and
+# in that topology the *bare* binary transcribes fine too.
+#
+# So the bundle is belt and braces, not the fix. It is kept because it costs two
+# directories, it is what makes `codesign` cover the plist, and it is the shape
+# Apple's tooling expects if this ever needs its own TCC identity.
 APP="$OUT_DIR/anna-transcribe.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
