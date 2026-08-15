@@ -111,6 +111,11 @@ const api = {
     return ipcRenderer.invoke(IPC.libraryBuild, max);
   },
 
+  /** Ask for a panel height that fits her frame. Main clamps it. */
+  fitHeight(height: number): void {
+    ipcRenderer.send(IPC.windowFit, height);
+  },
+
   onLibrary(handler: (view: LibraryView) => void): () => void {
     const listener = (_: unknown, view: LibraryView) => handler(view);
     ipcRenderer.on(IPC.libraryChanged, listener);

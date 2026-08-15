@@ -250,6 +250,14 @@ export const IPC = {
   libraryBuild: 'anna:library:build',
   /** main -> renderer: the library changed — a clip started, finished or failed. */
   libraryChanged: 'anna:library:changed',
+  /**
+   * renderer -> main: the panel wants to be this tall.
+   *
+   * The renderer asks rather than main deciding, because the height that fits
+   * is a CSS question — bezel padding, composer, and the photograph's own
+   * aspect — and only the renderer can measure it.
+   */
+  windowFit: 'anna:window:fit',
 
   // -- settings window ------------------------------------------------------
 
