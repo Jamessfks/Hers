@@ -1,6 +1,8 @@
 # 0003 — A local rigged VRM, with video avatars as a seam
 
-**Status:** accepted, v0.1. **This reverses part of the original brief.**
+**Status:** superseded by [0004](0004-photo-avatar.md), v1.0. Kept because its
+reasoning about *why not realtime video* is still the operative argument — only
+its conclusion about what to draw instead was reversed. **This reverses part of the original brief.**
 
 ## Context
 
@@ -41,7 +43,7 @@ plugin catalogue. Backends in this category can disappear inside a release cycle
 
 **The primary renderer is a rigged VRM, drawn locally with three.js.** Gestures
 are authored as keyframed bone offsets against the VRM humanoid spec
-([`poses.ts`](../../src/renderer/avatar/poses.ts)) rather than as retargeted
+(`renderer/avatar/poses.ts`, since deleted) rather than as retargeted
 motion capture, so every gesture works on any character the user drops in. The
 idle layer composites underneath every gesture, permanently.
 

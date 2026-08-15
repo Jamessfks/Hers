@@ -1,5 +1,81 @@
 # Changelog
 
+## 1.0.0 — 2026-08-15
+
+**On the version number.** This is the first *official* release, and it is
+numbered below the 0.x-era `1.1.0` entry below it deliberately: everything
+before this line was pre-release, developed in the open under a version that ran
+ahead of itself. Treat 1.0.0 as the baseline and the entries beneath it as
+history.
+
+Anna's body was replaced. This is a breaking change to on-disk state; read the
+migration note before upgrading from 1.1.0.
+
+### Changed — the avatar
+
+- **The VRM renderer is gone.** `three`, `@pixiv/three-vrm` and `@types/three`
+  are removed, along with `renderer/avatar/{body,poses,stage,placeholder,attention-policy}.ts`,
+  the bundled 15MB CC0 character, and `scripts/fetch-character.mjs`. The
+  renderer bundle went from ~1MB to ~25KB and there is no longer a 60fps render
+  loop, so the panel costs nothing when she is still.
+- **Her body is now one photograph plus pre-rendered clips**, played by
+  `renderer/avatar/hologram.ts`. Rationale in
+  [ADR 0004](docs/adr/0004-photo-avatar.md); [ADR 0003](docs/adr/0003-avatar-renderer.md)
+  is superseded.
+- The panel resizes to the photograph's aspect ratio instead of letterboxing it.
+
+### Added
+
+- **Two wired video providers**, each written against the vendor's published
+  OpenAPI document and checked against a live account: **Hedra**
+  (audio-driven, lip-sync) and **Runway** `gen4_turbo` (prompt-driven, $0.25 a
+  clip at its published rate). `luma` and `kling` remain deliberate stubs that
+  refuse rather than call an unverified endpoint.
+- A **video-provider section in Settings** — provider chooser, key field, folder
+  picker for the keyless option, and the price of a full library shown *above*
+  the button that spends it.
+- `core/avatar/image-info.ts` — reads format and dimensions from an image's
+  bytes. The first real photograph was named `.png` and contained JPEG.
+- Key validation now reports the account balance on success.
+
+### Fixed
+
+Four defects found by the first live render, three of which cost or would have
+cost money:
+
+- Hedra's moderation rejected a track of **digital silence**, hallucinating a
+  policy violation out of a buffer of zeros. `silentWav` now emits a −66 dBFS
+  noise floor.
+- The **idempotency key** was stable per slot while the request body was not,
+  producing a 409 that made a slot permanently unrenderable.
+- A **paid clip was discarded**: a `failed` slot was not requeued before a
+  retry, so bookkeeping threw after the render was billed — and the error
+  handler threw again because `failed → failed` was missing from the transition
+  table. Bytes now reach disk before any manifest write.
+- `clip-frames.ts` waited on `requestVideoFrameCallback`, which never fires for
+  a paused video after a seek, so the seam checker could not complete.
+- The dev build called itself "Electron", giving it different settings and a
+  different Keychain item than the packaged app — so keys saved by the real app
+  appeared to have vanished.
+
+### Migration from 1.1.0
+
+Both are silent — the app will not tell you, so it is written down here:
+
+- `avatar.modelPath` in `config.json` is replaced by `avatar.portrait` (the
+  photograph's sha-256), `avatar.videoProvider` and `avatar.clipFolder`. The old
+  key is left in place and ignored. **Anna will have no body until you choose a
+  photograph.**
+- Keychain entries `avatar.heygen` and `avatar.tavus` are replaced by
+  `video.hedra`, `video.runway`, `video.luma` and `video.kling`. The old entries
+  are orphaned, not migrated; delete them if you want them gone.
+
+### Removed
+
+- `progress.html`, a build-scaffolding page referenced by nothing.
+- Dead `charactersDir` / `defaultCharacterPaths()` wiring in `main/index.ts`.
+
+
 ## 1.1.0 — 2026-08-14
 
 ### The model picker was quietly broken

@@ -24,12 +24,12 @@
  *    entire reason this approach is viable where the per-minute streaming
  *    avatars in docs/adr/0003-avatar-renderer.md were not.
  *
- * Three of the four adapters below are stubs. That is deliberate and it is
- * stated rather than hidden: the endpoint paths, request field names and prices
- * for these vendors could not be verified from here, and a plausible-looking
- * wrong URL costs more to debug than an honest `throw`. Each stub lists exactly
- * what has to be filled in. The fourth — `manual` — is real, needs no key, and
- * is what makes the rest of this module testable and usable today.
+ * Five adapters, three of them real. `manual` needs no key and no account;
+ * `hedra` and `runway` were each written against the vendor's own published
+ * OpenAPI document and checked against a live account. `luma` and `kling` are
+ * deliberate stubs that throw: their endpoint paths, field names and prices
+ * were never verified, and a plausible-looking wrong URL costs more to debug
+ * than an honest refusal. Each stub lists exactly what has to be filled in.
  */
 
 import type { ClipSlotName } from './clips.ts';
@@ -40,11 +40,10 @@ import { createRunwayProvider } from './runway-provider.ts';
 /**
  * Video providers are a different axis from `AvatarRendererId` in
  * shared/protocol.ts, and deliberately not folded into it. That union names the
- * thing that *draws* Anna (`vrm`, and the two unimplemented streaming heads);
- * this one names the thing that *made the clips*, once, at setup. A clip
- * library rendered by Runway is played back by the same local renderer as one
- * rendered by hand, so collapsing the two would mean the renderer id no longer
- * tells you what code draws the screen.
+ * thing that *draws* Anna — now only `photo`; this one names the thing that
+ * *made the clips*, once, at setup. A clip library rendered by Runway is played
+ * back by the same local renderer as one rendered by hand, so collapsing the two
+ * would mean the renderer id no longer tells you what code draws the screen.
  */
 export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
 

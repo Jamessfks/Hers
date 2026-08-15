@@ -24,7 +24,7 @@ where she loses badly enough that saying otherwise would be dishonest.
 Most of the time nobody is talking. That is when an avatar is revealed as a
 puppet — it goes statue-still, or it loops a wave every eight seconds.
 
-Anna's answer is the layering in [`body.ts`](../src/renderer/avatar/body.ts):
+Anna's answer was the layering in `renderer/avatar/body.ts` (since deleted with the VRM renderer; see [ADR 0004](adr/0004-photo-avatar.md)):
 idle runs *underneath* everything else, permanently, so breathing, weight shift,
 head micro-motion, blinks and eye saccades never stop even mid-gesture. Blinks
 are scheduled from a fresh random interval each time, because a metronome blink
@@ -138,7 +138,9 @@ telemetry, and the conversation goes to a vendor you chose and already pay. See
 [PRIVACY.md](PRIVACY.md). This is not a feature Ani can copy without becoming a
 different company.
 
-**Full body, rendered locally, at zero marginal cost.** She stands, she can sit,
+**A real face, at a cost paid once rather than per minute.** *(Revised at v1.0 —
+this section originally claimed a locally-rendered full body at zero marginal
+cost. The VRM renderer is gone; see [ADR 0004](adr/0004-photo-avatar.md).)* She stands, she can sit,
 she leans, she gestures with both arms — at display refresh, on the GPU already
 in the machine, for as many hours as the app is open. Every realtime
 video-avatar API is a head-and-shoulders crop billed per streamed minute, which
@@ -160,7 +162,7 @@ see is not attentive, she is a smoke alarm.
 Also four, and these are the ones that matter to a person looking at both.
 
 **Motion quality.** Ani's clips came from a studio. Anna's are keyframed bone
-offsets written by hand in [`poses.ts`](../src/renderer/avatar/poses.ts) — 18
+offsets written by hand in `renderer/avatar/poses.ts` (since deleted) — 18
 gestures, procedurally interpolated. They are legible and they compose correctly
 over the idle layer, and they are not motion capture. A trained animator would
 identify the difference in about four seconds. This gap does not close with
@@ -174,19 +176,19 @@ is the difference.
 
 **A tuned voice.** Ani's voice was chosen and tuned for that character. Anna's
 default `voiceId` is the empty string, so out of the box she cannot speak until
-you paste a voice id into the config file — there is no settings UI yet. Even
+you pick a voice in Settings, with an audition button. Even
 once configured, it is a stock voice from a general catalogue that was not
 designed for her.
 
 **Lip sync.** Ani has visemes. Anna drives the jaw from an RMS amplitude
 envelope with a slow drift across three vowel shapes, asymmetrically smoothed so
 the mouth opens faster than it closes. That is a considered approximation of a
-jaw, not phoneme extraction, and the comment in `body.ts` says so: real visemes
+jaw, not phoneme extraction, and the comment in the old `body.ts` said so: real visemes
 need a forced aligner or phoneme timings, and none of the three voice providers
 return them. It reads fine at conversational distance and it will not survive a
 close-up.
 
-Plus everything a shipped product has that a v0.1 does not: no settings UI, no
+Plus everything a shipped product has that a v0.1 does not: no
 locomotion (`sit_down` holds a pose; she does not walk), macOS only, and no
 end-to-end latency instrumentation against live providers.
 

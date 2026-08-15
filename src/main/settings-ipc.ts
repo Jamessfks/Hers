@@ -14,8 +14,6 @@
  */
 
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron';
-import { basename, join } from 'node:path';
-import { copyFile, mkdir } from 'node:fs/promises';
 
 import type { Config } from './config.ts';
 import type { MemoryStore } from '../core/memory/store.ts';
@@ -44,7 +42,6 @@ export interface SettingsDeps {
   config: Config;
   secrets: Secrets;
   store: MemoryStore;
-  charactersDir: string;
   /** Called after anything that should rebuild the companion. */
   onChanged(): void;
   /** Bring up the settings window. */

@@ -85,27 +85,9 @@ async function main(): Promise<void> {
 
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
-  const charactersDir = join(app.getPath('userData'), 'characters');
   const diag = new Diagnostics(join(app.getPath('userData'), 'diagnostics.jsonl'));
   if (diag.enabled) console.log('[anna] diagnostics ->', join(app.getPath('userData'), 'diagnostics.jsonl'));
 
-  /**
-   * Where the bundled default character might be.
-   *
-   * It lives beside the asar rather than inside it — 15MB that is never
-   * imported by code, only read as a file. Packaged, that is a single known
-   * path. In development it depends on how Electron was invoked:
-   * `app.getAppPath()` is the project root under `electron .` but `out/main`
-   * under `electron out/main/index.js`, which is exactly the sort of difference
-   * that produces "works on my machine". Both are tried rather than guessed.
-   */
-  const defaultCharacterPaths = (): string[] =>
-    app.isPackaged
-      ? [join(process.resourcesPath, 'characters', 'anna-default.vrm')]
-      : [
-          join(__dirname, '..', '..', 'resources', 'characters', 'anna-default.vrm'),
-          join(app.getAppPath(), 'resources', 'characters', 'anna-default.vrm'),
-        ];
   const store = new MemoryStore({ path: join(app.getPath('userData'), 'memory.db') });
 
   /**
@@ -666,7 +648,6 @@ async function main(): Promise<void> {
     config,
     secrets,
     store,
-    charactersDir,
     onChanged: () => {
       refresh();
       notifySettingsChanged();

@@ -65,10 +65,16 @@ the budget, the ordering, and the concurrency cap directly.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Why the line is there.** The renderer loads user-supplied character files from
-disk — arbitrary glTF from the internet, parsed by a large dependency. That is
-the least trustworthy code in the app, so it gets no API keys, no filesystem, no
-`ipcRenderer`, and no network calls of its own. It receives performance events
+**Why the line is there.** The renderer decodes media it did not create: a
+photograph the user chose, and mp4s that came back from a video vendor. Both go
+through Chromium's image and video decoders, which is the largest attack surface
+in the app. So it gets no API keys, no filesystem, no `ipcRenderer`, and no
+network calls of its own.
+
+The justification changed with the avatar pivot — it used to be "arbitrary glTF
+parsed by a large dependency" — but the boundary did not, and should not: the
+argument for it is about what the renderer *parses*, and it still parses
+untrusted bytes. It receives performance events
 and PCM; it sends sense events. Everything in
 [`src/shared/protocol.ts`](../src/shared/protocol.ts) is the complete list of
 what can cross.
@@ -128,7 +134,7 @@ recognisable tell of a puppet.
 
 Gestures are authored as keyframed bone offsets against the VRM humanoid spec
 rather than as motion-capture clips, so every gesture works on any character the
-user loads. See [`poses.ts`](../src/renderer/avatar/poses.ts).
+user loads. See [`hologram.ts`](../src/renderer/avatar/hologram.ts).
 
 ### 3. Memory that ranks rather than dumps
 
@@ -160,7 +166,7 @@ The rule is that Anna degrades rather than breaks.
 
 ## Testing
 
-67 tests, no network, no mocks of our own code. They concentrate on the places
+323 tests, no network, no mocks of our own code. They concentrate on the places
 where being wrong is *silent*:
 
 - **Directive parsing** — a bad parser speaks `[teleports behind you]` out loud.

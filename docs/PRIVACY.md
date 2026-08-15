@@ -11,8 +11,11 @@ complete list of hosts the app ever contacts is the vendors you configured:
 
 ```
 api.anthropic.com                     api.cartesia.ai          api.deepgram.com
-api.openai.com                        api.elevenlabs.io
-generativelanguage.googleapis.com     api.hume.ai
+api.openai.com                        api.elevenlabs.io        api.hume.ai
+generativelanguage.googleapis.com
+
+api.hedra.com        files.hedra.com     cdn.hedra.com          (video, if chosen)
+api.dev.runwayml.com cdn.runwayml.com                          (video, if chosen)
 ```
 
 That list is `grep -rho 'https://[a-z0-9.-]*' src/` minus the signup links that
@@ -32,6 +35,17 @@ two are ever contacted.
 | Sensor lines as prose | Every turn, inside the system prompt | Your language provider | Nothing beyond the turn |
 | Fact sentences | On recall and on consolidation | Your embeddings provider — or nowhere, on the lexical fallback | Vector stored in `facts.embedding` |
 | A window of transcript | Every 12 turns | Your language provider | Distilled facts and a rolling summary |
+| **The photograph you chose as her body** | Once per clip you render, and only then | Your video provider (Hedra or Runway) | The vendor's retention applies; Hedra's upload handles expire after an hour, Runway's after 24–48h. A copy is also kept locally — see below |
+| **The generated clips** | Downloaded once, per clip | From your video provider to this machine | Stored on disk indefinitely, until you replace the photograph |
+
+**The photograph deserves its own sentence, because it is a picture of a
+person.** If you choose Hedra or Runway, that image is uploaded to them and a
+video model runs on it. Nothing is uploaded until you press the button that
+renders a clip, and the `Bring your own clips` provider uploads nothing at all —
+but if you use a hosted provider, a face leaves this machine. That is a
+different category from a 512px webcam frame described in one clause and
+discarded, and it is why it is listed separately rather than folded into the
+table above.
 
 The fifth row is the one people miss, so it is worth stating without softening:
 **what Anna can see about your screen leaves the machine as text.** It is not
@@ -48,8 +62,9 @@ titles into a chat with that vendor, turn `senses.screenActivity` off.
 
 Keys go into the macOS Keychain through Electron's `safeStorage`, and the design
 in [`secrets.ts`](../src/main/secrets.ts) is built around one assumption: the
-renderer is the least trustworthy process in the app, because it parses
-arbitrary glTF that came off the internet.
+renderer is the least trustworthy process in the app, because it decodes media
+it did not create — a photograph the user chose, and video that came back from a
+vendor.
 
 - **Keys are never written to `config.json`.** A synced dotfile, a support
   screenshot or a shared settings export cannot leak one.
@@ -63,8 +78,10 @@ arbitrary glTF that came off the internet.
   disk in the clear.
 - **The vault file is `0600`**, and holds base64 ciphertext that is useless on
   another machine. A ciphertext that fails to decrypt — restored from a backup,
-  or from a reinstalled OS — is dropped and the user is asked for the key again,
-  instead of hitting an opaque failure.
+  or from a reinstalled OS — is **retained and reported**, not dropped. An
+  earlier version deleted it, on the theory that asking for the key again beats
+  an opaque failure; that was wrong, because deleting is destroying a working
+  credential the user pasted once and may not have anywhere else.
 
 Where the boundary is thinner than it looks: `sandbox: false` in
 `webPreferences`, because an ESM preload is illegal with the Chromium sandbox
@@ -197,8 +214,17 @@ Everything lives in one directory, `app.getPath('userData')`, which on macOS is:
 ├── secrets.json   base64 ciphertext, mode 0600, useless off this machine
 ├── memory.db      SQLite: turns, facts, summaries
 ├── memory.db-wal  write-ahead log (journal_mode = WAL)
-└── memory.db-shm  shared-memory index for the WAL
+├── memory.db-shm  shared-memory index for the WAL
+└── libraries/
+    └── <first 16 hex of the photo's sha-256>/
+        ├── library.json  which clips exist, what each one cost
+        ├── source.jpg    your photograph, byte-for-byte as you gave it
+        └── clips/        the generated mp4s, a few MB each
 ```
+
+The photograph is stored under its own hash, so choosing a different one starts
+a new directory rather than overwriting the old. Deleting `libraries/` removes
+every photograph and every clip.
 
 The database schema is in [`memory/store.ts`](../src/core/memory/store.ts) and
 holds four tables:
@@ -216,10 +242,9 @@ Anna's *spoken* words only — the inline `[lean_in]` directives are stripped by
 [`companion.test.ts`](../src/core/orchestrator/companion.test.ts).
 
 **Deleting everything.** `MemoryStore.wipe()` truncates all four tables in one
-statement, and is covered by a test. It is not yet reachable from the UI,
-because there is no settings UI yet — see *Not done yet* in the README. Until
-there is, forgetting means quitting Anna and deleting `memory.db` along with its
-`-wal` and `-shm` siblings. Deleting `secrets.json` removes every stored key.
+statement, is covered by a test, and is reachable from **Settings → Memory**.
+Deleting `secrets.json` removes every stored key; deleting `libraries/` removes
+every photograph and generated clip.
 
 ---
 

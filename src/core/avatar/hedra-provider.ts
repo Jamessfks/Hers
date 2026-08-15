@@ -266,10 +266,14 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
            * which Hedra correctly refuses with `409 Idempotency-Key already used
            * with a different request body`. The slot became unrenderable.
            *
-           * Hashing the body gives the semantics the header is actually for: an
-           * identical request replays the original acknowledgement instead of
-           * enqueueing a duplicate, and a genuinely different request is a
-           * genuinely different job.
+           * What this does and does not buy, stated plainly because the
+           * obvious reading is wrong: it makes retries *legal* — no more 409 —
+           * but it cannot dedupe across attempts, because the uploads it hashes
+           * are new every time by construction. So if the submit response is
+           * lost after Hedra accepted the job, that job is billed and orphaned;
+           * the key does not save you. Real cross-attempt dedupe would mean
+           * uploading once and reusing the handle for the retry, which the
+           * one-hour expiry on those URLs makes its own piece of work.
            */
           idempotency_key: `anna-${request.slot}-${hash(JSON.stringify(input))}`,
         }),

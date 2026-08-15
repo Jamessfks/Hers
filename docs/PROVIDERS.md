@@ -158,11 +158,11 @@ bills by the minute of stream.
 
 | Backend | Published latency | Framing | Billing | Status here |
 | --- | --- | --- | --- | --- |
-| HeyGen LiveAvatar | ~1–2s | Head and shoulders | Per streaming minute | Seam only |
-| Tavus (Phoenix-4 / CVI) | sub-600ms | Head and shoulders | Per conversation minute | Seam only |
+| HeyGen LiveAvatar | ~1–2s | Head and shoulders | Per streaming minute | Not wired |
+| Tavus (Phoenix-4 / CVI) | sub-600ms | Head and shoulders | Per conversation minute | Not wired |
 | Anam | ~180ms | Head and shoulders | Per streaming minute | Not wired |
 | Simli | Sub-second, face-only stream | Face | Per streaming minute | Not wired |
-| Hedra | — | Head and shoulders | Per minute | Deprecated in LiveKit's plugin catalogue |
+| Hedra (realtime) | — | Head and shoulders | Per minute | **Withdrawn.** The endpoint answers `410 Gone`; LiveKit's plugin throws |
 
 Anam's ~180ms is genuinely impressive and Tavus's sub-600ms is usable. Neither
 number is the problem.
@@ -198,83 +198,62 @@ keep it behind a seam, not to build on top of it.
 
 ### What we did instead
 
-The primary renderer is a rigged VRM, driven locally at display refresh with
-three.js, at zero marginal cost. The full body works, gestures are authored as
-bone offsets against the VRM humanoid spec so they run on any character the user
-loads, and the idle layer keeps running underneath every gesture.
+*(Rewritten at v1.0. This section previously described a rigged VRM with the
+video backends as an unimplemented seam. Both halves of that changed — see
+[adr/0004-photo-avatar.md](adr/0004-photo-avatar.md).)*
 
-The video backends are kept as a *seam*, not an implementation:
+The finding above still stands, and it is worth restating because it is what the
+current design is built around: **realtime** video avatars are framed wrong and
+billed wrong for a companion that idles all day.
 
-- `AvatarRendererId = 'vrm' | 'heygen' | 'tavus'` in
-  [`protocol.ts`](../src/shared/protocol.ts);
-- `avatar.heygen` and `avatar.tavus` are valid `SecretName`s in
-  [`secrets.ts`](../src/main/secrets.ts).
+So generation moved off the conversation path entirely. Anna's body is one
+photograph plus nineteen clips rendered from it **once, at setup**. Latency
+stops being a design constraint — a three-minute render is a progress bar — and
+the cost is paid once instead of per minute of presence.
 
-There is nothing behind either. That is a deliberate half-step: the shape of the
-decision is committed to code so a close-up mode is a new module rather than a
-refactor, and the honest state of it is stated in the README rather than implied
-by a config value. The reasoning, including the fact that this reverses part of
-the original brief, is in
-[adr/0003-avatar-renderer.md](adr/0003-avatar-renderer.md).
+That inverts the economics the table above rejects. A full library is about
+**$4.75** at Runway's published rate. Under the per-streamed-minute model, the
+same money bought roughly an hour of standing still.
 
----
+#### The video providers
 
-## Language
+Three are real, two are honest stubs. `VideoProviderId` lives in
+[`protocol.ts`](../src/shared/protocol.ts) and the registry is in
+[`core/avatar/video-provider.ts`](../src/core/avatar/video-provider.ts).
 
-| Provider | Suggested models | Vision default | Embeddings | Strongest as a companion brain at |
+| Id | Key | Driven by | Price before you spend | Status |
 | --- | --- | --- | --- | --- |
-| **Anthropic** *(default)* | `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5-20251001` | `claude-haiku-4-5-20251001` | **None** | Staying in character under pressure |
-| **OpenAI** | `gpt-4.1`, `gpt-4.1-mini`, `gpt-4o` | `gpt-4.1-mini` | `text-embedding-3-small` (1536) | Covering all three jobs from one key |
-| **Google** | `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash` | `gemini-2.5-flash` | `text-embedding-004` (768) | Cheap fast multimodal, so the camera costs little |
+| `manual` | none | You, in any tool you like | Nothing is charged here | **Wired** |
+| `runway` | `video.runway` | A written prompt. Accepts no audio | **Yes** — 5 credits/s at $0.01, so $0.25 for a 5s clip | **Wired** |
+| `hedra` | `video.hedra` | A driving waveform | **No** — it refuses to quote before ingest, and bills by audio duration | **Wired** |
+| `luma` | `video.luma` | — | — | Stub: `submit()` throws |
+| `kling` | `video.kling` | — | — | Stub: `submit()` throws |
 
-**Anthropic** is the default in `DEFAULT_CONFIG` because the dominant failure
-mode of this product is assistant drift, and the persona in
-[`anna.ts`](../src/core/persona/anna.ts) is written almost entirely as
-prohibitions — "no lists", "never say let me know if", "do not summarise what
-they just said". Negative instruction held over a long context is exactly the
-thing Claude is most reliable at. It is also the model most willing to be
-unimpressed, which is half of Anna's register.
+Both wired adapters were written against the vendor's own published OpenAPI
+document — `api.hedra.com/v3/openapi.json` and
+`docs.dev.runwayml.com/openapi.json` — and then checked against a live account.
+The stubs were not, which is exactly why they refuse rather than call a URL
+nobody verified.
 
-**OpenAI** is the only provider that covers all three jobs Anna needs from a
-single key: conversation, embeddings, and transcription. It is also the adapter
-with the widest escape hatch — it speaks Chat Completions rather than the
-Responses API precisely so that pointing `baseUrl` at Groq, Together, OpenRouter
-or a local llama.cpp server is a configuration change rather than a fourth
-adapter.
+**They are complementary, not interchangeable.** Eighteen of the nineteen slots
+are *silent* gesture loops, which is what Runway does natively. Hedra has no
+prompt-only mode at all, so a silent clip needs a fabricated near-silent track —
+and it bills for that track's length regardless. Hedra earns its place on the
+one thing only it can do: lip-sync a specific line Anna is about to say.
 
-**Google** is the cheapest way to run the camera. Vision is on a slow timer and
-the answer is one clause, so a fast cheap multimodal model is strictly correct
-there; `gemini-2.5-flash` is the vision default for Google users and a
-reasonable conversation model as well.
+Two things live rendering taught us that no amount of reading would have:
 
-### The embeddings gap
-
-Anthropic ships no embeddings endpoint. Since Anthropic is also the recommended
-conversation provider, an Anthropic-only user would otherwise get no semantic
-recall at all — which is the feature the whole product rests on.
-
-The resolution is in [`main/index.ts`](../src/main/index.ts): the embedder is
-chosen independently of the conversation provider, preferring an OpenAI key,
-then a Google key, and falling back to `createLexicalEmbedder()`.
-
-| Keys present | Embedder | Recall quality |
-| --- | --- | --- |
-| OpenAI | `text-embedding-3-small`, 1536-d | Full semantic recall |
-| Google (no OpenAI) | `text-embedding-004`, 768-d | Full semantic recall |
-| Anthropic only | Lexical, 512-d, offline | Keyword-grade: literal overlap only |
-
-The lexical fallback is a deterministic feature hash over unigrams and bigrams
-with signed buckets, L2-normalised so cosine similarity is a dot product. It is
-not pretending to be a neural embedding. It recovers most of the value for this
-workload, because a few thousand short first-person sentences overlap literally
-far more often than they overlap conceptually — "the demo", "his mum", "that
-interview". Nobody is asked to open a second paid account to have a memory.
+- **Digital silence gets a job refused.** Hedra transcribes driving audio before
+  moderating it, and an ASR model hallucinated a policy violation out of a
+  buffer of zeros. `silentWav` now emits a −66 dBFS noise floor.
+- **Failed jobs are not billed**, at least on Hedra, which makes a cautious
+  first render genuinely cheap to attempt.
 
 ---
 
-## How to add a fourth provider
+## How to add another provider
 
-Every vendor sits behind one of three interfaces. Adding one is a new file, one
+Every vendor sits behind one of four interfaces. Adding one is a new file, one
 line in a registry, and one member on a union type. Nothing above the interface
 changes.
 
@@ -283,6 +262,18 @@ changes.
 | Language | `LlmProvider` | [`core/llm/types.ts`](../src/core/llm/types.ts) |
 | Voice | `TtsProvider` | [`core/speech/types.ts`](../src/core/speech/types.ts) |
 | Hearing | `SttProvider` | [`core/speech/stt.ts`](../src/core/speech/stt.ts) |
+| Video | `VideoClipProvider` | [`core/avatar/video-provider.ts`](../src/core/avatar/video-provider.ts) |
+
+**A `VideoClipProvider` is the odd one out**, because it is a job rather than a
+request and because it spends money. It must implement `submit` / `poll` /
+`download` as three separate calls, so a render can outlive the process that
+started it; fill in a `ClipCostModel` including `basis` (`'observed'`,
+`'published'` or `'unknown'` — do not claim a price you cannot source); and make
+`validateKey()` check the *balance* as well as the credential, returning it in
+`note` so the settings screen can show it. Register the key under a `video.*`
+`SecretName` and add an entry to `VIDEO_PROVIDER_INFO`. The six things that must
+be read off the vendor's docs rather than guessed are listed above `notWired()`
+in the same file.
 
 **An `LlmProvider` must normalise:** streaming into an `AsyncIterable<string>`
 of raw text deltas, with no other shape — no content blocks, no choice arrays,
