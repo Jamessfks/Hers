@@ -47,7 +47,7 @@ regex over the buffer specifically because tags split across token boundaries
 (`"[le"` then `"an_in]"`) and a rescanning parser fires the same gesture twice.
 
 **Pass condition:** the gesture lands on the word it belongs to, not after the
-clause. Tested for correctness (14 tests in `performance.test.ts`); the *timing*
+clause. Tested for correctness (16 tests in `core/persona/performance.test.ts`); the *timing*
 against real audio is not measured.
 
 ### 3. Time to first audio
@@ -145,9 +145,10 @@ she leans, she gestures with both arms — at display refresh, on the GPU alread
 in the machine, for as many hours as the app is open. Every realtime
 video-avatar API is a head-and-shoulders crop billed per streamed minute, which
 makes *idling* the most expensive state in the product; the comparison is in
-[PROVIDERS.md](PROVIDERS.md). Because gestures are authored as bone offsets
-against the VRM humanoid spec rather than as retargeted clips, they also work on
-any character the user loads.
+[PROVIDERS.md](PROVIDERS.md). At v1.0 that argument survives but its conclusion
+changed: clips are generated **offline, once**, so the cost is paid at setup
+rather than per minute of presence — about $4.75 for a full library — and the
+face on screen is a real one. See [ADR 0004](adr/0004-photo-avatar.md).
 
 **Restraint.** The attention policy is mostly rules about *not* speaking: one
 opener per cooldown window regardless of how many triggers fire, a separate and
@@ -169,10 +170,11 @@ identify the difference in about four seconds. This gap does not close with
 better engineering; it closes with a motion library we cannot license.
 
 **A character.** Ani ships as a designed, licensed, art-directed character with
-a name and a look. **Anna ships with no model at all** — she is a luminous
-stand-in figure until you drag a `.vrm` onto her window. The pipeline is
-complete and the product is not, and the first thirty seconds of the experience
-is the difference.
+a name and a look. **Anna ships with nobody at all** — she is an empty panel
+until you give her a photograph, and a still one until you pay to animate it.
+The pipeline is complete and the product is not, and the first thirty seconds of
+the experience is the difference. Bringing your own face is the point of the
+design; it is also the steepest first-run cost in the product.
 
 **A tuned voice.** Ani's voice was chosen and tuned for that character. Anna's
 default `voiceId` is the empty string, so out of the box she cannot speak until

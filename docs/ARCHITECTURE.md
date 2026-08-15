@@ -106,7 +106,8 @@ Window behaviour, Keychain, config, macOS sensors, IPC wiring.
 
 ### `src/renderer` — the body
 
-Three.js, the VRM rig, audio playback, camera and microphone.
+The photograph and the generated clips (`avatar/hologram.ts`), audio playback,
+camera and microphone. No 3D, no render loop — a `<video>` decodes itself.
 
 ## The three ideas worth knowing
 
@@ -125,16 +126,23 @@ a rescanning parser fires the same gesture twice. Unknown tags are dropped
 rather than spoken; a stray `[` in ordinary prose is rescued as text. Both are
 tested.
 
-### 2. Three animation layers, composited every frame
+### 2. Every clip begins and ends on the same frame
 
-`idle ⊕ gesture ⊕ speech`. Idle keeps running underneath everything — she is
-still breathing while she waves. An avatar that *swaps* to a gesture clip goes
-rigid everywhere the clip does not touch, and that stillness is the single most
-recognisable tell of a puppet.
+This is the load-bearing property of the whole avatar, and it replaced a
+three-layer animation compositor (`idle ⊕ gesture ⊕ speech`) that only a rig
+could have.
 
-Gestures are authored as keyframed bone offsets against the VRM humanoid spec
-rather than as motion-capture clips, so every gesture works on any character the
-user loads. See [`hologram.ts`](../src/renderer/avatar/hologram.ts).
+A generated clip cannot be blended with another — it has one performance baked
+into it. What makes a library of them read as continuous instead is that all
+nineteen are anchored to the *same* photograph: each one starts there and is
+asked to return there. Any two can then be cut together with no transition at
+all — and deliberately none is applied, because dissolving between two frames
+that are already identical only softens a cut that was invisible.
+
+`prompts.ts` asks for that property and `seam.ts` measures it. See
+[`hologram.ts`](../src/renderer/avatar/hologram.ts) for the playback side, and
+the README's *Not done yet* for the fact that the measurement is not yet wired
+to the thing that accepts a clip.
 
 ### 3. Memory that ranks rather than dumps
 
