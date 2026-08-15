@@ -23,6 +23,7 @@ import {
   type PerformanceEvent,
   type PermissionReport,
   type SenseEvent,
+  type VideoProviderView,
   type VoiceOption,
 } from '../shared/protocol.ts';
 
@@ -100,6 +101,16 @@ const api = {
   /** What exists in the clip library right now. */
   libraryStatus(): Promise<LibraryView> {
     return ipcRenderer.invoke(IPC.libraryStatus);
+  },
+
+  /** The video providers, each with what a full library would cost. */
+  videoProviders(): Promise<VideoProviderView[]> {
+    return ipcRenderer.invoke(IPC.videoProviders);
+  },
+
+  /** Choose the folder hand-made clips are dropped into. Null when cancelled. */
+  pickClipFolder(): Promise<{ folder: string } | null> {
+    return ipcRenderer.invoke(IPC.clipFolderPick);
   },
 
   /**

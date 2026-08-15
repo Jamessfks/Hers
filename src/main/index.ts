@@ -13,6 +13,11 @@ import { readFile } from 'node:fs/promises';
 
 import { CLIP_SLOT_NAMES, type ClipSlotName } from '../core/avatar/clips.ts';
 import { ClipLibraryStore } from '../core/avatar/library-store.ts';
+import {
+  VIDEO_PROVIDER_INFO,
+  createVideoClipProvider,
+  estimateLibraryCost,
+} from '../core/avatar/video-provider.ts';
 import { PortraitLibrary } from './avatar/portrait.ts';
 
 import { Attention, SituationTracker } from '../core/senses/attention.ts';
@@ -39,7 +44,12 @@ import { createSayTts } from './demo/mock-tts.ts';
 import { createTray } from './tray.ts';
 import { registerSettingsHandlers } from './settings-ipc.ts';
 import { readActivity, readNextEvent } from './senses/macos.ts';
-import { IPC, type LibraryView, type SenseEvent } from '../shared/protocol.ts';
+import {
+  IPC,
+  type LibraryView,
+  type SenseEvent,
+  type VideoProviderView,
+} from '../shared/protocol.ts';
 
 /** How often the cheap sensors are read. */
 const ACTIVITY_POLL_MS = 20_000;
@@ -477,6 +487,7 @@ async function main(): Promise<void> {
     store: new ClipLibraryStore({ root: join(app.getPath('userData'), 'libraries') }),
     providerId: config.get().avatar.videoProvider,
     apiKey: () => secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
+    dropDir: config.get().avatar.clipFolder,
   });
 
   portraits.on('changed', (view: LibraryView) => send(IPC.libraryChanged, view));
@@ -528,6 +539,41 @@ async function main(): Promise<void> {
   ipcMain.handle(IPC.portraitGet, async () => portraits.portraitBytes());
   ipcMain.handle(IPC.clipGet, async (_event, slot: ClipSlotName) => portraits.clipBytes(slot));
   ipcMain.handle(IPC.libraryStatus, () => portraits.view());
+
+  /**
+   * The provider menu, priced.
+   *
+   * The price is computed here rather than written into the UI because it is a
+   * property of the adapter — Runway publishes a rate card and Hedra refuses to
+   * quote — and a settings screen that hardcoded either would go stale silently.
+   */
+  ipcMain.handle(IPC.videoProviders, () =>
+    VIDEO_PROVIDER_INFO.map((info): VideoProviderView => {
+      const provider = createVideoClipProvider(info.id, { apiKey: 'probe', dropDir: '/' });
+      return {
+        id: info.id,
+        label: info.label,
+        why: info.why,
+        site: info.site,
+        wired: info.status === 'wired',
+        keyless: info.id === 'manual',
+        estimate: estimateLibraryCost(provider.cost, CLIP_SLOT_NAMES.length),
+        pricingUrl: provider.cost.pricingUrl,
+      };
+    }),
+  );
+
+  ipcMain.handle(IPC.clipFolderPick, async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Where will you put the clips?',
+      buttonLabel: 'Use this folder',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    const folder = picked.canceled ? null : picked.filePaths[0];
+    if (!folder) return null;
+    config.update({ avatar: { clipFolder: folder } });
+    return { folder };
+  });
 
   /**
    * Render clips. This is the one handler in the app that spends money.

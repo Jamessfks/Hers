@@ -116,13 +116,47 @@
         </div>
         <img id="portrait-preview" alt="" hidden />
 
-        <p class="section-note">
-          Clips are rendered once, ahead of time, by a video model. Until the
-          first one exists she is the photograph itself.
-        </p>
-        <div class="key-row">
-          <button type="button" id="build-clip">Render the next clip</button>
-          <span id="library-status" class="muted" aria-live="polite">No photo yet</span>
+        <!--
+          The video provider.
+
+          Same markup contract as the key groups above — data-provider, data-key,
+          data-reveal, data-save, data-forget, data-status, data-why — so it is
+          driven by the same code rather than by a second, subtly different copy
+          of it. The two extra rows are the ones this kind needs and the others
+          do not: a price, and a folder for the provider that has no key.
+        -->
+        <div class="key-group" data-kind="video">
+          <div class="key-head">
+            <h3>How her clips get made</h3>
+            <p>
+              Rendered once, ahead of time. Until the first clip exists she is
+              the photograph itself.
+            </p>
+          </div>
+          <div class="key-row">
+            <label class="visually-hidden" for="video-provider">Video provider</label>
+            <select id="video-provider" data-provider></select>
+            <label class="visually-hidden" for="video-key">Video API key</label>
+            <input id="video-key" type="password" data-key placeholder="paste key" spellcheck="false" autocomplete="off" />
+            <button type="button" data-reveal aria-label="Show the key" title="Show the key">👁</button>
+            <button type="button" data-save>Check &amp; save</button>
+            <button type="button" data-forget class="danger" hidden>Remove</button>
+          </div>
+          <p class="provider-why" data-why></p>
+          <p class="key-status" data-status aria-live="polite"></p>
+
+          <!-- Only for "bring your own clips", which takes a folder, not a key. -->
+          <div class="key-row" id="clip-folder-row" hidden>
+            <button type="button" id="pick-clip-folder">Choose a folder…</button>
+            <span id="clip-folder-name" class="muted">No folder chosen</span>
+          </div>
+
+          <p class="price-note" id="library-price" aria-live="polite"></p>
+
+          <div class="key-row">
+            <button type="button" id="build-clip">Render the next clip</button>
+            <span id="library-status" class="muted" aria-live="polite">No photo yet</span>
+          </div>
         </div>
       </section>
 

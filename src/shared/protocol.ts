@@ -194,6 +194,14 @@ export interface AnnaConfig {
     portrait: string;
     /** Who renders the clips. `manual` needs no key and no account. */
     videoProvider: VideoProviderId;
+    /**
+     * Where hand-made clips are dropped, for the `manual` provider.
+     *
+     * Empty until chosen. It is a real folder the user opens in Finder, which is
+     * the whole point of that provider: the clips are theirs, rendered wherever
+     * they already pay for renders.
+     */
+    clipFolder: string;
   };
   senses: {
     camera: boolean;
@@ -246,6 +254,10 @@ export const IPC = {
   clipGet: 'anna:clip:get',
   /** renderer -> main: what exists in the clip library right now. */
   libraryStatus: 'anna:library:status',
+  /** renderer -> main: the video providers, with what each would cost. */
+  videoProviders: 'anna:video:providers',
+  /** renderer -> main: pick the folder hand-made clips are dropped into. */
+  clipFolderPick: 'anna:clip-folder:pick',
   /** renderer -> main: render the next clips. Costs money; count is a ceiling. */
   libraryBuild: 'anna:library:build',
   /** main -> renderer: the library changed — a clip started, finished or failed. */
@@ -326,6 +338,30 @@ export interface VoiceOption {
  * — none of which the body needs to draw a frame, and all of which would have to
  * cross an IPC boundary on every change.
  */
+/**
+ * One video provider, as the settings screen needs it.
+ *
+ * Sent from main rather than imported, even though it is static data. The
+ * provider modules reach for `node:fs` and a network stack; pulling them into
+ * the renderer bundle to read a label would drag both across a boundary that
+ * exists specifically to keep them out.
+ */
+export interface VideoProviderView {
+  id: VideoProviderId;
+  label: string;
+  /** Why someone would pick this one over the others. */
+  why: string;
+  /** The vendor's own site, for the "get a key" link. */
+  site: string | null;
+  /** False for adapters that would throw rather than call an unverified endpoint. */
+  wired: boolean;
+  /** True when this one takes a folder instead of a key. */
+  keyless: boolean;
+  /** What a full library would cost, in USD. */
+  estimate: { low: number; high: number; confident: boolean };
+  pricingUrl: string | null;
+}
+
 export interface LibraryView {
   /** '' when no photograph has been chosen yet. */
   portrait: string;
