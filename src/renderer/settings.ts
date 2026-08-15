@@ -23,10 +23,21 @@ import type {
   LlmProviderId,
   MemoryFactView,
   PermissionReport,
+  VideoProviderView,
 } from '../shared/protocol.ts';
 
 /** Sentinel option value for "let me type a model id myself". */
 const CUSTOM = '__custom__';
+
+/**
+ * Slots in a full clip library: idle plus the eighteen gestures.
+ *
+ * Duplicated from core/avatar/clips.ts rather than imported, because importing
+ * it would pull `node:fs` into the settings bundle through the manual provider.
+ * The estimate itself is computed in main against the real list; this is only
+ * used to divide it back down to a per-clip figure.
+ */
+const CLIP_COUNT = 19;
 
 declare global {
   interface Window {
@@ -127,6 +138,7 @@ type Kind = 'llm' | 'tts' | 'stt' | 'video';
 
 let config: AnnaConfig;
 let permissions: PermissionReport | null = null;
+let videoProviders: VideoProviderView[] = [];
 
 const $ = <T extends HTMLElement>(selector: string): T =>
   document.querySelector<T>(selector) as T;
@@ -484,15 +496,29 @@ function wireVoice(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Character
+// Her body
 // ---------------------------------------------------------------------------
 
-function wireCharacter(): void {
+/**
+ * The photograph, the provider that animates it, and the spend so far.
+ *
+ * The key input itself is not here — it is a `.key-group[data-kind="video"]` in
+ * the markup, driven by the same {@link keyGroup} that drives the model, voice
+ * and hearing keys. This wires the three things a video provider needs that a
+ * text one does not: a photograph to work from, a folder for the provider that
+ * has no API at all, and a price shown *before* the button that spends money.
+ */
+function wireBody(): void {
   const button = $<HTMLButtonElement>('#pick-portrait');
   const name = $('#portrait-name');
   const preview = $<HTMLImageElement>('#portrait-preview');
   const build = $<HTMLButtonElement>('#build-clip');
   const status = $('#library-status');
+  const price = $('#library-price');
+  const providerSelect = $<HTMLSelectElement>('#video-provider');
+  const folderRow = $<HTMLDivElement>('#clip-folder-row');
+  const folderButton = $<HTMLButtonElement>('#pick-clip-folder');
+  const folderName = $('#clip-folder-name');
 
   /**
    * Shows the photograph back to the user.
@@ -511,6 +537,39 @@ function wireCharacter(): void {
     preview.src = URL.createObjectURL(new Blob([bytes as BlobPart]));
     preview.hidden = false;
     name.textContent = 'This is her';
+  };
+
+  /**
+   * What the chosen provider would charge for a full library.
+   *
+   * Shown next to the button rather than after the first invoice, and phrased
+   * differently depending on how well the number is actually known — a
+   * published rate card gets a figure, a vendor that will not quote gets a
+   * range and the word "somewhere". Presenting both with the same confidence is
+   * the part that would mislead.
+   */
+  const showPrice = (): void => {
+    const chosen = videoProviders.find((entry) => entry.id === providerSelect.value);
+    if (!chosen) {
+      price.textContent = '';
+      return;
+    }
+
+    folderRow.hidden = !chosen.keyless;
+    folderName.textContent = config.avatar.clipFolder || 'No folder chosen';
+
+    if (chosen.keyless) {
+      price.textContent =
+        'Nothing is charged here — you render the clips yourself and drop them in the folder.';
+      return;
+    }
+    if (!chosen.wired) {
+      price.textContent = 'This one is not wired up in this build. Pick Hedra or Runway.';
+      return;
+    }
+    price.textContent = chosen.estimate.confident
+      ? `A full library of ${CLIP_COUNT} clips costs about $${chosen.estimate.low.toFixed(2)}. One clip is about $${(chosen.estimate.low / CLIP_COUNT).toFixed(2)}.`
+      : `${chosen.label} will not quote a price before rendering. A full library is somewhere between $${chosen.estimate.low.toFixed(2)} and $${chosen.estimate.high.toFixed(2)}.`;
   };
 
   /**
@@ -553,6 +612,13 @@ function wireCharacter(): void {
     showLibrary(await api.libraryStatus());
   });
 
+  folderButton.addEventListener('click', async () => {
+    const picked = await api.pickClipFolder();
+    if (!picked) return;
+    config = await api.getConfig();
+    folderName.textContent = picked.folder;
+  });
+
   build.addEventListener('click', async () => {
     build.disabled = true;
     status.textContent = 'Starting…';
@@ -562,7 +628,13 @@ function wireCharacter(): void {
     showLibrary(await api.buildLibrary(1));
   });
 
+  // The price follows the provider menu, which `keyGroup` also listens to. Two
+  // listeners on one select rather than a callback threaded through keyGroup:
+  // they are independent concerns and the ordering between them does not matter.
+  providerSelect.addEventListener('change', showPrice);
+
   api.onLibrary(showLibrary);
+  showPrice();
   void showPortrait();
   void api.libraryStatus().then(showLibrary);
 }
@@ -854,10 +926,21 @@ async function boot(): Promise<void> {
   config = await api.getConfig();
   permissions = await api.permissions().catch(() => null);
 
-  for (const kind of ['llm', 'tts', 'stt'] as const) keyGroup(kind);
+  // The video menu is filled before its key group is wired, because the group
+  // reads its options — and the price it shows — out of that list.
+  videoProviders = await api.videoProviders().catch(() => []);
+  PROVIDERS.video = videoProviders.map((provider) => ({
+    id: provider.id,
+    label: provider.wired ? provider.label : `${provider.label} (not wired up)`,
+    url: provider.site ?? '',
+    why: provider.why,
+    keyless: provider.keyless,
+  }));
+
+  for (const kind of ['llm', 'tts', 'stt', 'video'] as const) keyGroup(kind);
   wireModelPicker();
   wireVoice();
-  wireCharacter();
+  wireBody();
   renderToggles($('#senses'), sensesToggles());
   wirePresence();
   wireWipe();
