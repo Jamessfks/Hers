@@ -64,7 +64,7 @@ async function showAvatar(): Promise<void> {
 
   await hologram.setPortrait(URL.createObjectURL(new Blob([bytes as BlobPart])));
   hideTrouble();
-  await fitPanelTo(hologram.shape);
+  fitPanelTo(hologram.shape);
   await applyLibrary(await window.anna.libraryStatus());
 }
 
