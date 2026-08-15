@@ -19,6 +19,7 @@
 import { MODEL_CATALOG, resolveModel, type ModelOption } from '../core/llm/models.ts';
 import type {
   AnnaConfig,
+  LibraryView,
   LlmProviderId,
   MemoryFactView,
   PermissionReport,
@@ -452,27 +453,83 @@ function wireVoice(): void {
 // ---------------------------------------------------------------------------
 
 function wireCharacter(): void {
-  const button = $<HTMLButtonElement>('#pick-character');
-  const name = $('#character-name');
+  const button = $<HTMLButtonElement>('#pick-portrait');
+  const name = $('#portrait-name');
+  const preview = $<HTMLImageElement>('#portrait-preview');
+  const build = $<HTMLButtonElement>('#build-clip');
+  const status = $('#library-status');
 
-  const show = (): void => {
-    name.textContent = config.avatar.modelPath
-      ? `Wearing ${config.avatar.modelPath}`
-      : 'Using the default character';
+  /**
+   * Shows the photograph back to the user.
+   *
+   * Worth the round trip for the bytes rather than showing a filename: the
+   * whole avatar is this one frame, and "did it take the right picture" is a
+   * question only a picture answers.
+   */
+  const showPortrait = async (): Promise<void> => {
+    const bytes = await api.getPortrait();
+    if (!bytes) {
+      name.textContent = 'No photo yet';
+      preview.hidden = true;
+      return;
+    }
+    preview.src = URL.createObjectURL(new Blob([bytes as BlobPart]));
+    preview.hidden = false;
+    name.textContent = 'This is her';
+  };
+
+  /**
+   * Says what exists, what is running, and what has been spent.
+   *
+   * The spend is shown even when it is zero. This is the one screen in the app
+   * behind which a bill accumulates, and a number that only appears once it is
+   * large is a number nobody was watching.
+   */
+  const showLibrary = (view: LibraryView): void => {
+    if (!view.portrait) {
+      status.textContent = 'No photo yet';
+      build.disabled = true;
+      return;
+    }
+    build.disabled = view.building !== null;
+
+    const spent = view.spentUsd > 0 ? ` · $${view.spentUsd.toFixed(2)} spent` : '';
+    if (view.building) {
+      status.textContent = `Rendering ${view.building}… (minutes, not seconds)${spent}`;
+    } else if (view.ready.length === 0) {
+      status.textContent = `No clips yet — she is the photograph${spent}`;
+    } else {
+      const failed = view.failed.length > 0 ? `, ${view.failed.length} failed` : '';
+      status.textContent = `${view.ready.length} of ${view.total} clips${failed}${spent}`;
+    }
   };
 
   button.addEventListener('click', async () => {
-    const result = await api.pickCharacter();
+    const result = await api.pickPortrait();
     if (!result) return;
     if ('error' in result) {
       name.textContent = result.error;
       return;
     }
-    await patch({ avatar: { modelPath: result.id } });
-    show();
+    await showPortrait();
+    // The note is advice, not a failure — an unusual crop is allowed, it just
+    // decides the shape of every clip, so it is said once and not repeated.
+    if (result.note) status.textContent = result.note;
+    showLibrary(await api.libraryStatus());
   });
 
-  show();
+  build.addEventListener('click', async () => {
+    build.disabled = true;
+    status.textContent = 'Starting…';
+    // One. The first clip answers questions the other eighteen depend on, and
+    // rendering them all before looking at one bills for the same lesson
+    // nineteen times.
+    showLibrary(await api.buildLibrary(1));
+  });
+
+  api.onLibrary(showLibrary);
+  void showPortrait();
+  void api.libraryStatus().then(showLibrary);
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ import {
   IPC,
   type AnnaConfig,
   type BrainState,
+  type LibraryView,
   type MemoryFactView,
   type MemoryStats,
   type PerformanceEvent,
@@ -69,24 +70,51 @@ const api = {
   },
 
   /**
-   * Hand a dropped .vrm to main to be stored. Returns the id to put in config.
+   * Hand a dropped photograph to main. Returns the hash that names her library.
    *
    * The renderer cannot write to disk, so a blob: URL is all it has — and a
-   * blob URL dies with the window, which is why a dropped character used to
-   * vanish on restart.
+   * blob URL dies with the window, which is why a dropped avatar used to vanish
+   * on restart. Rejections come back as `{error}` rather than a throw: "that
+   * photo is too small" is something to show under the drop target, not an
+   * exception.
    */
-  saveCharacter(name: string, bytes: Uint8Array): Promise<{ id: string } | { error: string }> {
-    return ipcRenderer.invoke(IPC.characterSave, name, bytes);
+  setPortrait(bytes: Uint8Array): Promise<{ hash: string; note?: string } | { error: string }> {
+    return ipcRenderer.invoke(IPC.portraitSet, bytes);
   },
 
-  /** Read the stored character back. Null when none is set. */
-  loadCharacter(): Promise<Uint8Array | null> {
-    return ipcRenderer.invoke(IPC.characterLoad);
+  /** Open a native picker for a photograph. Null when cancelled. */
+  pickPortrait(): Promise<{ hash: string; note?: string } | { error: string } | null> {
+    return ipcRenderer.invoke(IPC.portraitPick);
   },
 
-  /** Open a native picker for a .vrm. Returns the stored id, or null. */
-  pickCharacter(): Promise<{ id: string } | { error: string } | null> {
-    return ipcRenderer.invoke(IPC.characterPick);
+  /** The stored photograph's bytes. Null before one is chosen. */
+  getPortrait(): Promise<Uint8Array | null> {
+    return ipcRenderer.invoke(IPC.portraitGet);
+  },
+
+  /** One generated clip's bytes. Null when that slot is not ready. */
+  getClip(slot: string): Promise<Uint8Array | null> {
+    return ipcRenderer.invoke(IPC.clipGet, slot);
+  },
+
+  /** What exists in the clip library right now. */
+  libraryStatus(): Promise<LibraryView> {
+    return ipcRenderer.invoke(IPC.libraryStatus);
+  },
+
+  /**
+   * Render up to `max` clips. This is the only call in this bridge that spends
+   * money, which is why the ceiling is explicit at every call site rather than
+   * defaulted somewhere out of sight.
+   */
+  buildLibrary(max: number): Promise<LibraryView> {
+    return ipcRenderer.invoke(IPC.libraryBuild, max);
+  },
+
+  onLibrary(handler: (view: LibraryView) => void): () => void {
+    const listener = (_: unknown, view: LibraryView) => handler(view);
+    ipcRenderer.on(IPC.libraryChanged, listener);
+    return () => ipcRenderer.off(IPC.libraryChanged, listener);
   },
 
   // -- settings -------------------------------------------------------------

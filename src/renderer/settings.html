@@ -105,13 +105,24 @@
       <section aria-labelledby="body-heading">
         <h2 id="body-heading">Her body</h2>
         <p class="section-note">
-          She comes with a CC0 VRoid sample avatar. Any other VRM works too —
-          drag one onto her window, or choose a file. Free characters are on
-          VRoid Hub, and VRoid Studio will make you one in an afternoon.
+          One photograph is the whole avatar. Every clip is generated from it and
+          returns to it, so the shot matters more than the resolution: face
+          visible, looking roughly at the camera, and a background you are happy
+          to see behind her for as long as she is on screen.
         </p>
         <div class="key-row">
-          <button type="button" id="pick-character">Choose a .vrm…</button>
-          <span id="character-name" class="muted">Using the default character</span>
+          <button type="button" id="pick-portrait">Choose a photo…</button>
+          <span id="portrait-name" class="muted">No photo yet</span>
+        </div>
+        <img id="portrait-preview" alt="" hidden />
+
+        <p class="section-note">
+          Clips are rendered once, ahead of time, by a video model. Until the
+          first one exists she is the photograph itself.
+        </p>
+        <div class="key-row">
+          <button type="button" id="build-clip">Render the next clip</button>
+          <span id="library-status" class="muted" aria-live="polite">No photo yet</span>
         </div>
       </section>
 
