@@ -8,6 +8,28 @@
  * a critic signing off on geometry the app does not have.
  */
 
+/**
+ * Shows whether Anna is listening, on the handset in the composer.
+ *
+ * Lives here rather than in main.ts so the harness drives the real thing. It
+ * was setting `data-on` by hand, which meant the page used to review this
+ * carried a green button with `aria-pressed` unset and a label still reading
+ * "Talk to her" — the accessibility half of the state was never once looked at,
+ * because the only place it existed was the one file the harness did not run.
+ *
+ * The colour is not the whole signal. A green handset is the universal *place a
+ * call* affordance, so on its own it reads as an invitation to start rather
+ * than as a microphone that is already open, and a dead microphone and a live
+ * one are then distinguishable only by hue. The pulse in `styles.css` says
+ * "now"; this says it to a screen reader.
+ */
+export function showListening(voice: HTMLElement, on: boolean): void {
+  voice.dataset['on'] = String(on);
+  voice.setAttribute('aria-pressed', String(on));
+  voice.setAttribute('aria-label', on ? 'Stop listening' : 'Listen');
+  voice.title = on ? 'She is listening — click to stop' : 'Let her hear you';
+}
+
 /** Line height of the field, in reference points. Matches `#say` in styles.css. */
 const LINE = 23;
 /** Its block padding, top plus bottom. Also from `#say`. */
@@ -41,7 +63,19 @@ export function fitComposer(input: HTMLTextAreaElement, composer: HTMLElement): 
   input.style.height = 'auto';
   const content = input.scrollHeight - PAD * s;
   const lines = Math.min(MAX_LINES, Math.max(1, Math.round(content / (LINE * s))));
-  input.style.height = `${(PAD + lines * LINE) * s}px`;
+
+  /*
+   * One line hands the height back to the stylesheet rather than computing it.
+   *
+   * `(PAD + LINE) * s` is the same number `calc(46 * var(--s))` resolves to in
+   * exact arithmetic and not the same number after it has been through a
+   * JavaScript float, a `px` string and the engine's own rounding — the field
+   * came to rest half a point taller than it started, every time, and stayed
+   * there. The empty composer is the state the user sees most, so it is the one
+   * that should be exactly right.
+   */
+  if (lines === 1) input.style.height = '';
+  else input.style.height = `${(PAD + lines * LINE) * s}px`;
 
   document.documentElement.style.setProperty(
     '--composer-h',

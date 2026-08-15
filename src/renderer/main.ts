@@ -11,7 +11,7 @@ import type { AnnaConfig, LibraryView, PerformanceEvent } from '../shared/protoc
 import { SpeechPlayer } from './audio/player.ts';
 import { Hologram } from './avatar/hologram.ts';
 import { Thread } from './chat.ts';
-import { fitComposer } from './composer.ts';
+import { fitComposer, showListening } from './composer.ts';
 import { Microphone } from './audio/microphone.ts';
 import { Vision } from './senses/vision.ts';
 
@@ -263,25 +263,30 @@ voiceEl.addEventListener('click', async () => {
   if (!config) return;
   const next = await window.anna.setConfig({ senses: { microphone: !config.senses.microphone } });
   config = next;
-  showListening(next.senses.microphone);
+  showListening(voiceEl, next.senses.microphone);
 });
 
-/**
- * Puts the handset into its listening state, or takes it out.
+/*
+ * Keyboard focus is only drawn for people using a keyboard.
  *
- * The colour is not the whole signal, and it was. A green handset is the
- * universal *place a call* affordance, so a static green button reads as an
- * invitation to start rather than as a microphone that is already open — and a
- * dead microphone and a live one were pixel-identical to anything that does not
- * see colour. The pulse is the part that says "now", and `aria-pressed` is the
- * part that says it to a screen reader.
+ * The four round controls use `:focus-visible`, which is exactly right for
+ * them. A text field is the exception: it matches `:focus-visible` when it is
+ * clicked as well as when it is tabbed to, so gating the composer's ring on
+ * that alone would ring it on every click into the box. Tracking whether the
+ * last input was a Tab is the only way to give a keyboard user the same ring on
+ * all five and a mouse user none — and without it they get four rings and then
+ * nothing on the one control they were heading for.
  */
-function showListening(on: boolean): void {
-  voiceEl.dataset['on'] = String(on);
-  voiceEl.setAttribute('aria-pressed', String(on));
-  voiceEl.setAttribute('aria-label', on ? 'Stop listening' : 'Listen');
-  voiceEl.title = on ? 'She is listening — click to stop' : 'Let her hear you';
-}
+window.addEventListener(
+  'keydown',
+  (event) => {
+    if (event.key === 'Tab') document.body.dataset['kbd'] = 'true';
+  },
+  { capture: true },
+);
+window.addEventListener('pointerdown', () => delete document.body.dataset['kbd'], {
+  capture: true,
+});
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -350,7 +355,7 @@ async function boot(): Promise<void> {
    * the worst possible behaviour.
    */
   async function applySenses(next: AnnaConfig): Promise<void> {
-    showListening(next.senses.microphone);
+    showListening(voiceEl, next.senses.microphone);
 
     try {
       if (next.senses.microphone) await microphone.start();

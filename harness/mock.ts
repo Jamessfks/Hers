@@ -11,7 +11,7 @@
  */
 
 import { Thread } from '../src/renderer/chat.ts';
-import { fitComposer } from '../src/renderer/composer.ts';
+import { fitComposer, showListening } from '../src/renderer/composer.ts';
 
 const backdrop = document.querySelector<HTMLDivElement>('#backdrop')!;
 
@@ -52,6 +52,21 @@ const SCRIPT: Array<[from: 'anna' | 'you', text: string]> = [
 
 const thread = new Thread({ mount: document.querySelector<HTMLDivElement>('#thread')! });
 
+/*
+ * Exposed on purpose.
+ *
+ * Scroll anchoring, burst behaviour and the streaming-clause path are only
+ * reachable by driving the thread directly — typing into the field exercises
+ * one of them. Anything reviewing this page needs a handle on the real object,
+ * and nothing in the app reads `window.anna_thread`.
+ */
+declare global {
+  interface Window {
+    anna_thread: Thread;
+  }
+}
+window.anna_thread = thread;
+
 for (const [from, text] of SCRIPT) {
   if (from === 'anna') thread.say(text);
   else thread.said(text);
@@ -85,15 +100,16 @@ if (flags.get('long')) {
   thread.seal();
 }
 if (flags.get('state')) document.body.dataset['state'] = flags.get('state')!;
-if (flags.get('mic') === 'on') {
-  document.querySelector<HTMLButtonElement>('#voice')!.dataset['on'] = 'true';
-}
 
 // Typing into the field appends a bubble, so send motion can be judged live.
-// Same growth and same key handling as the app — see fitComposer in main.ts.
+// Same growth, same key handling and same listening state as the app — all
+// three come from the app's own modules rather than being reimplemented here.
 const input = document.querySelector<HTMLTextAreaElement>('#say')!;
+const voice = document.querySelector<HTMLButtonElement>('#voice')!;
 const composer = document.querySelector<HTMLElement>('#composer')!;
 const fitField = (): void => fitComposer(input, composer);
+
+showListening(voice, flags.get('mic') === 'on');
 
 input.addEventListener('input', fitField);
 window.addEventListener('resize', fitField);

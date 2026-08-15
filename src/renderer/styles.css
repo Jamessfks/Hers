@@ -441,7 +441,7 @@ button {
  * instead.
  */
 .msg[data-from='you'] {
-  animation: arrive-sent 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: arrive-sent 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .msg[data-from='anna'] {
@@ -523,7 +523,17 @@ button {
 #typing {
   align-self: flex-start;
   display: grid;
-  grid-template-rows: 0fr;
+  /*
+   * `minmax(0, 0fr)`, not `0fr`, and the difference is not pedantry.
+   *
+   * A `0fr` track is floored by its item's automatic minimum size, and
+   * `min-height: 0` on the item is not enough to defeat that in Blink. The row
+   * bottomed out at 78% of its open height, so every thread carried a permanent
+   * dead gap almost exactly one bubble tall between the newest message and the
+   * composer — and the open/close animated the remaining 22%, which is to say
+   * the reveal this rule exists for was mostly not happening.
+   */
+  grid-template-rows: minmax(0, 0fr);
   opacity: 0;
   transform: scale(0.9);
   transform-origin: 0 100%;
@@ -544,7 +554,7 @@ button {
 }
 
 body[data-state='thinking'] #typing {
-  grid-template-rows: 1fr;
+  grid-template-rows: minmax(0, 1fr);
   opacity: 1;
   transform: scale(1);
 }
@@ -803,28 +813,88 @@ body[data-state='thinking'] #typing {
   color: #fff;
 }
 
-#voice[data-on='true']::after {
+/*
+ * Two rings, half a cycle apart, and no hold in the keyframe.
+ *
+ * The first version of this made exactly the mistake it was written to fix in
+ * the typing dots: a `70%, 100%` hold meant the ring finished expanding a third
+ * of the way through the period and then sat frozen and fully transparent for
+ * the rest of it — more than half of every cycle with nothing visibly moving,
+ * on the one control whose whole job is to say "right now". Staggering a second
+ * ring by half the period means one is always mid-flight.
+ */
+#voice[data-on='true']::after,
+#voice[data-on='true']::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 0 0 rgba(75, 210, 140, 0.55);
-  animation: listening 1.9s ease-out infinite;
+  box-shadow: 0 0 0 0 rgba(75, 210, 140, 0.5);
+  animation: listening 1.6s linear infinite;
   pointer-events: none;
 }
 
+#voice[data-on='true']::before {
+  animation-delay: 0.8s;
+}
+
 @keyframes listening {
-  0% {
+  from {
     box-shadow: 0 0 0 0 rgba(75, 210, 140, 0.5);
   }
-  70%,
-  100% {
-    box-shadow: 0 0 0 calc(9 * var(--s)) rgba(75, 210, 140, 0);
+  to {
+    box-shadow: 0 0 0 calc(10 * var(--s)) rgba(75, 210, 140, 0);
   }
 }
 
 #voice[data-on='true']:hover {
   background: #359e65;
+}
+
+/* ---------------------------------------------------------------------------
+   The way back down
+   --------------------------------------------------------------------------- */
+
+/*
+ * Anna speaks unprompted, and a thread that is scrolled up deliberately does
+ * not move when she does — which is right, and leaves no indication that
+ * anything arrived and no way back except scrolling through all of it by hand.
+ * This is the only control in the window with no counterpart in the reference
+ * screenshot, and it is here because the reference is a phone conversation that
+ * happens to be short enough not to need one.
+ */
+#jump {
+  position: absolute;
+  right: calc(24 * var(--s));
+  bottom: calc(36 * var(--s) + var(--composer-h, calc(50 * var(--s))));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(34 * var(--s));
+  height: calc(34 * var(--s));
+  border: 0;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--edge);
+  color: var(--ink);
+  cursor: pointer;
+  animation: arrive 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#jump svg {
+  width: calc(20 * var(--s));
+  height: calc(20 * var(--s));
+}
+
+#jump:hover {
+  background: var(--glass-strong);
+}
+
+#jump[hidden] {
+  display: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -841,7 +911,8 @@ body[data-state='thinking'] #typing {
 #who:active,
 #settings:active,
 #plus:active,
-#voice:active {
+#voice:active,
+#jump:active {
   transform: scale(0.94);
   transition-duration: 90ms;
 }
@@ -856,18 +927,27 @@ body[data-state='thinking'] #typing {
 #who:focus-visible,
 #settings:focus-visible,
 #plus:focus-visible,
-#voice:focus-visible {
+#voice:focus-visible,
+#jump:focus-visible {
   outline: calc(2 * var(--s)) solid rgba(255, 255, 255, 0.85);
   outline-offset: calc(2 * var(--s));
 }
 
 /*
- * The field is not in that list. A text input matches `:focus-visible` when it
- * is clicked as well as when it is tabbed to, so a ring here would appear on
- * every click into the composer — and it does not need one: `#field` already
- * lightens on `:focus-within`, which is a focus indicator that costs the layout
- * nothing.
+ * The field gets the same ring, but only for a keyboard.
+ *
+ * A text input matches `:focus-visible` when it is clicked as well as when it
+ * is tabbed to, so the plain rule would ring the composer on every click. The
+ * `:focus-within` lightening it had instead is a 13% alpha shift on a
+ * translucent dark pill — a change you have to go looking for — which meant a
+ * keyboard user tabbing through got ring, ring, ring, ring, and then nothing at
+ * all on the one control they were about to type into. `data-kbd` is set by the
+ * first Tab and cleared by the first click; see main.ts.
  */
+body[data-kbd] #field:focus-within {
+  outline: calc(2 * var(--s)) solid rgba(255, 255, 255, 0.85);
+  outline-offset: calc(2 * var(--s));
+}
 
 /* ---------------------------------------------------------------------------
    Trouble

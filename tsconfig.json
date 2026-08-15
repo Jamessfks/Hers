@@ -23,6 +23,7 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "//": "harness/ is included because it imports the app's own modules and is how the UI is reviewed; a page that stands in for the window should not be the one file nothing checks.",
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "harness/*.ts"],
   "exclude": ["node_modules", "out", "release"]
 }
