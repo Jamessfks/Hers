@@ -107,6 +107,15 @@ export interface ClipJobRef {
 }
 
 export interface ClipEntry {
+  /**
+   * True when this clip's loop closure was actually measured.
+   *
+   * A hand-dropped clip, or one recovered from disk after a crash, has bytes
+   * but no verdict. It plays — refusing to would make the feature unusable —
+   * but nothing claims it is seamless, and the setup screen can offer to check
+   * it rather than quietly implying it already has been.
+   */
+  verified?: boolean;
   slot: ClipSlotName;
   status: ClipStatus;
   /** File name inside the library's `clips/` directory. Set only when ready. */
@@ -371,7 +380,9 @@ export function completeClip(
       // A measured cut point beats the nominal one: the hold keeps breathing,
       // so a fixed timestamp lands at an arbitrary phase of that movement.
       durationMs: clip.seam?.cutAtMs ?? clip.durationMs,
-      verified: clip.seam ? true : false,
+      // Only written when true: an absent flag already means "not measured",
+      // and a `false` in every manifest is noise that has to round-trip.
+      ...(clip.seam ? { verified: true } : {}),
       job: null,
       error: null,
       spentUsd: entry.spentUsd + (clip.costUsd ?? 0),

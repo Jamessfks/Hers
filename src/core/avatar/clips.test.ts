@@ -299,3 +299,50 @@ test('a library survives a save and load round trip through JSON', () => {
   const parsed = parseLibrary(JSON.parse(JSON.stringify(library)));
   assert.deepEqual(parsed, library);
 });
+
+test('a clip that does not close is failed, not marked ready', () => {
+  // The whole seamlessness claim rests on this. Bytes used to be accepted on
+  // the strength of a prompt that *asked* the model to return to the pose.
+  const library = startLibrary();
+  const next = completeClip(library, 'nod', {
+    file: 'nod.webm',
+    durationMs: 5000,
+    seam: { closesCleanly: false, summary: 'worst region moved 41%' },
+  });
+  assert.equal(next.clips.nod.status, 'failed');
+  assert.match(next.clips.nod.error ?? '', /does not return to the source pose/);
+  assert.match(next.clips.nod.error ?? '', /41%/, 'the measurement reaches the user');
+});
+
+test('a measured clip is marked verified and cut where it actually closes', () => {
+  const library = startLibrary();
+  const next = completeClip(library, 'nod', {
+    file: 'nod.webm',
+    durationMs: 5000,
+    seam: { closesCleanly: true, summary: 'closes cleanly (0.4%)', cutAtMs: 4120 },
+  });
+  assert.equal(next.clips.nod.status, 'ready');
+  assert.equal(next.clips.nod.verified, true);
+  assert.equal(next.clips.nod.durationMs, 4120, 'the measured cut point beats the nominal one');
+});
+
+test('an unmeasured clip still plays, but does not claim to be seamless', () => {
+  // A hand-dropped clip has bytes and no verdict. Refusing it would make the
+  // manual provider unusable; implying it was checked would be a lie.
+  const library = startLibrary();
+  const next = completeClip(library, 'nod', { file: 'nod.webm', durationMs: 5000 });
+  assert.equal(next.clips.nod.status, 'ready');
+  assert.equal(next.clips.nod.verified, undefined);
+});
+
+test('a failed clip still records what it cost', () => {
+  // The money was spent whether or not the frame came back clean.
+  const library = startLibrary();
+  const next = completeClip(library, 'nod', {
+    file: 'nod.webm',
+    durationMs: 5000,
+    costUsd: 0.35,
+    seam: { closesCleanly: false, summary: 'drifted' },
+  });
+  assert.equal(next.clips.nod.spentUsd, 0.35);
+});
