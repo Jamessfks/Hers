@@ -1,34 +1,44 @@
 /**
- * Hedra v3: image plus audio to a photoreal clip.
+ * Hedra v3 — a photograph plus driving audio, rendered into a clip.
  *
- * Every endpoint, field name and status value here was read from Hedra's own
- * machine-readable spec at https://api.hedra.com/v3/openapi.json, not inferred.
- * The rest of this directory left vendor adapters as documented stubs precisely
- * so that nobody would ship a plausible-looking guess; this one is filled in
- * because the spec was actually fetched and checked against a live key.
+ * Unlike the three stubs in video-provider.ts, every path, field name, enum
+ * value and error shape below was read out of Hedra's own machine-readable spec
+ * (`https://api.hedra.com/v3/openapi.json`) and then checked against a live key.
+ * Where the spec and the live service disagreed, the live service won and the
+ * disagreement is noted.
  *
- * ## What this is not
+ * ## This is not the realtime product
  *
- * It is not realtime. Hedra's streaming avatar product is gone — the endpoint
+ * Hedra's streaming avatar — the one that made "she talks back with a real
+ * face" sound plausible — has been withdrawn. `POST /public/livekit/v1/session`
  * answers `410 Gone` with "The Hedra realtime avatar service is no longer
- * available", and LiveKit's plugin for it is now a single line that throws.
- * Generation here takes minutes, so this drives a *render*, never a reply.
+ * available", and LiveKit's plugin for it now throws on construction. What
+ * remains is this: an offline job queue measured in minutes.
  *
- * ## Why the model is a parameter
+ * That is a hard constraint on how it can be used, not a detail. Nothing here
+ * can run while she is talking. It builds a clip *library* ahead of time, which
+ * is exactly the shape video-provider.ts already assumes.
  *
- * The same request shape serves `hedra-character-3`, `omnihuman-15` and
- * `kling-ai-avatar-v2`. They differ in price and in whether they accept a
- * prompt and an aspect ratio, not in how they are called — so choosing between
- * them is configuration rather than three near-identical adapters.
+ * ## Audio is mandatory, and audio is the meter
  *
- * Notably `aspect_ratio` is a real parameter here. The "512x512, cropped around
- * the face" constraint that made streaming avatars useless for a standing
- * figure belonged to the *realtime* product; offline, a portrait full-body
- * render is a request field.
+ * Every avatar model here requires a driving audio track — there is no
+ * prompt-only mode. And the price is not per clip: asked for an estimate, the
+ * service replies that "the price is the driving audio's duration, which is not
+ * known until the audio is ingested at submit". So a four-second clip of
+ * silence costs the same as four seconds of speech, and `POST
+ * /models/{model}/estimate` refuses to quote for these models at all. That is
+ * why {@link HEDRA_COST} carries no per-clip figure and is not marked verified:
+ * there is no per-clip figure to carry.
+ *
+ * For the silent gesture clips the library is made of, {@link silentWav}
+ * supplies the required track. See its comment for what that does and does not
+ * establish.
  */
 
+import type { ClipSlotName } from './clips.ts';
 import {
   VideoClipError,
+  type ClipCostModel,
   type ClipJobHandle,
   type ClipJobState,
   type ClipRequest,
@@ -38,163 +48,310 @@ import {
 
 const BASE_URL = 'https://api.hedra.com/v3';
 
-/** Models that take a start image and driving audio. */
-export const HEDRA_AVATAR_MODELS = [
-  'hedra-character-3',
-  'omnihuman-15',
-  'kling-ai-avatar-v2',
-] as const;
-export type HedraAvatarModel = (typeof HEDRA_AVATAR_MODELS)[number];
+/**
+ * The avatar models: the ones that take a start frame plus driving audio.
+ *
+ * Hedra publishes eighty-odd models. The rest are text-to-image, text-to-video
+ * or speech, and none of them can be pointed at a photograph of a person and
+ * asked to move it, so listing them here would only invite a wrong choice.
+ */
+export type HedraAvatarModel = 'hedra-character-3' | 'hedra-avatar' | 'omnihuman-15';
 
-/** Hedra's job lifecycle, verbatim from the spec's status enum. */
+interface ModelCapability {
+  /** Accepted `aspect_ratio` values, from the model's own request schema. */
+  aspectRatios: readonly string[];
+  resolutions: readonly string[];
+  /** Whether the model's input schema has a `prompt` field at all. */
+  takesPrompt: boolean;
+  /** Whether the clip length can be pinned, rather than following the audio. */
+  takesDuration: boolean;
+}
+
+/**
+ * Per-model capabilities, transcribed from each model's request schema.
+ *
+ * This table is the reason `omnihuman-15` is not the default despite being the
+ * better-known name: its `aspect_ratio` enum contains exactly one value,
+ * `16:9`. A landscape frame cannot hold a standing figure at the size Anna's
+ * 420x680 panel needs, so choosing it silently would cost the whole full-body
+ * premise. `hedra-character-3` accepts `9:16` and is the default for that one
+ * reason.
+ */
+export const HEDRA_MODELS: Readonly<Record<HedraAvatarModel, ModelCapability>> = {
+  'hedra-character-3': {
+    aspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16', '9:21', '21:9'],
+    resolutions: ['540p', '720p', '1080p'],
+    takesPrompt: true,
+    takesDuration: true,
+  },
+  'hedra-avatar': {
+    aspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16', '9:21', '21:9'],
+    resolutions: ['540p', '720p', '1080p'],
+    takesPrompt: true,
+    takesDuration: true,
+  },
+  'omnihuman-15': {
+    aspectRatios: ['16:9'],
+    resolutions: ['720p', '1080p'],
+    takesPrompt: true,
+    takesDuration: false,
+  },
+};
+
+/** Hedra's job lifecycle, verbatim from the spec's `JobStatus` enum. */
 type HedraStatus = 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+
+/**
+ * No verified per-clip price, and `verified: false` says so.
+ *
+ * Not an oversight and not laziness: Hedra bills audio-driven models by the
+ * second of driving audio and declines to quote before ingest, so a number here
+ * would be a fabrication. `assumedUsdPerClip` is the category envelope from
+ * video-provider.ts, used only to warn.
+ */
+export const HEDRA_COST: ClipCostModel = {
+  usdPerClip: null,
+  assumedUsdPerClip: 0.25,
+  pricingUrl: 'https://www.hedra.com/pricing',
+  verified: false,
+};
 
 export interface HedraOptions {
   apiKey: string;
   model?: HedraAvatarModel;
-  /** Injected for tests; defaults to global fetch. */
-  fetch?: typeof globalThis.fetch;
-  baseUrl?: string;
-  /** Portrait by default: a companion stands, she is not a thumbnail. */
+  /** Portrait by default: the panel is taller than it is wide, and so is she. */
   aspectRatio?: string;
   resolution?: string;
+  /** Injected by tests. Defaults to the global. */
+  fetch?: typeof globalThis.fetch;
+  baseUrl?: string;
 }
 
 interface SubmitAck {
   job_id: string;
   status: HedraStatus;
-  status_url?: string;
 }
 
-interface JobView {
+interface JobEnvelope {
   job_id: string;
   status: HedraStatus;
-  error?: string | null;
+  error?: { message?: string } | string | null;
   cost?: number | null;
-  outputs?: Array<{ url?: string }> | null;
+  outputs?: Array<{
+    url?: string | null;
+    duration_ms?: number | null;
+    error?: string | null;
+  }> | null;
+}
+
+interface StatusView {
+  status: HedraStatus;
+  progress?: number | null;
 }
 
 export function createHedraProvider(options: HedraOptions): VideoClipProvider {
   const doFetch = options.fetch ?? globalThis.fetch;
-  const root = (options.baseUrl ?? BASE_URL).replace(/\/$/, '');
+  const root = (options.baseUrl ?? BASE_URL).replace(/\/+$/, '');
   const model = options.model ?? 'hedra-character-3';
-  const aspectRatio = options.aspectRatio ?? '9:16';
-  const resolution = options.resolution ?? '720p';
-  const headers = { 'X-API-Key': options.apiKey };
+  const capability = HEDRA_MODELS[model];
 
-  /** Uploads bytes and returns the URL the model will read them from. */
+  // Clamped rather than passed through: an unsupported enum value is a 422 five
+  // seconds after the user pressed the button, and the honest fallback — the
+  // model's first advertised ratio — at least renders.
+  const aspectRatio = pick(options.aspectRatio ?? '9:16', capability.aspectRatios);
+  const resolution = pick(options.resolution ?? '720p', capability.resolutions);
+
+  // The spec names `Authorization: Key <key_id>:<secret>` as the primary scheme.
+  // `X-API-Key` and `Bearer` are also accepted live, but the documented one is
+  // the one least likely to be withdrawn.
+  const auth = { authorization: `Key ${options.apiKey}` };
+
+  /**
+   * Uploads bytes and returns the handle the model reads them from.
+   *
+   * The returned URL is presigned and must be passed back *verbatim, query
+   * string included* — it is the handle, not merely a location. It lapses one
+   * hour after upload, which is why uploads happen inside `submit` rather than
+   * once at the start of a nineteen-clip library build.
+   */
   async function upload(bytes: Uint8Array, filename: string, type: string): Promise<string> {
     const form = new FormData();
     form.append('file', new Blob([bytes as unknown as BlobPart], { type }), filename);
-    const response = await doFetch(`${root}/files`, { method: 'POST', headers, body: form });
+    const response = await doFetch(`${root}/files`, { method: 'POST', headers: auth, body: form });
     if (!response.ok) throw await failure(response, 'uploading a file');
     const body = (await response.json()) as { url?: string };
-    if (!body.url) throw new VideoClipError('Hedra accepted the upload but returned no URL.');
+    if (!body.url) throw new VideoClipError('Hedra accepted the upload but returned no handle.');
     return body.url;
+  }
+
+  async function envelope(id: string, signal: AbortSignal | undefined): Promise<JobEnvelope> {
+    const response = await doFetch(`${root}/jobs/${encodeURIComponent(id)}`, {
+      headers: auth,
+      signal: signal ?? null,
+    });
+    if (!response.ok) throw await failure(response, 'reading a finished job');
+    return (await response.json()) as JobEnvelope;
   }
 
   return {
     id: 'hedra',
-    label: 'Hedra (offline render)',
-    cost: {
-      // Deliberately not a made-up number. Hedra bills per job and reports the
-      // actual cost on the finished job, which is what gets recorded.
-      usdPerClip: null,
-      verified: false,
-      note: 'Billed per job; the real figure is read back from the finished job.',
-    },
-    // Observed generation times run to several minutes; the ceiling is generous
-    // because abandoning a job that is merely slow means paying for it twice.
+    label: 'Hedra',
+    cost: HEDRA_COST,
+    // Fifteen minutes. Renders are documented and observed in minutes, and the
+    // job handle survives on disk, so a timeout that fires early does not lose
+    // the clip — but it does mean re-polling later, and the alternative
+    // (abandoning a job already paid for) is worse.
     timeoutMs: 15 * 60_000,
 
     async submit(request: ClipRequest): Promise<ClipJobHandle> {
+      const driving = request.audio ?? {
+        bytes: silentWav(request.seconds),
+        mimeType: 'audio/wav',
+      };
+
       const [startImage, audio] = await Promise.all([
-        upload(request.sourceImage, 'source.jpg', 'image/jpeg'),
-        upload(request.audio, 'audio.wav', 'audio/wav'),
+        upload(request.image, 'source' + extensionFor(request.imageMimeType), request.imageMimeType),
+        upload(driving.bytes, 'drive.wav', driving.mimeType),
       ]);
 
       const input: Record<string, unknown> = {
-        start_image: startImage,
-        audio,
-        resolution,
+        start_image: { source: 'url', url: startImage },
+        audio: { source: 'url', url: audio },
         aspect_ratio: aspectRatio,
+        resolution,
       };
-      // Only character-3 requires a prompt; sending one where it is not
-      // accepted is a 422 rather than a harmless extra field.
-      if (model === 'hedra-character-3') input['prompt'] = request.prompt;
+      if (capability.takesPrompt) input['prompt'] = promptFor(request);
+      if (capability.takesDuration) input['duration_ms'] = Math.round(request.seconds * 1000);
 
       const response = await doFetch(`${root}/models/${model}`, {
         method: 'POST',
-        headers: { ...headers, 'content-type': 'application/json' },
+        headers: { ...auth, 'content-type': 'application/json' },
+        signal: request.signal ?? null,
         body: JSON.stringify({
           input,
-          // Hedra replays the original acknowledgement for a repeated key, so a
-          // retried submit after a dropped connection cannot double-charge.
-          idempotency_key: request.idempotencyKey,
+          // Replays the original acknowledgement instead of enqueueing a
+          // duplicate. Worth the two lines: without it, a submit whose response
+          // is lost to a dropped connection is a second charge, and the retry
+          // path in awaitClip makes that a realistic way to pay twice.
+          idempotency_key: `anna-${request.slot}-${hash(`${request.prompt}|${request.seconds}`)}`,
         }),
       });
 
       if (!response.ok) throw await failure(response, 'starting a render');
       const ack = (await response.json()) as SubmitAck;
-      return { provider: 'hedra', id: ack.job_id, submittedAt: Date.now() };
+      return { providerId: 'hedra', id: ack.job_id, submittedAt: Date.now() };
     },
 
+    /**
+     * One status check.
+     *
+     * Deliberately two endpoints. `/status` is the cheap one and is all that is
+     * needed for the ninety-odd percent of polls that come back "still going";
+     * the full envelope — with the cost, the duration and the failure reason —
+     * is fetched only once, when the job has actually stopped.
+     */
     async poll(job: ClipJobHandle, signal?: AbortSignal): Promise<ClipJobState> {
-      const response = await doFetch(`${root}/jobs/${encodeURIComponent(job.id)}`, {
-        headers,
+      const response = await doFetch(`${root}/jobs/${encodeURIComponent(job.id)}/status`, {
+        headers: auth,
         signal: signal ?? null,
       });
       if (!response.ok) throw await failure(response, 'checking a render');
+      const status = (await response.json()) as StatusView;
 
-      const view = (await response.json()) as JobView;
-      switch (view.status) {
-        case 'COMPLETED': {
-          const url = view.outputs?.[0]?.url;
-          if (!url) {
-            return { status: 'failed', reason: 'Hedra reported success but returned no output.' };
-          }
-          return {
-            status: 'succeeded',
-            url,
-            ...(typeof view.cost === 'number' && { costUsd: view.cost }),
-          };
-        }
-        case 'FAILED':
-          return { status: 'failed', reason: view.error ?? 'Hedra did not say why.' };
-        case 'IN_QUEUE':
-          return { status: 'queued' };
-        default:
-          return { status: 'running' };
+      if (status.status === 'IN_QUEUE' || status.status === 'IN_PROGRESS') {
+        return {
+          status: status.status === 'IN_QUEUE' ? 'queued' : 'running',
+          // Hedra reports a fraction; ClipJobState is a fraction too. Null
+          // until the job says something, rather than a fake zero.
+          progress: typeof status.progress === 'number' ? status.progress : null,
+        };
       }
+
+      const view = await envelope(job.id, signal);
+
+      if (view.status === 'FAILED') {
+        return {
+          status: 'failed',
+          reason: reasonFrom(view) ?? 'Hedra did not say why.',
+          // A failed render is not retried automatically. Hedra charges on
+          // ingest, so an automatic retry of a prompt the model rejected is a
+          // way to spend money repeating a mistake.
+          retryable: false,
+        };
+      }
+
+      const output = view.outputs?.[0];
+      if (!output?.url) {
+        return {
+          status: 'failed',
+          reason: output?.error ?? 'Hedra reported success but produced no video.',
+          retryable: false,
+        };
+      }
+
+      return {
+        status: 'succeeded',
+        seconds: typeof output.duration_ms === 'number' ? output.duration_ms / 1000 : null,
+        costUsd: typeof view.cost === 'number' ? view.cost : null,
+      };
     },
 
-    async download(job, state, signal): Promise<Uint8Array> {
-      const response = await doFetch(state.url, { signal: signal ?? null });
+    /**
+     * Fetches the finished bytes.
+     *
+     * Re-reads the envelope rather than caching a URL from `poll`, because the
+     * download URL is presigned and short-lived: a handle captured at poll time
+     * and used after a queue of other downloads is a 403 that looks like a
+     * permissions bug.
+     */
+    async download(
+      job: ClipJobHandle,
+      _state: SucceededState,
+      signal?: AbortSignal,
+    ): Promise<Uint8Array> {
+      const view = await envelope(job.id, signal);
+      const url = view.outputs?.[0]?.url;
+      if (!url) {
+        throw new VideoClipError(`Hedra job ${job.id} has no downloadable output.`, {
+          provider: 'hedra',
+        });
+      }
+      const response = await doFetch(url, { signal: signal ?? null });
       if (!response.ok) throw await failure(response, 'downloading a finished render');
       return new Uint8Array(await response.arrayBuffer());
     },
 
     /**
-     * Checks the key and the balance in one call.
+     * Checks the key *and* the balance.
      *
-     * Balance matters as much as validity here: a perfectly good key with no
-     * credit fails at submit time, several screens after the point where the
-     * user could have understood why. Asking now means the setup screen can say
-     * "top up" instead of the render failing later with a 402.
+     * Balance belongs in this check, even though the method is named for
+     * credentials. A valid key on an empty account fails at submit — after the
+     * photo has been chosen, the prompts written and the build started — with a
+     * billing error several screens away from anything the user can act on.
+     * Asking `GET /balance` costs nothing and moves that message to the one
+     * screen where "top up your Hedra account" is a useful sentence.
      */
     async validateKey() {
-      const response = await doFetch(`${root}/balance`, { headers });
+      let response: Response;
+      try {
+        response = await doFetch(`${root}/balance`, { headers: auth });
+      } catch {
+        return { ok: false as const, reason: 'Could not reach Hedra.' };
+      }
+
       if (response.status === 401 || response.status === 403) {
         return { ok: false as const, reason: 'Hedra rejected that key.' };
       }
       if (!response.ok) {
         return { ok: false as const, reason: `Hedra returned ${response.status}.` };
       }
+
       const body = (await response.json()) as { balance?: number; currency?: string };
       if (typeof body.balance === 'number' && body.balance <= 0) {
         return {
           ok: false as const,
-          reason: 'That key works, but the Hedra account has no credit. Top it up to render.',
+          reason:
+            'That key works, but the Hedra account has no credit — every render would fail. Top it up first.',
         };
       }
       return { ok: true as const };
@@ -202,14 +359,120 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * The prompt, with the negative half folded in.
+ *
+ * prompts.ts keeps `prompt` and `avoid` separate because most vendors have a
+ * dedicated negative-prompt field. Hedra does not — its avatar models take one
+ * `prompt` string. Dropping `avoid` on the floor would silently discard half of
+ * what prompts.ts works hardest at (the instructions that stop the camera
+ * drifting and the figure wandering out of frame), so it is appended as a
+ * clause instead.
+ */
+function promptFor(request: ClipRequest): string {
+  const base = request.prompt.trim();
+  const avoid = request.avoid.trim();
+  return avoid ? `${base} Avoid: ${avoid}.` : base;
+}
+
+/**
+ * A silent WAV of the requested length.
+ *
+ * Hedra's avatar models require driving audio — there is no prompt-only mode,
+ * and the minimum accepted length is 0.5s. The library these clips belong to is
+ * silent by design: eighteen of the nineteen slots are idle and gesture loops
+ * that get played under Anna's own TTS, so anything spoken here would fight it.
+ *
+ * What this establishes and what it does not: the request will be *accepted*,
+ * and the clip will be the right length. Whether a silent track yields a closed,
+ * still mouth — rather than an idling one — has not been observed, because the
+ * account balance is $0.00 and no render has run. Check the first clip before
+ * building the other eighteen.
+ *
+ * 16-bit PCM, mono, 16 kHz: the smallest thing that is unambiguously a WAV.
+ */
+export function silentWav(seconds: number): Uint8Array {
+  const rate = 16_000;
+  // Hedra's floor is 500ms; asking for less is a 422 rather than a short clip.
+  const frames = Math.max(rate / 2, Math.round(Math.max(0, seconds) * rate));
+  const dataBytes = frames * 2;
+  const buffer = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buffer);
+
+  const ascii = (at: number, text: string): void => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(at + i, text.charCodeAt(i));
+  };
+
+  ascii(0, 'RIFF');
+  view.setUint32(4, 36 + dataBytes, true);
+  ascii(8, 'WAVE');
+  ascii(12, 'fmt ');
+  view.setUint32(16, 16, true); // PCM header length
+  view.setUint16(20, 1, true); // format: PCM
+  view.setUint16(22, 1, true); // channels
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true); // byte rate
+  view.setUint16(32, 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+  ascii(36, 'data');
+  view.setUint32(40, dataBytes, true);
+  // The samples themselves are already zero — silence is the absence of writes.
+
+  return new Uint8Array(buffer);
+}
+
+function pick(wanted: string, allowed: readonly string[]): string {
+  return allowed.includes(wanted) ? wanted : allowed[0]!;
+}
+
+function extensionFor(mimeType: string): string {
+  if (mimeType === 'image/png') return '.png';
+  if (mimeType === 'image/webp') return '.webp';
+  return '.jpg';
+}
+
+/** A short stable id for the idempotency key. Not a security primitive. */
+function hash(text: string): string {
+  let value = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    value ^= text.charCodeAt(i);
+    value = Math.imul(value, 0x01000193) >>> 0;
+  }
+  return value.toString(36);
+}
+
+function reasonFrom(view: JobEnvelope): string | null {
+  if (typeof view.error === 'string') return view.error;
+  if (view.error && typeof view.error === 'object' && view.error.message) return view.error.message;
+  return view.outputs?.[0]?.error ?? null;
+}
+
+/**
+ * Turns a failed response into an error worth reading.
+ *
+ * Hedra returns a structured envelope — `{error: {code, message, retryable,
+ * retry_after}}` — and its own `retryable` flag is used in preference to
+ * guessing from the status code. The service knows which of its 400s are worth
+ * repeating and this code does not.
+ */
 async function failure(response: Response, doing: string): Promise<VideoClipError> {
   const text = await response.text().catch(() => '');
-  let detail = text.slice(0, 200);
+  let detail = '';
+  let retryable: boolean | undefined;
+
   try {
-    const parsed = JSON.parse(text) as { error?: string };
-    if (parsed.error) detail = parsed.error;
+    const parsed = JSON.parse(text) as {
+      error?: { message?: string; retryable?: boolean };
+      message?: string;
+    };
+    detail = parsed.error?.message ?? parsed.message ?? '';
+    if (typeof parsed.error?.retryable === 'boolean') retryable = parsed.error.retryable;
   } catch {
-    // Not JSON; the raw text is the best available detail.
+    detail = text.slice(0, 200);
   }
 
   const friendly =
@@ -224,7 +487,9 @@ async function failure(response: Response, doing: string): Promise<VideoClipErro
   return new VideoClipError(detail ? `${friendly} ${detail}` : friendly, {
     status: response.status,
     provider: 'hedra',
-    // A rate limit or a server fault is worth retrying; a bad key is not.
-    retryable: response.status === 429 || response.status >= 500,
+    retryable: retryable ?? (response.status === 429 || response.status >= 500),
   });
 }
+
+/** Re-exported so callers can name a slot without importing two modules. */
+export type { ClipSlotName };

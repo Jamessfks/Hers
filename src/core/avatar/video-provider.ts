@@ -33,6 +33,7 @@
  */
 
 import type { ClipSlotName } from './clips.ts';
+import { createHedraProvider } from './hedra-provider.ts';
 import { createManualProvider } from './manual-provider.ts';
 
 /**
@@ -44,7 +45,7 @@ import { createManualProvider } from './manual-provider.ts';
  * rendered by hand, so collapsing the two would mean the renderer id no longer
  * tells you what code draws the screen.
  */
-export type VideoProviderId = 'manual' | 'runway' | 'luma' | 'kling';
+export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
 
 // ---------------------------------------------------------------------------
 // The interface
@@ -67,6 +68,22 @@ export interface ClipRequest {
   avoid: string;
   /** Requested length. Vendors quantise; the prompt does not depend on the exact value. */
   seconds: number;
+  /**
+   * Driving audio, for the vendors that are audio-driven rather than
+   * prompt-driven.
+   *
+   * Optional because it is meaningless to half the providers here and mandatory
+   * to the other half. The two families are genuinely different machines: Runway
+   * and Luma read a prompt and invent motion, while Hedra and OmniHuman read a
+   * waveform and derive mouth, head and body from it — they have no prompt-only
+   * mode at all.
+   *
+   * Left unset, an audio-driven provider supplies its own silence (see
+   * `silentWav` in hedra-provider.ts), which is the right default for the idle
+   * and gesture clips that make up most of a library. Set, it is how a clip gets
+   * lip-synced to a specific line Anna is about to say.
+   */
+  audio?: { bytes: Uint8Array; mimeType: string };
   signal?: AbortSignal;
 }
 
@@ -292,6 +309,7 @@ export interface VideoProviderOptions {
  */
 const FACTORIES: Record<VideoProviderId, (options: VideoProviderOptions) => VideoClipProvider> = {
   manual: (options) => createManualProvider(options.dropDir ?? ''),
+  hedra: (options) => createHedraProvider({ apiKey: options.apiKey ?? '' }),
   runway: (options) => createRunwayProvider(options.apiKey ?? ''),
   luma: (options) => createLumaProvider(options.apiKey ?? ''),
   kling: (options) => createKlingProvider(options.apiKey ?? ''),
@@ -323,6 +341,13 @@ export const VIDEO_PROVIDER_INFO: ReadonlyArray<{
     label: 'Bring your own clips',
     why: 'Render the nineteen clips yourself, in whichever tool you already pay for, and drop them in a folder. No key, no API, no surprises on a bill.',
     site: null,
+    status: 'wired',
+  },
+  {
+    id: 'hedra',
+    label: 'Hedra',
+    why: 'The only one of these wired up against a real API reference. Audio-driven rather than prompt-driven, renders portrait 9:16 at up to 1080p, and bills by the second of driving audio — so a library of short clips is cheap and a monologue is not.',
+    site: 'https://www.hedra.com',
     status: 'wired',
   },
   {
