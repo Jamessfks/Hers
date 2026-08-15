@@ -10,10 +10,11 @@
  *  - Generation happens **once, at setup**. Nineteen clips pasted into whichever
  *    web UI the user already pays for is an afternoon, not a workflow, and it
  *    needs no key, no billing setup and no trust in this app with a card.
- *  - It is the only way to *look at each clip before accepting it*. Loop
- *    closure either worked or it did not, and a human can see that in one
- *    second and a program cannot see it at all — there is no cheap automatic
- *    check for "does the last frame match the first".
+ *  - It is the only way to *look at each clip before accepting it*. seam.ts now
+ *    measures loop closure automatically, so the "a program cannot see this at
+ *    all" that this bullet used to claim is no longer true — but a number that
+ *    says the frames match is not the same as a person confirming the gesture
+ *    was the one that was asked for.
  *  - It costs nothing here, so the whole submit/poll/download path, the
  *    manifest, the resume logic and the fallback behaviour can be exercised end
  *    to end without spending a cent.
