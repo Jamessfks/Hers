@@ -25,13 +25,16 @@
 
       <!--
         The stage is a well inside the bezel, not the whole panel. A Proto has
-        an opaque enclosure with visible walls and a floor, and nothing of the
-        room inside it; the figure stands in a lit volume. Putting the canvas
-        and the subtitle in their own container is what makes that possible.
+        an opaque enclosure with visible walls, and nothing of the room inside
+        it. The still and the clips are appended here by Hologram at runtime —
+        the markup is empty because the number of video elements is that
+        module's business, not the document's.
+
+        The lit floor that used to be here is gone with the 3D scene. A
+        photograph brings its own background, its own light and its own ground;
+        painting a cyclorama under it produced two floors at two angles.
       -->
       <div id="well">
-        <canvas id="stage"></canvas>
-        <div id="floor" aria-hidden="true"></div>
         <div id="subtitle" aria-live="polite"></div>
       </div>
 

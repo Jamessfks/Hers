@@ -43,64 +43,59 @@ const hologram = new Hologram({
 let config: AnnaConfig | null = null;
 
 // ---------------------------------------------------------------------------
-// Character
+// The photograph
 // ---------------------------------------------------------------------------
 
-async function loadCharacter(path: string): Promise<void> {
-  if (!path) {
-    placeholder = createPlaceholder(stage.scene);
-    frameHeight(stage.camera, placeholder.height);
-    showTrouble('Drop a .vrm character onto this window to give Anna a body.');
+/**
+ * Shows whichever photograph main is holding, and whatever clips exist for it.
+ *
+ * Called at boot and again whenever the library changes, because the two
+ * interesting moments — a photograph being chosen, and the first clip finishing
+ * — both happen while the window is already open. Reloading the app to see your
+ * own avatar appear would be a strange thing to ask.
+ */
+async function showAvatar(): Promise<void> {
+  const bytes = await window.anna.getPortrait();
+  if (!bytes) {
+    hologram.setPortrait(null);
+    showTrouble('Drop a photo onto this window to give Anna a face.');
     return;
   }
-  try {
-    window.anna.report('character-loading', { bytes: path.length });
-    const vrm = await loadVrm(path);
-    stage.scene.add(vrm.scene);
-    // World matrices are stale until the scene is updated, and frameFullBody
-    // measures the head's world position — without this it can measure zero and
-    // put the camera inside her.
-    vrm.scene.updateWorldMatrix(true, true);
-    frameFullBody(stage.camera, vrm);
-    body = new Body(vrm);
-    body.setViewer(stage.camera.position);
-    body.setExpression('warm', 0.6);
-    placeholder?.dispose();
-    placeholder = null;
-    hideTrouble();
-    window.anna.report('character-ready', {
-      meta: vrm.meta?.metaVersion ?? '?',
-      cameraZ: Math.round(stage.camera.position.z * 100) / 100,
-    });
-  } catch (error) {
-    placeholder = createPlaceholder(stage.scene);
-    frameHeight(stage.camera, placeholder.height);
-    const message = error instanceof Error ? error.message : 'That character would not load.';
-    window.anna.report('error-character', { message: message.slice(0, 200) });
-    showTrouble(message);
-  }
+
+  hologram.setPortrait(URL.createObjectURL(new Blob([bytes as BlobPart])));
+  hideTrouble();
+  await applyLibrary(await window.anna.libraryStatus());
 }
 
-// Dropping a .vrm on the window is the whole setup flow for the avatar.
+async function applyLibrary(view: LibraryView): Promise<void> {
+  // The cache has to be dropped before idle is re-checked: this module records
+  // which slots are missing so it stops asking, and the whole point of this
+  // call is that one of them may have just stopped being missing.
+  hologram.invalidate();
+  await hologram.setIdle(view.ready.includes('idle') ? 'idle' : null);
+  document.body.dataset['alive'] = String(view.alive);
+}
+
+/*
+ * Dropping a photo on the window is the whole setup flow for the avatar.
+ *
+ * The extension is not checked here. It was, and the first real photograph
+ * handed to this app is named `.png` and contains JPEG — main sniffs the bytes
+ * and is the only thing entitled to an opinion.
+ */
 window.addEventListener('dragover', (event) => event.preventDefault());
 window.addEventListener('drop', async (event) => {
   event.preventDefault();
   const file = event.dataTransfer?.files?.[0];
-  if (!file || !file.name.toLowerCase().endsWith('.vrm')) return;
+  if (!file) return;
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-
-  // Show it immediately from a blob URL, then hand the bytes to main to be
-  // stored. A blob URL cannot be persisted — it dies with the window — so the
-  // config records the id main gives back, not the URL.
-  await loadCharacter(URL.createObjectURL(new Blob([bytes as BlobPart])));
-
-  const saved = await window.anna.saveCharacter(file.name, bytes);
+  const saved = await window.anna.setPortrait(new Uint8Array(await file.arrayBuffer()));
   if ('error' in saved) {
-    showTrouble(`She is wearing that for now, but I could not save it: ${saved.error}`);
+    showTrouble(saved.error);
     return;
   }
-  await window.anna.setConfig({ avatar: { modelPath: saved.id } });
+  await showAvatar();
+  if (saved.note) showTrouble(saved.note);
 });
 
 // ---------------------------------------------------------------------------
@@ -115,20 +110,22 @@ function perform(event: PerformanceEvent): void {
       showSubtitle(event.text);
       break;
     case 'gesture':
-      body?.playGesture(event.name, event.intensity ?? 1);
+      // Intensity is dropped. A generated clip has one performance baked into
+      // it; there is no dial. Pretending otherwise by, say, scaling playback
+      // rate would just make her move at the wrong speed.
+      void hologram.play(event.name);
       break;
     case 'expression':
-      body?.setExpression(event.name, event.weight ?? 1);
-      break;
     case 'gaze':
-      body?.setGaze(event.target);
+      // Both were rig controls. A photograph looks where it looks, and its
+      // expression is whichever clip is playing.
       break;
     case 'turn-end':
       scheduleSubtitleFade(2600);
       break;
     case 'barge-in':
       player.stop();
-      body?.silence();
+      hologram.silence();
       scheduleSubtitleFade(0);
       break;
   }
@@ -169,9 +166,6 @@ function hideTrouble(): void {
  * complexity now that she lives in a bounded panel.
  */
 
-inputEl.addEventListener('focus', () => body?.setAttention('listening'));
-inputEl.addEventListener('input', () => body?.setAttention('listening'));
-
 inputEl.addEventListener('keydown', async (event) => {
   if (event.key !== 'Enter') return;
   const text = inputEl.value.trim();
@@ -181,24 +175,15 @@ inputEl.addEventListener('keydown', async (event) => {
   window.anna.sense({ kind: 'user-typed', text, at: Date.now() });
 });
 
-// ---------------------------------------------------------------------------
-// Frame loop
-// ---------------------------------------------------------------------------
-
-let previous = performance.now();
-
-function frame(now: number): void {
-  const delta = Math.min(0.1, (now - previous) / 1000);
-  previous = now;
-
-  const energy = player.energy();
-  body?.setSpeechEnergy(energy, player.viseme());
-  body?.update(delta);
-  placeholder?.update(delta, energy);
-
-  stage.renderer.render(stage.scene, stage.camera);
-  requestAnimationFrame(frame);
-}
+/*
+ * There is no frame loop any more.
+ *
+ * The VRM renderer ran `requestAnimationFrame` forever: it composited an idle
+ * layer, a gesture layer and a speech layer into a skeleton, then drew a WebGL
+ * frame, sixty times a second, whether or not anything had changed. A video
+ * element decodes itself. The panel now costs nothing when she is still, which
+ * for something left running all day is the difference that matters.
+ */
 
 // ---------------------------------------------------------------------------
 // The two buttons
@@ -225,7 +210,7 @@ document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click',
   // Fade first, hide once it finishes, so she leaves rather than blinking out.
   appEl.dataset['leaving'] = 'true';
   player.stop();
-  body?.silence();
+  hologram.silence();
   window.setTimeout(() => window.anna.hide(), LEAVE_MS);
 });
 
@@ -242,10 +227,6 @@ async function boot(): Promise<void> {
   });
   window.anna.onState((state) => {
     document.body.dataset['state'] = state;
-    // This is the line that makes her react to *you* rather than only to
-    // herself: listening, thinking and speaking each carry their own posture,
-    // gaze ratio and backchannel behaviour.
-    body?.setAttention(state);
   });
   window.anna.onTrouble(showTrouble);
   window.anna.onDemoSaid((text) => {
@@ -253,7 +234,6 @@ async function boot(): Promise<void> {
     // of the conversation, not just her side of it.
     inputEl.value = text;
     composerEl.dataset['visible'] = 'true';
-    body?.setAttention('listening');
     window.setTimeout(() => {
       inputEl.value = '';
     }, 2000);
@@ -275,11 +255,8 @@ async function boot(): Promise<void> {
     else if (config?.senses.camera) void vision.start();
   });
 
-  // Always ask: main answers with the chosen character, or with the bundled
-  // CC0 default, or with nothing. The renderer has no filesystem access, so
-  // bytes plus a blob URL is the only route the loader can take.
-  const stored = await window.anna.loadCharacter();
-  await loadCharacter(stored ? URL.createObjectURL(new Blob([stored as BlobPart])) : '');
+  window.anna.onLibrary((view) => void applyLibrary(view));
+  await showAvatar();
 
   const microphone = new Microphone({
     onUtterance: (audio, mimeType) =>
@@ -332,20 +309,19 @@ async function boot(): Promise<void> {
   });
 
   /*
-   * Start drawing BEFORE the sensors, and never await them.
+   * The sensors start last, and are never awaited.
    *
-   * This ordering is not a preference, it is a bug fix. `getUserMedia` blocks
-   * while macOS shows its permission prompt — and if the user never answers,
-   * or the prompt is suppressed, the promise simply never settles. With the
-   * render loop behind that await, Anna's panel drew its frame and then stayed
-   * completely empty: no avatar, no placeholder, nothing, with no error to
-   * explain it. It only appeared once the camera was switched on, which is
-   * exactly when it is hardest to attribute.
+   * This ordering is not a preference, it is a bug fix that outlived the code it
+   * was written for. `getUserMedia` blocks while macOS shows its permission
+   * prompt — and if the user never answers, or the prompt is suppressed, the
+   * promise simply never settles. With the avatar behind that await, Anna's
+   * panel drew its frame and then stayed completely empty, with no error to
+   * explain it, and only filled in once the camera was switched on: exactly when
+   * it is hardest to attribute.
    *
-   * The body has nothing to do with the sensors. It should be on screen the
-   * instant it can be.
+   * Her body has nothing to do with the sensors. It should be on screen the
+   * instant it can be, which is why `showAvatar()` is above and this is here.
    */
-  requestAnimationFrame(frame);
   void applySenses(config);
 }
 
