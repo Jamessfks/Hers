@@ -51,6 +51,22 @@ import {
   type VideoProviderView,
 } from '../shared/protocol.ts';
 
+/**
+ * The app is called Anna in development too.
+ *
+ * Unpackaged, Electron names the app after the entry point's package.json — and
+ * `out/main` has none, so it falls back to "Electron". That name decides two
+ * things that must match the packaged build or nothing works: `userData`
+ * (`~/Library/Application Support/<name>`), and the Keychain item `safeStorage`
+ * encrypts against (`<name> Safe Storage`).
+ *
+ * With them mismatched, a development run has its own empty settings *and*
+ * cannot decrypt a key saved by the real app — which reads as "my keys
+ * vanished" rather than as two apps with the same icon. Must be called before
+ * `whenReady`, because the first `getPath('userData')` fixes it.
+ */
+app.setName('Anna');
+
 /** How often the cheap sensors are read. */
 const ACTIVITY_POLL_MS = 20_000;
 /** How often the calendar is read. Expensive; the trigger fires at 12 minutes. */
