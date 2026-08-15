@@ -200,7 +200,7 @@ test('omnihuman is clamped to the only aspect ratio it accepts, and gets no dura
   assert.equal(input['duration_ms'], undefined, 'omnihuman has no duration field');
 });
 
-test('character-3 keeps portrait and pins the length', async () => {
+test('character-3 pins the length', async () => {
   const { fetch, calls } = transport([
     ['/files', () => ({ status: 201, json: uploaded })],
     ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
@@ -208,8 +208,61 @@ test('character-3 keeps portrait and pins the length', async () => {
   await createHedraProvider({ apiKey: 'k:s', fetch }).submit(clipRequest({ seconds: 3.5 }));
 
   const input = (calls.at(-1)!.body as { input: Record<string, unknown> }).input;
-  assert.equal(input['aspect_ratio'], '9:16');
   assert.equal(input['duration_ms'], 3500);
+});
+
+test('the output ratio is taken from the photograph, not from a default', async () => {
+  const shapes: Array<[Uint8Array, string]> = [
+    [jpegHeader(1024, 1024), '1:1'],
+    [jpegHeader(1080, 1920), '9:16'],
+    [jpegHeader(1920, 1080), '16:9'],
+  ];
+
+  for (const [image, expected] of shapes) {
+    const { fetch, calls } = transport([
+      ['/files', () => ({ status: 201, json: uploaded })],
+      ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
+    ]);
+    await createHedraProvider({ apiKey: 'k:s', fetch }).submit(clipRequest({ image }));
+
+    const input = (calls.at(-1)!.body as { input: Record<string, string> }).input;
+    assert.equal(input['aspect_ratio'], expected, `${expected} source`);
+  }
+});
+
+test('an explicit ratio still wins over the photograph', async () => {
+  const { fetch, calls } = transport([
+    ['/files', () => ({ status: 201, json: uploaded })],
+    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
+  ]);
+  await createHedraProvider({ apiKey: 'k:s', fetch, aspectRatio: '4:3' }).submit(
+    clipRequest({ image: jpegHeader(1024, 1024) }),
+  );
+
+  const input = (calls.at(-1)!.body as { input: Record<string, string> }).input;
+  assert.equal(input['aspect_ratio'], '4:3');
+});
+
+test('a photograph named .png but holding JPEG bytes is uploaded as JPEG', async () => {
+  // Not hypothetical: this is exactly the file Anna's avatar is built from.
+  let uploadedType: string | null = null;
+  const { fetch } = transport([
+    ['/files', () => ({ status: 201, json: uploaded })],
+    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
+  ]);
+  const spy = (async (url: string, init: RequestInit = {}) => {
+    if (String(url).endsWith('/files') && init.body instanceof FormData) {
+      const file = init.body.get('file');
+      if (file instanceof File && file.name.startsWith('source')) uploadedType = file.type;
+    }
+    return fetch(url as never, init as never);
+  }) as unknown as typeof globalThis.fetch;
+
+  await createHedraProvider({ apiKey: 'k:s', fetch: spy }).submit(
+    clipRequest({ image: jpegHeader(1024, 1024), imageMimeType: 'image/png' }),
+  );
+
+  assert.equal(uploadedType, 'image/jpeg', 'the bytes decide, not the caller');
 });
 
 test('supplied audio is used instead of generated silence', async () => {

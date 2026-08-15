@@ -36,6 +36,7 @@
  */
 
 import type { ClipSlotName } from './clips.ts';
+import { nearestAspectRatio, sniffImage } from './image-info.ts';
 import {
   VideoClipError,
   type ClipCostModel,
@@ -158,8 +159,26 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
   // Clamped rather than passed through: an unsupported enum value is a 422 five
   // seconds after the user pressed the button, and the honest fallback — the
   // model's first advertised ratio — at least renders.
-  const aspectRatio = pick(options.aspectRatio ?? '9:16', capability.aspectRatios);
+  const configuredRatio = options.aspectRatio ? pick(options.aspectRatio, capability.aspectRatios) : null;
   const resolution = pick(options.resolution ?? '720p', capability.resolutions);
+
+  /**
+   * The output shape, taken from the photograph unless someone insisted.
+   *
+   * Defaulting to a fixed ratio is the wrong instinct here even though the panel
+   * is portrait. `aspect_ratio` decides the frame the clip is generated into,
+   * and a frame that is not the photograph's own means the first frame is a crop
+   * or a pad of the source rather than the source — which is precisely the
+   * property seam.ts measures and prompts.ts is built around. The first real
+   * photograph handed to this app is 1024x1024; a 9:16 default would have cost
+   * the seam on all nineteen clips.
+   */
+  function ratioFor(image: Uint8Array): string {
+    if (configuredRatio) return configuredRatio;
+    const info = sniffImage(image);
+    if (!info) return pick('1:1', capability.aspectRatios);
+    return nearestAspectRatio(info.width, info.height, capability.aspectRatios);
+  }
 
   // The spec names `Authorization: Key <key_id>:<secret>` as the primary scheme.
   // `X-API-Key` and `Bearer` are also accepted live, but the documented one is
@@ -209,15 +228,22 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
         mimeType: 'audio/wav',
       };
 
+      // The declared MIME type is a hint, not evidence: the first photograph
+      // this app was given is named `.png` and contains JPEG. Hedra sniffs the
+      // bytes anyway, so this is about the local half of the system agreeing
+      // with the remote one.
+      const info = sniffImage(request.image);
+      const imageType = info?.mimeType ?? request.imageMimeType;
+
       const [startImage, audio] = await Promise.all([
-        upload(request.image, 'source' + extensionFor(request.imageMimeType), request.imageMimeType),
+        upload(request.image, 'source' + extensionFor(imageType), imageType),
         upload(driving.bytes, 'drive.wav', driving.mimeType),
       ]);
 
       const input: Record<string, unknown> = {
         start_image: { source: 'url', url: startImage },
         audio: { source: 'url', url: audio },
-        aspect_ratio: aspectRatio,
+        aspect_ratio: ratioFor(request.image),
         resolution,
       };
       if (capability.takesPrompt) input['prompt'] = promptFor(request);
