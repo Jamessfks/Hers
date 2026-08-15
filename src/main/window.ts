@@ -54,6 +54,19 @@ export interface AnnaWindow {
   window: BrowserWindow;
   /** Let clicks through everywhere except the given rectangles. */
   setInteractiveRegion(hit: boolean): void;
+  /**
+   * Resize the panel to a height the renderer measured.
+   *
+   * The panel's height is not a design constant any more — it follows the
+   * photograph. A square portrait in a fixed 420x680 frame is 40% black bars,
+   * which reads as a video that failed to load rather than as a considered
+   * frame, and cropping to fill instead would cut the top of her head off.
+   *
+   * The bottom-right corner is held fixed while the height changes, so the panel
+   * grows upward from where the user parked it rather than walking down the
+   * screen every time a photograph is swapped.
+   */
+  fitHeight(height: number): void;
 }
 
 export function createAnnaWindow(): AnnaWindow {
@@ -123,6 +136,29 @@ export function createAnnaWindow(): AnnaWindow {
      */
     setInteractiveRegion() {
       // Intentionally empty. See the note on WIDTH.
+    },
+
+    fitHeight(height: number) {
+      if (window.isDestroyed()) return;
+      // Clamped hard. This number is computed in the renderer from CSS and an
+      // image's dimensions, and a renderer bug here would otherwise be a window
+      // taller than the display or one pixel high.
+      const wanted = Math.round(height);
+      if (!Number.isFinite(wanted)) return;
+      const target = Math.max(320, Math.min(workArea.height - MARGIN * 2, wanted));
+
+      const bounds = window.getBounds();
+      if (Math.abs(bounds.height - target) < 2) return;
+
+      // Hold the bottom edge: the panel grows upward out of the corner it sits
+      // in, rather than pushing its own bottom off the screen.
+      const bottom = bounds.y + bounds.height;
+      window.setBounds({
+        x: bounds.x,
+        y: Math.max(workArea.y, bottom - target),
+        width: bounds.width,
+        height: target,
+      });
     },
   };
 }

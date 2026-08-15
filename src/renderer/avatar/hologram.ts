@@ -90,10 +90,29 @@ export class Hologram {
     return this.#idle !== null;
   }
 
-  /** Sets the photograph. Everything else is drawn on top of this. */
-  setPortrait(url: string | null): void {
-    if (url) this.#still.src = url;
+  /**
+   * The photograph's pixel dimensions, once it has decoded. Null before that.
+   *
+   * Exposed because the panel is sized to fit her rather than the other way
+   * round, and this is the only place those numbers exist in the renderer.
+   */
+  get shape(): { width: number; height: number } | null {
+    const { naturalWidth: width, naturalHeight: height } = this.#still;
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+
+  /**
+   * Sets the photograph. Everything else is drawn on top of this.
+   *
+   * Resolves once the image has actually decoded, so a caller that needs
+   * {@link shape} — to size the window, say — is not reading zeros.
+   */
+  async setPortrait(url: string | null): Promise<void> {
     this.#still.hidden = !url;
+    if (!url) return;
+    this.#still.src = url;
+    if (this.#still.complete) return;
+    await once(this.#still, 'load');
   }
 
   /**

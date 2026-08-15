@@ -57,14 +57,32 @@ let config: AnnaConfig | null = null;
 async function showAvatar(): Promise<void> {
   const bytes = await window.anna.getPortrait();
   if (!bytes) {
-    hologram.setPortrait(null);
+    void hologram.setPortrait(null);
     showTrouble('Drop a photo onto this window to give Anna a face.');
     return;
   }
 
-  hologram.setPortrait(URL.createObjectURL(new Blob([bytes as BlobPart])));
+  await hologram.setPortrait(URL.createObjectURL(new Blob([bytes as BlobPart])));
   hideTrouble();
+  await fitPanelTo(hologram.shape);
   await applyLibrary(await window.anna.libraryStatus());
+}
+
+/**
+ * Sizes the panel so the well is exactly the photograph's shape.
+ *
+ * Measured rather than calculated: the chrome around the well is bezel padding,
+ * a grip and a composer, all of which live in CSS and any of which can change.
+ * Measuring `#app` after the aspect is applied means this stays correct when
+ * the stylesheet does not.
+ */
+async function fitPanelTo(shape: { width: number; height: number } | null): Promise<void> {
+  if (!shape || shape.height === 0) return;
+  wellEl.style.aspectRatio = `${shape.width} / ${shape.height}`;
+
+  // One frame, so layout has actually run against the new aspect ratio.
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  window.anna.fitHeight(appEl.getBoundingClientRect().height);
 }
 
 async function applyLibrary(view: LibraryView): Promise<void> {

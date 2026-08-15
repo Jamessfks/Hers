@@ -55,7 +55,7 @@ async function main(): Promise<void> {
 
   const config = new Config();
   const secrets = new Secrets();
-  const { window, setInteractiveRegion } = createAnnaWindow();
+  const { window, setInteractiveRegion, fitHeight } = createAnnaWindow();
 
   const situation = new SituationTracker();
   const attention = new Attention(config.get().presence);
@@ -522,6 +522,8 @@ async function main(): Promise<void> {
       return { error: error instanceof Error ? error.message : 'Could not read that file.' };
     }
   });
+
+  ipcMain.on(IPC.windowFit, (_event, height: number) => fitHeight(height));
 
   ipcMain.handle(IPC.portraitGet, async () => portraits.portraitBytes());
   ipcMain.handle(IPC.clipGet, async (_event, slot: ClipSlotName) => portraits.clipBytes(slot));
