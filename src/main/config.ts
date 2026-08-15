@@ -24,7 +24,10 @@ export const DEFAULT_CONFIG: AnnaConfig = {
   // accented speech, but a default that demands a third signup before she can
   // hear you is a default that leaves the microphone switched off forever.
   stt: { provider: 'apple' },
-  avatar: { renderer: 'vrm', modelPath: '' },
+  // `manual` by default because it is the only provider that needs no account
+  // and cannot produce a bill. Choosing Hedra is a decision the user makes on
+  // the settings screen, next to what it costs.
+  avatar: { renderer: 'photo', portrait: '', videoProvider: 'manual' },
   senses: {
     // Camera and microphone start off. A companion that switches on your camera
     // the first time you launch her has already lost the argument.
