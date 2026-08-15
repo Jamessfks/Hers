@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  BLOCK_THRESHOLD,
   CHANGED_FRACTION_THRESHOLD,
   FrameSizeMismatch,
   SEAM_THRESHOLD,
@@ -54,18 +55,20 @@ test('a subject that moved is caught even though most of the frame matches', () 
   const drifted = withPatch(source, 40, 30, 20, 50, 200);
   const measurement = measureSeam(source, drifted);
   assert.equal(closesCleanly(measurement), false, 'a moved subject must not pass');
-  assert.ok(measurement.worstDelta > 0.5, 'the 99th percentile should see the moved region');
+  assert.ok(measurement.worstBlockDelta > 0.3, 'the block containing the subject should light up');
   assert.match(describeSeam(measurement), /does not close/);
 });
 
-test('mean alone would have accepted that clip', () => {
-  // 10% of the frame moving hard is a visible pop, but averaged over the whole
-  // frame the mean stays low — which is why changedFraction is also a gate.
+test('a small drifted region is caught even though the frame mean is fine', () => {
+  // 1% of the frame moving hard is a visible pop — a face is well under 1% of a
+  // full-body shot. The frame mean stays below threshold and a 99th percentile
+  // sits in untouched background, which is why this is measured in blocks.
   const source = flat(100, 100, 40, 40, 40);
   const drifted = withPatch(source, 45, 45, 10, 10, 255);
   const measurement = measureSeam(source, drifted);
-  assert.ok(measurement.meanDelta < SEAM_THRESHOLD, 'mean is deceptively low');
-  assert.ok(measurement.worstDelta > 0.5, 'but the worst pixels are far off');
+  assert.ok(measurement.meanDelta < SEAM_THRESHOLD, 'the frame mean is deceptively low');
+  assert.ok(measurement.worstBlockDelta > BLOCK_THRESHOLD, 'but its block is plainly wrong');
+  assert.equal(closesCleanly(measurement), false, 'and so the clip is rejected');
 });
 
 test('a uniform exposure shift is reported as levellable, not as movement', () => {
