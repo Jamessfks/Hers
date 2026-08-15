@@ -297,11 +297,30 @@ export function attachJob(
   return withEntry(library, slot, { job }, now);
 }
 
+/**
+ * The seam verdict for a finished clip.
+ *
+ * Carried in rather than computed here, because measuring it needs a video
+ * decoder and `core` must stay runnable without one.
+ */
+export interface SeamVerdict {
+  closesCleanly: boolean;
+  /** Human-readable, for the setup screen and the diagnostics log. */
+  summary: string;
+  /**
+   * Where to cut, in milliseconds, if a better point than the nominal end was
+   * found by searching the hold.
+   */
+  cutAtMs?: number;
+}
+
 export interface CompletedClip {
   /** File name inside `clips/`, already written to disk. */
   file: string;
   durationMs: number;
   costUsd?: number;
+  /** Absent when the clip was accepted without being measured. */
+  seam?: SeamVerdict;
 }
 
 export function completeClip(
@@ -311,13 +330,48 @@ export function completeClip(
   now = Date.now(),
 ): ClipLibrary {
   const entry = library.clips[slot];
+
+  /*
+   * A clip is only ready if it actually closes back onto the source photo.
+   *
+   * This used to accept bytes on the strength of a prompt that *asked* the
+   * model to start and end on the source pose. Vendors denoise and re-encode
+   * the init image, so that is a wish rather than a guarantee — and because
+   * every clip anchors to the same photo, a drifted last frame is not one seam
+   * in one place but a pop at every entry and exit, repeating forever on the
+   * idle loop.
+   *
+   * The measurement is taken by the caller (it needs a video decoder; see
+   * renderer/avatar/clip-frames.ts) and handed in. A clip that arrives without
+   * one is recorded as `unverified` rather than `ready`: the player can still
+   * fall back to it, but nothing claims it is seamless.
+   */
+  if (clip.seam && !clip.seam.closesCleanly) {
+    return withEntry(
+      library,
+      slot,
+      {
+        status: 'failed',
+        file: clip.file,
+        durationMs: clip.durationMs,
+        job: null,
+        error: `Clip does not return to the source pose — ${clip.seam.summary}`,
+        spentUsd: entry.spentUsd + (clip.costUsd ?? 0),
+      },
+      now,
+    );
+  }
+
   return withEntry(
     library,
     slot,
     {
       status: 'ready',
       file: clip.file,
-      durationMs: clip.durationMs,
+      // A measured cut point beats the nominal one: the hold keeps breathing,
+      // so a fixed timestamp lands at an arbitrary phase of that movement.
+      durationMs: clip.seam?.cutAtMs ?? clip.durationMs,
+      verified: clip.seam ? true : false,
       job: null,
       error: null,
       spentUsd: entry.spentUsd + (clip.costUsd ?? 0),
