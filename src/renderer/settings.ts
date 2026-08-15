@@ -54,6 +54,8 @@ interface ProviderEntry {
   url: string;
   why?: string;
   keyless?: boolean;
+  /** False for an adapter that would refuse rather than call an unverified endpoint. */
+  wired?: boolean;
 }
 
 /**
@@ -193,6 +195,22 @@ function keyGroup(kind: Kind): void {
       status.textContent = 'Ready. No key needed, and nothing is sent anywhere.';
       return;
     }
+
+    /*
+     * An adapter that is not wired up gets no key field either.
+     *
+     * The check would run, the adapter would refuse, and the key would not be
+     * stored — so nothing breaks. But offering "Check & save" next to a box is
+     * an invitation to go and find a key for a provider this build cannot call,
+     * and the person who accepts that invitation has been wasted, not warned.
+     */
+    if (chosen?.wired === false) {
+      for (const control of [input, button, reveal, forget]) control.hidden = true;
+      status.dataset['tone'] = 'bad';
+      status.textContent = `${chosen.label.replace(' (not wired up)', '')} is not wired up in this build yet.`;
+      return;
+    }
+
     for (const control of [input, button, reveal]) control.hidden = false;
 
     const stored = await api.keyStatus();
@@ -935,6 +953,7 @@ async function boot(): Promise<void> {
     url: provider.site ?? '',
     why: provider.why,
     keyless: provider.keyless,
+    wired: provider.wired,
   }));
 
   for (const kind of ['llm', 'tts', 'stt', 'video'] as const) keyGroup(kind);
