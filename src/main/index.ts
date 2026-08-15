@@ -7,9 +7,13 @@
  * the camera and microphone heard. It cannot reach a key or the disk.
  */
 
-import { BrowserWindow, Menu, app, globalShortcut, ipcMain } from 'electron';
-import { basename, join } from 'node:path';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { BrowserWindow, Menu, app, dialog, globalShortcut, ipcMain } from 'electron';
+import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+
+import { CLIP_SLOT_NAMES, type ClipSlotName } from '../core/avatar/clips.ts';
+import { ClipLibraryStore } from '../core/avatar/library-store.ts';
+import { PortraitLibrary } from './avatar/portrait.ts';
 
 import { Attention, SituationTracker } from '../core/senses/attention.ts';
 import { Companion } from '../core/orchestrator/companion.ts';
@@ -35,7 +39,7 @@ import { createSayTts } from './demo/mock-tts.ts';
 import { createTray } from './tray.ts';
 import { registerSettingsHandlers } from './settings-ipc.ts';
 import { readActivity, readNextEvent } from './senses/macos.ts';
-import { IPC, type SenseEvent } from '../shared/protocol.ts';
+import { IPC, type LibraryView, type SenseEvent } from '../shared/protocol.ts';
 
 /** How often the cheap sensors are read. */
 const ACTIVITY_POLL_MS = 20_000;
@@ -461,58 +465,85 @@ async function main(): Promise<void> {
   }
 
   /**
-   * Character storage.
+   * The photograph, and the clips made from it.
    *
    * The renderer gets a dropped file as a Blob and can only make a `blob:` URL
    * from it, and a blob URL dies with the window — so persisting one in config
-   * means the character silently vanishes on the next launch. Main copies the
-   * bytes into the app's data directory and hands them back on request, which
-   * keeps the renderer off the filesystem and keeps the character across
-   * restarts.
+   * means the avatar silently vanishes on the next launch. Main stores the bytes
+   * under their own hash and hands them back on request, which keeps the
+   * renderer off the filesystem and keeps her across restarts.
    */
-  ipcMain.handle(IPC.characterSave, async (_event, name: string, bytes: Uint8Array) => {
+  const portraits = new PortraitLibrary({
+    store: new ClipLibraryStore({ root: join(app.getPath('userData'), 'libraries') }),
+    providerId: config.get().avatar.videoProvider,
+    apiKey: () => secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
+  });
+
+  portraits.on('changed', (view: LibraryView) => send(IPC.libraryChanged, view));
+  portraits.on('trouble', (message: string) => send(IPC.trouble, message));
+
+  void portraits.resume(config.get().avatar.portrait).then((library: unknown) => {
+    diag.note('portrait-resumed', { found: Boolean(library), hash: config.get().avatar.portrait });
+  });
+
+  ipcMain.handle(IPC.portraitSet, async (_event, bytes: Uint8Array) => {
+    const result = await portraits.adopt(new Uint8Array(bytes));
+    if (!result.ok) {
+      diag.note('portrait-rejected', { why: result.reason });
+      return { error: result.reason };
+    }
+    config.update({ avatar: { portrait: result.hash } });
+    diag.note('portrait-adopted', {
+      hash: result.hash.slice(0, 16),
+      size: `${result.info.width}x${result.info.height}`,
+      type: result.info.mimeType,
+    });
+    return { hash: result.hash, ...(result.note !== undefined && { note: result.note }) };
+  });
+
+  ipcMain.handle(IPC.portraitPick, async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Choose a photograph of Anna',
+      // Every clip is generated from this one frame, so the message says what
+      // the choice actually commits to rather than just "Open".
+      buttonLabel: 'Use this photo',
+      properties: ['openFile'],
+      filters: [{ name: 'Photographs', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+    });
+    if (picked.canceled || !picked.filePaths[0]) return null;
+
     try {
-      // Never trust a filename from a drag-and-drop; it is attacker-influenced.
-      const safe = `${basename(name).replace(/[^a-zA-Z0-9._-]/g, '_').slice(-64)}`;
-      const id = safe.toLowerCase().endsWith('.vrm') ? safe : `${safe}.vrm`;
-      await mkdir(charactersDir, { recursive: true });
-      await writeFile(join(charactersDir, id), bytes);
-      return { id };
+      const bytes = new Uint8Array(await readFile(picked.filePaths[0]));
+      const result = await portraits.adopt(bytes);
+      if (!result.ok) return { error: result.reason };
+      config.update({ avatar: { portrait: result.hash } });
+      return { hash: result.hash, ...(result.note !== undefined && { note: result.note }) };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Could not save that character.' };
+      return { error: error instanceof Error ? error.message : 'Could not read that file.' };
     }
   });
 
-  /**
-   * Hand the renderer the character bytes.
-   *
-   * Falls back to the bundled default when the user has not chosen one. The
-   * default is a CC0 VRoid sample — see scripts/fetch-character.mjs for why
-   * that licence and no other — and it is what makes the first run show a
-   * person rather than a placeholder. If it is absent, because the build-time
-   * fetch was skipped or offline, the renderer draws the stand-in figure.
-   */
-  ipcMain.handle(IPC.characterLoad, async () => {
-    const id = config.get().avatar.modelPath;
-    const candidates = id
-      ? [join(charactersDir, basename(id)), ...defaultCharacterPaths()]
-      : defaultCharacterPaths();
+  ipcMain.handle(IPC.portraitGet, async () => portraits.portraitBytes());
+  ipcMain.handle(IPC.clipGet, async (_event, slot: ClipSlotName) => portraits.clipBytes(slot));
+  ipcMain.handle(IPC.libraryStatus, () => portraits.view());
 
-    for (const path of candidates) {
-      try {
-        const bytes = await readFile(path);
-        diag.note('character-loaded', { path, bytes: bytes.length });
-        // Returned as a plain Uint8Array rather than a Node Buffer: a Buffer
-        // survives structured clone, but the renderer then receives something
-        // that is not quite the array it expects, and 15MB is large enough
-        // that being sloppy about the copy is worth avoiding.
-        return new Uint8Array(bytes);
-      } catch (error) {
-        diag.note('character-miss', { path, why: String(error).slice(0, 80) });
-      }
+  /**
+   * Render clips. This is the one handler in the app that spends money.
+   *
+   * The ceiling is clamped rather than trusted: the renderer asks for a number,
+   * and a renderer bug that asks for a thousand should cost one clip, not a
+   * thousand. `libraryBuild` is also the only path here that can take minutes,
+   * so it reports through `libraryChanged` instead of making the caller wait.
+   */
+  ipcMain.handle(IPC.libraryBuild, async (_event, max: unknown) => {
+    const ceiling = Math.max(1, Math.min(CLIP_SLOT_NAMES.length, Number(max) || 1));
+    try {
+      return await portraits.build(ceiling);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'That render did not start.';
+      send(IPC.trouble, message);
+      return portraits.view();
     }
-    diag.note('character-none', { candidates });
-    return null;
   });
 
   // -- Settings window and menu bar ----------------------------------------

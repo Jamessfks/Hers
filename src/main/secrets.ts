@@ -30,8 +30,13 @@ export type SecretName =
   | 'tts.hume'
   | 'stt.deepgram'
   | 'stt.openai'
-  | 'avatar.heygen'
-  | 'avatar.tavus';
+  // The streaming-avatar keys are gone with the streaming avatars: Hedra's
+  // realtime service answers 410, and nothing here talks to HeyGen or Tavus.
+  // What replaced them renders a clip library offline, once, from a photograph.
+  | 'video.hedra'
+  | 'video.runway'
+  | 'video.luma'
+  | 'video.kling';
 
 interface Vault {
   version: 1;

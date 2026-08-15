@@ -215,28 +215,15 @@ export function registerSettingsHandlers(deps: SettingsDeps): void {
     deps.onChanged();
   });
 
-  // -- character -----------------------------------------------------------
+  /*
+   * The character picker used to live here.
+   *
+   * It copied a .vrm into the app's data directory. Both halves of that are
+   * gone: there is no VRM any more, and the photograph that replaced it is
+   * picked in main/index.ts where the clip library that owns it lives — a
+   * photograph is not a file the app stores, it is the identity of a library.
+   */
 
-  ipcMain.handle(IPC.characterPick, async () => {
-    const parent = deps.parentWindow();
-    const result = await (parent
-      ? dialog.showOpenDialog(parent, PICK_OPTIONS)
-      : dialog.showOpenDialog(PICK_OPTIONS));
-
-    const source = result.filePaths[0];
-    if (result.canceled || !source) return null;
-
-    try {
-      // Copy rather than reference. A character living in ~/Downloads is one
-      // tidy-up away from Anna losing her body on next launch.
-      const id = basename(source).replace(/[^a-zA-Z0-9._-]/g, '_').slice(-64);
-      await mkdir(deps.charactersDir, { recursive: true });
-      await copyFile(source, join(deps.charactersDir, id));
-      return { id };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Could not copy that file.' };
-    }
-  });
 
   // -- permissions ---------------------------------------------------------
 
