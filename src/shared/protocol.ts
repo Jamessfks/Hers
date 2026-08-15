@@ -181,7 +181,20 @@ export interface AnnaConfig {
   };
   tts: { provider: TtsProviderId; voiceId: string };
   stt: { provider: SttProviderId };
-  avatar: { renderer: AvatarRendererId; modelPath: string };
+  avatar: {
+    renderer: AvatarRendererId;
+    /**
+     * Full sha-256 of the source photograph, or '' when none has been chosen.
+     *
+     * A hash rather than a path because the hash *is* the identity of the clip
+     * library: it names the directory the clips live in, and a different
+     * photograph is therefore a different library rather than a library that has
+     * quietly gone stale. See core/avatar/library-store.ts.
+     */
+    portrait: string;
+    /** Who renders the clips. `manual` needs no key and no account. */
+    videoProvider: VideoProviderId;
+  };
   senses: {
     camera: boolean;
     microphone: boolean;
@@ -223,12 +236,20 @@ export const IPC = {
   trouble: 'anna:trouble',
   /** renderer -> main: user clicked through to a window control. */
   window: 'anna:window',
-  /** renderer -> main: persist a dropped .vrm; returns its stored id. */
-  characterSave: 'anna:character:save',
-  /** renderer -> main: read the stored character back as bytes. */
-  characterLoad: 'anna:character:load',
-  /** renderer -> main: open a native file picker for a .vrm. */
-  characterPick: 'anna:character:pick',
+  /** renderer -> main: persist a dropped photograph; opens its clip library. */
+  portraitSet: 'anna:portrait:set',
+  /** renderer -> main: open a native picker for a photograph. */
+  portraitPick: 'anna:portrait:pick',
+  /** renderer -> main: read the stored photograph back as bytes. */
+  portraitGet: 'anna:portrait:get',
+  /** renderer -> main: read one generated clip's bytes. Null when not ready. */
+  clipGet: 'anna:clip:get',
+  /** renderer -> main: what exists in the clip library right now. */
+  libraryStatus: 'anna:library:status',
+  /** renderer -> main: render the next clips. Costs money; count is a ceiling. */
+  libraryBuild: 'anna:library:build',
+  /** main -> renderer: the library changed — a clip started, finished or failed. */
+  libraryChanged: 'anna:library:changed',
 
   // -- settings window ------------------------------------------------------
 
@@ -287,6 +308,30 @@ export interface VoiceOption {
   id: string;
   name: string;
   description?: string;
+}
+
+/**
+ * What the renderer is told about the clip library.
+ *
+ * A flattened view rather than the `ClipLibrary` manifest itself. The manifest
+ * carries job ids, attempt counts, seam measurements and per-slot error strings
+ * — none of which the body needs to draw a frame, and all of which would have to
+ * cross an IPC boundary on every change.
+ */
+export interface LibraryView {
+  /** '' when no photograph has been chosen yet. */
+  portrait: string;
+  /** Slots with a playable clip on disk. */
+  ready: string[];
+  /** Currently rendering, if anything is. */
+  building: string | null;
+  /** Slots that failed and will not be retried without being asked. */
+  failed: string[];
+  total: number;
+  /** True once the idle clip exists, which is when she stops being a still. */
+  alive: boolean;
+  /** What has actually been charged so far, as reported by the provider. */
+  spentUsd: number;
 }
 
 export interface MemoryStats {
