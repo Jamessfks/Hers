@@ -1,6 +1,9 @@
 # 0004 — One photograph, animated by pre-rendered clips
 
 **Status:** accepted, v1.0. Supersedes [0003](0003-avatar-renderer.md).
+Its presentation half — the bezel, `object-fit: contain`, and the panel sizing
+itself to the photograph — is amended by
+[0005](0005-chat-thread-ui.md). The avatar decision below still stands.
 
 ## Context
 

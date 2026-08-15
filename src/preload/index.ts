@@ -248,6 +248,18 @@ const api = {
   },
 
   /**
+   * What the microphone turned out to have said, once main has transcribed it.
+   *
+   * The body records the audio and never learns what was in it, so this is the
+   * only way the thread can show the user's own spoken lines beside her replies.
+   */
+  onHeard(handler: (text: string) => void): () => void {
+    const listener = (_: unknown, text: string) => handler(text);
+    ipcRenderer.on(IPC.heard, listener);
+    return () => ipcRenderer.off(IPC.heard, listener);
+  },
+
+  /**
    * Anna wants to look right now.
    *
    * Fired when the conversation needs eyes — "can you see me?" — rather than

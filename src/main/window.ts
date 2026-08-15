@@ -36,17 +36,20 @@ import { join } from 'node:path';
  * clicks inside belong to her, clicks outside do not.
  */
 /*
- * Sized so the *stage* is bigger than it was, not just the panel.
+ * A phone's proportions, on purpose.
  *
- * The bezel and the composer take about 32px horizontally and 90px vertically,
- * so a 360x560 panel left a 328x470 volume — smaller than the borderless
- * version it replaced. At that size her face is roughly 35px tall and every
- * expression, gaze shift and viseme the renderer computes is invisible. This is
- * the real constraint a Proto solves with a 21.5" screen and a desktop panel
- * cannot: a full body and a readable face are in direct competition.
+ * 406x880 is 0.461 — the aspect of the conversation this layout is copied from,
+ * to within a pixel. It is not an arbitrary desktop panel size: the whole visual
+ * grammar of an instant-messaging thread (the bubble column, the avatar gutter
+ * behind it, the floating composer with air under it) is calibrated to a tall
+ * narrow window, and it comes apart in a wide one. Bubbles at 900px wide are a
+ * document, not a conversation.
+ *
+ * The old 420x680 was sized so her *face* was readable inside a bezel. She is
+ * the full background now, so height buys thread instead of pixels-per-face.
  */
-const WIDTH = 420;
-const HEIGHT = 680;
+const WIDTH = 406;
+const HEIGHT = 880;
 /** Gap from the screen edges, so she is not jammed into the corner. */
 const MARGIN = 28;
 
@@ -73,11 +76,20 @@ export function createAnnaWindow(): AnnaWindow {
   const display = screen.getPrimaryDisplay();
   const { workArea } = display;
 
+  /*
+   * 880 is taller than the work area on a 13" laptop, and a window that opens
+   * with its composer below the dock is a window with no way to type in it. The
+   * aspect is the intent, not the pixel count, so the width follows the height
+   * down and the shape survives the clamp.
+   */
+  const height = Math.min(HEIGHT, workArea.height - MARGIN * 2);
+  const width = Math.round((height * WIDTH) / HEIGHT);
+
   const window = new BrowserWindow({
-    width: WIDTH,
-    height: HEIGHT,
-    x: workArea.x + workArea.width - WIDTH - MARGIN,
-    y: workArea.y + workArea.height - HEIGHT - MARGIN,
+    width,
+    height,
+    x: workArea.x + workArea.width - width - MARGIN,
+    y: workArea.y + workArea.height - height - MARGIN,
     minWidth: 260,
     minHeight: 400,
     // Transparent so the panel can have genuinely rounded corners; the frame

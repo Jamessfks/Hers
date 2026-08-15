@@ -43,10 +43,23 @@ function interactiveIds(markup: string): string[] {
 
 test('the panel has the controls we think it has', () => {
   const ids = interactiveIds(html);
+  assert.ok(ids.includes('who'), 'her name, which opens settings');
   assert.ok(ids.includes('settings'), 'the settings gear');
-  assert.ok(ids.includes('dismiss'), 'the dismiss button');
+  assert.ok(ids.includes('plus'), 'the add button, which changes her photograph');
+  assert.ok(ids.includes('voice'), 'the handset, which toggles the microphone');
   assert.ok(ids.includes('say'), 'the text input');
 });
+
+/*
+ * `dismiss` is gone on purpose.
+ *
+ * The panel used to carry an ✕ that faded her out and hid the window. The bar
+ * this layout copies has exactly two controls in it — a name and a gear — and a
+ * third button would be the one thing on screen that is not in the reference.
+ * Sending her away is still available in two places that were always the more
+ * likely ones: the menu bar item and ⌥⌘A. If a dismiss control ever comes back
+ * into the window, it belongs in this list.
+ */
 
 test('every interactive control is wired up in main.ts', () => {
   for (const id of interactiveIds(html)) {

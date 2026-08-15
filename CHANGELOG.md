@@ -1,5 +1,70 @@
 # Changelog
 
+## Unreleased
+
+Anna's window was rebuilt as a conversation. She fills it; the thread sits on
+top of her. Rationale in [ADR 0005](docs/adr/0005-chat-thread-ui.md), which
+amends the presentation half of ADR 0004 and leaves the avatar decision alone.
+
+### Added
+
+- **A message thread** (`renderer/chat.ts`). Her speech is already chunked at
+  breath points for the voice path, and each clause now becomes its own bubble,
+  so a turn arrives as several short messages rather than one block. Clauses
+  landing within 900ms of each other extend the open bubble instead of starting
+  a new one.
+- **The user's spoken words reach the window.** Main transcribes microphone
+  audio and previously forwarded only Anna's replies, so the body had no way to
+  know what it had heard. New `anna:heard` channel; without it a thread shows
+  her answering questions that are not on screen.
+- **A growing composer.** `#say` is a `<textarea>` that grows to five lines and
+  then scrolls; Enter sends, Shift+Enter starts a line. The previous
+  `<input type="text">` could not hold a line break at all.
+- **Press and focus states.** Four controls are tabbable and none of them
+  showed focus; the only interactive state in the stylesheet was `:hover`,
+  which does not exist on the interface this layout is drawn from.
+- `harness/` — the same markup, stylesheet, `Thread` and `fitComposer` in a
+  plain page. Anna's window sets `setContentProtection(true)` and is invisible
+  to every screen recorder on the machine, which is correct for a companion and
+  makes the app impossible to review by screenshot.
+
+### Changed
+
+- **`object-fit: cover`, not `contain`.** Her clip fills the whole window and is
+  cropped at the edges rather than letterboxed inside a well. A square source in
+  this window keeps its full height and its middle ~46% of width.
+- **The window no longer resizes itself to the photograph.** It is a fixed
+  phone-shaped frame at 406x880, clamped proportionally on displays too short
+  for it. `fitHeight` on the bridge has lost its only caller.
+- **The layout is written in one unit.** Every dimension in `renderer/styles.css`
+  is a multiple of `--s`, one point of a 393x852 reference screen, so it is the
+  same layout at every window size instead of correct at one.
+- **The subtitle is gone**, replaced by the thread. It faded about 2.6 seconds
+  after she stopped speaking, so there was no way to re-read anything she said
+  and no record that you had typed at all.
+- **The thread's scroll is no longer left to the browser.** Adding a bubble used
+  to teleport the transcript up by its height in one frame while the bubble
+  faded in separately; it now slides on the same curve. Scrolling up and
+  receiving a message holds your place exactly, and sending one always returns
+  you to it.
+
+### Removed
+
+- **The ✕ beside the composer.** The bar this layout copies has two controls,
+  and a third would be the only thing on screen with no counterpart in it.
+  ⌥⌘A and the menu bar item both still hide her and both predate the button.
+  The 240ms leaving animation went with it: hiding is now instant, which is the
+  right answer to a shortcut whose purpose is getting her off your screen.
+
+### Known
+
+- **The thread does not survive a restart.** It is built from live IPC events
+  and lives only in the window that drew it. Her memory is unaffected.
+- **The typeface is a substitute.** The reference sets its bubbles in a face
+  wider than anything on macOS at the same size; Avenir Next at 20.5/26.8 puts
+  six of seven line breaks exactly where the reference puts them. The seventh
+  needs the real face — see the note in `styles.css`.
+
 ## 1.0.0 — 2026-08-15
 
 **On the version number.** This is the first *official* release, and it is

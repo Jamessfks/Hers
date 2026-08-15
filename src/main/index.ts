@@ -301,6 +301,9 @@ async function main(): Promise<void> {
       const { text } = await stt.transcribe(audio, mimeType);
       if (!text) return;
       situation.observe({ kind: 'user-speech', text, final: true, at: Date.now() });
+      // The window cannot know what it heard: it sent audio, main sent it to a
+      // recogniser. Without this the thread shows her replies to nothing.
+      send(IPC.heard, text);
       diag.startTurn('user', config.get().llm.model, text.length);
 
       /*

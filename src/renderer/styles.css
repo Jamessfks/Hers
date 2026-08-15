@@ -1,17 +1,104 @@
 /*
- * Anna's window is transparent and sits on top of everything, so every pixel
- * that is not her has to be genuinely empty — no panel, no card, no border. The
- * only chrome is the subtitle and the composer, and both are designed to read
- * against an unknown background: dark text would vanish on a dark editor, so
- * everything light sits on its own soft shadow instead of on a surface.
+ * Anna, as a conversation she is standing behind.
+ *
+ * The old sheet framed her: an opaque bezel, a well with `object-fit: contain`,
+ * and the controls outside the picture. That reads as a device on the desk,
+ * which was the point at the time. It is the wrong shape for a thread — a chat
+ * with a bezel around it is a widget, and the letterbox that `contain` leaves
+ * above and below a square clip is exactly the black bar this window now has to
+ * not have.
+ *
+ * So: the clip is the window. Everything else floats on it.
+ *
+ * ## Everything is measured in one unit
+ *
+ * `--s` is one point of the reference layout — a 393x852 phone screen — in this
+ * window's pixels. Every size below is written as a multiple of it, so the
+ * layout is not "correct at 406x880 and approximately correct elsewhere": it is
+ * the same layout at every window size, and the only thing resizing changes is
+ * how large it is drawn. A 20px font in a window the user can drag from 300 to
+ * 900 pixels wide is three different designs.
+ *
+ * `min()` of the two axes is what keeps it a phone rather than letting a wide
+ * window stretch the type: the scale follows whichever axis is scarcer, and a
+ * window wider than 0.461 gets air on either side of the column instead of
+ * 900px-wide bubbles. Her clip still fills every pixel of it.
  */
 
 :root {
-  --ink: rgba(255, 255, 255, 0.94);
-  --ink-dim: rgba(255, 255, 255, 0.62);
-  --glow: 0 1px 12px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.85);
-  --accent: #8ecdff;
-  font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+  --s: min(calc(100vw / 393), calc(100vh / 852));
+  /* The column the conversation lives in: the reference screen, centred. */
+  --w: calc(393 * var(--s));
+
+  /*
+   * All four sampled off the reference rather than chosen. Her card is pure
+   * white with no transparency at all — every stable bubble in the reference
+   * measures (255,255,255) — and her ink is a soft blue-black rather than the
+   * colder near-black that looks right in isolation and wrong beside it.
+   */
+  --bubble-in: #ffffff;
+  --ink-in: #242433;
+  /* Yours: the one saturated thing on screen, and it is nearly pure blue. */
+  --bubble-out: #00004d;
+  --ink-out: #ffffff;
+
+  /*
+   * Chrome: neutral dark glass. Not warm.
+   *
+   * This was `rgba(58,52,48,…)` — brown baked into the fill — because the
+   * reference's pills look warm. They do, and none of it is in the fill. The
+   * same reference disc reads (92,81,68) where it lies over a warm ceiling and
+   * (87,87,92) where it straddles a cool window; solving both for one base
+   * gives a flat neutral grey at just over half opacity. Baking the warmth in
+   * makes the chrome muddy the moment the clip behind it is blue, which the
+   * one clip this app has happens to be.
+   */
+  --glass: rgba(49, 49, 49, 0.53);
+  --glass-strong: rgba(49, 49, 49, 0.66);
+  /*
+   * The blur is a real number, not a decorative one. The reference's controls
+   * render dead flat across hard colour boundaries — a 34pt disc sitting half
+   * on a wall and half on a window is uniform to the pixel — and that needs a
+   * sample radius of about 30 points. At the 8 this started on the fill mottles
+   * with whatever is behind it.
+   */
+  --blur: blur(calc(30 * var(--s)));
+  /* Every glass surface carries a 1pt inner ring at 5% white. */
+  --edge: inset 0 0 0 calc(1 * var(--s)) rgba(255, 255, 255, 0.05);
+  --ink: rgba(255, 255, 255, 0.96);
+
+  /*
+   * 32, and it is not half of anything.
+   *
+   * This started at 16, derived from half the height of a one-line bubble — but
+   * that was half the height of *our* one-line bubble, which was 20pt too short
+   * because the padding was wrong. Fitting a circle to the reference's corner
+   * arc gives R ≈ 30 on a two-line bubble and R ≈ 34 on a five-line one, so 32
+   * it is. Short bubbles still come out as pills because a border radius clamps
+   * itself to half the box; long ones are now as round as the reference's
+   * instead of visibly squarer.
+   */
+  --radius: calc(32 * var(--s));
+
+  /*
+   * Avenir Next before SF.
+   *
+   * The reference sets its thread in a geometric sans with a large x-height and
+   * noticeably wider letterforms than anything in the SF family; at the same
+   * point size SF Pro Rounded runs about an eighth narrower, which moves every
+   * wrap point in the thread and makes six bubbles that should be two lines
+   * each into six one-liners. Avenir Next ships with macOS, is geometric, and
+   * is close enough on width that six of the seven bubbles in the reference
+   * break their lines in exactly the same places.
+   *
+   * The seventh is the honest cost of not knowing what the real face is:
+   * "Singapore! do you like" fits the reference's widest bubble and does not
+   * fit ours, because Avenir Next sets that particular string wide. Widening
+   * the bubble to force it overshoots every other measurement, so the wrap
+   * stands. If the actual typeface is ever identified, this is the line to
+   * change and that wrap is the test for it.
+   */
+  font-family: 'Avenir Next', ui-rounded, -apple-system, system-ui, sans-serif;
 }
 
 * {
@@ -26,114 +113,66 @@ body {
   height: 100%;
   background: transparent;
   overflow: hidden;
-  /* The window is click-through by default; JS opts individual regions in. */
   -webkit-user-select: none;
   user-select: none;
   cursor: default;
 }
 
 /*
- * The panel.
+ * The window.
  *
- * A visible boundary between her and the desktop, because that is what makes
- * her read as a device on the desk rather than as something loose on top of
- * your screen. The frame is deliberately quiet: one hairline border, a soft
- * vertical wash so she separates from any wallpaper, and a shadow doing most
- * of the work of lifting it off the background.
- *
- * `inset: 0` with a border-radius on a transparent window is what gives real
- * rounded corners — the window itself is square and fully transparent.
- */
-/*
- * The enclosure.
- *
- * Deliberately opaque, and deliberately not a translucent blurred sheet. The
- * previous version used `backdrop-filter` over a transparent background, which
- * made the user's own desktop the backdrop *inside* the stage — the room
- * smeared through the volume she is supposed to be standing in. Combined with a
- * 20px radius, a hairline border and a drag pill it was, precisely, the macOS
- * Control Center recipe: a floating system sheet, not a device on a desk.
- *
- * A Proto occludes the room completely. The figure stands in a lit box with
- * walls, a floor and a bezel around it, and no interface inside the volume.
- * That is what this is now: an opaque matte bezel, a lit well, and the controls
- * on the bezel rather than in the scene.
+ * `overflow: hidden` with a radius is what clips the video to the corners — the
+ * BrowserWindow itself is square and transparent, so the rounding has to happen
+ * here or her frame has four sharp corners hanging in space.
  */
 #app {
   position: relative;
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 10px;
-  padding: 26px 16px 14px;
   overflow: hidden;
-  border-radius: 18px;
-  /* The bezel: matte, opaque, and wide enough to read as a physical frame. */
-  background: linear-gradient(180deg, #17181d 0%, #101116 100%);
+  border-radius: calc(20 * var(--s));
+  background: #07090d;
   box-shadow:
-    0 22px 60px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 calc(10 * var(--s)) calc(28 * var(--s)) rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: opacity 240ms ease, transform 240ms ease;
 }
 
-/*
- * The well: the boundary between the room and her.
- *
- * This used to be a lit cyclorama — a back wall, a floor, a horizon seam and a
- * contact shadow — because it held a 3D figure standing on nothing, and without
- * a lit volume around it a rendered character floats on a dark rectangle.
- *
- * A photograph needs none of that and is actively harmed by it. It arrives with
- * its own background, its own key light and its own ground plane, so a painted
- * floor underneath produced two floors at two angles, and a blue wash over the
- * top tinted a frame that had already been graded. Everything the cyclorama did
- * is now the photographer's job.
- *
- * What remains is the part that was never about lighting: an edge. The panel has
- * to read as an object on the desktop with her inside it, so the well keeps its
- * radius, its inner shadow and a black backdrop for the letterbox that appears
- * whenever her frame is not the panel's shape.
- */
-#well {
-  position: relative;
-  border-radius: 10px;
+/* ---------------------------------------------------------------------------
+   Layer 1 — her
+   --------------------------------------------------------------------------- */
+
+#backdrop {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   background: #07090d;
-  box-shadow:
-    inset 0 0 38px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 /*
- * The still and the clips, stacked in one place.
+ * `cover`, not `contain`, and this is the whole brief in one declaration.
  *
- * `object-fit: contain` rather than `cover`. Cropping is the wrong trade here:
- * every clip is generated to return to this exact frame, so cropping the
- * display would hide the part of the frame the seam is measured on, and a
- * portrait cropped to fill a taller panel loses the top of her head.
+ * Her source frame is square and this window is roughly 2:4.4, so `contain`
+ * leaves more than half the window black. `cover` scales to the taller axis and
+ * crops the sides instead — and because she is centred in her own frame, the
+ * surviving strip is very nearly exactly her. Nothing letterboxes at any window
+ * size, which is the property being defended here.
+ *
+ * The vertical bias is for the other direction: if the window is ever dragged
+ * wider than it is tall, `cover` crops top and bottom instead, and 30% keeps her
+ * head in frame rather than centring on her waist.
  */
-#still,
-#well .clip {
+#backdrop > #still,
+#backdrop > .clip {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: 50% 30%;
   display: block;
 }
 
-/*
- * A photograph is not alive, and pretending otherwise is worse than admitting it.
- *
- * Before the first clip exists she is a still image, which after a few seconds
- * stops reading as "waiting" and starts reading as "crashed". This is a very
- * slow scale — under half a percent, over eleven seconds — which is enough to
- * keep the panel from looking frozen and far too small to be mistaken for her
- * moving. It is a CSS transform on a JPEG, not generated motion, and it stops
- * the moment there is a real clip to play.
- */
 #still {
   animation: breathe 11s ease-in-out infinite;
   transform-origin: 50% 85%;
@@ -153,180 +192,717 @@ body[data-alive='true'] #still {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #still {
-    animation: none;
+/* ---------------------------------------------------------------------------
+   Layer 2 — legibility
+   The middle of the frame is left alone; only the two ends where chrome sits
+   get a wash, and it is a gradient so there is no visible seam.
+   --------------------------------------------------------------------------- */
+
+#scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0) 15%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 17%);
+}
+
+/* ---------------------------------------------------------------------------
+   The drag handle
+   --------------------------------------------------------------------------- */
+
+#grip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: calc(12 * var(--s));
+  -webkit-app-region: drag;
+  z-index: 6;
+}
+
+#bar,
+#composer,
+#thread,
+#say,
+button {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * The three floating rows share one column, centred, so they line up with each
+ * other rather than with the window — which is the same thing until the window
+ * is dragged wider than the reference aspect, and then it is the only thing
+ * keeping the composer under the thread.
+ */
+#bar,
+#thread,
+#composer {
+  left: 50%;
+  width: var(--w);
+  transform: translateX(-50%);
+}
+
+/* ---------------------------------------------------------------------------
+   The bar
+   Two floating pills, not a title bar. There is no bar surface — the video runs
+   underneath and between them.
+   --------------------------------------------------------------------------- */
+
+#bar {
+  position: absolute;
+  top: calc(18 * var(--s));
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 calc(20 * var(--s));
+}
+
+#who,
+#settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--edge);
+  color: #fff;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#who {
+  gap: calc(1.7 * var(--s));
+  height: calc(38 * var(--s));
+  padding: 0 calc(10 * var(--s)) 0 calc(16 * var(--s));
+  border-radius: 999px;
+  font: inherit;
+  font-size: calc(17 * var(--s));
+  font-weight: 600;
+  letter-spacing: calc(-0.5 * var(--s));
+}
+
+/*
+ * The chevron is half-lit, and that is the point of it.
+ *
+ * At full strength it competes with her name for the eye and the pill reads as
+ * two things. In the reference it peaks at about 50% white over the fill —
+ * present enough to say the name is a door, quiet enough that you read "anna"
+ * first.
+ */
+#who svg {
+  width: calc(22 * var(--s));
+  height: calc(22 * var(--s));
+  opacity: 0.52;
+}
+
+#settings {
+  width: calc(34 * var(--s));
+  height: calc(34 * var(--s));
+  border-radius: 999px;
+}
+
+/*
+ * The gear fills its disc — 26.5 of 34, a 6pt margin all round. It was 17 in a
+ * 31pt disc, which left so much air that the icon read as a speck in a button
+ * rather than as a button.
+ */
+#settings svg {
+  width: calc(26.5 * var(--s));
+  height: calc(26.5 * var(--s));
+}
+
+#who:hover,
+#settings:hover {
+  background: var(--glass-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   The thread
+   --------------------------------------------------------------------------- */
+
+/*
+ * Bottom-anchored, and `column-reverse` is how that is done without JavaScript.
+ *
+ * The alternative — scrollTop = scrollHeight after every append — fights the
+ * user the moment they scroll up to re-read something, and drops a frame on
+ * every message because it lands after layout. Reversing the flow direction
+ * makes "stuck to the bottom" the browser's default and scrolling up an
+ * explicit act. The messages are prepended in chat.ts to match.
+ */
+#thread {
+  position: absolute;
+  top: calc(64 * var(--s));
+  /*
+   * 28 is the composer's 20 of float plus 8 of clearance; the rest is however
+   * tall the composer currently is, which main.ts writes here as it grows. A
+   * fixed 78 was right for a one-line field and put the last bubble underneath
+   * a three-line one.
+   */
+  bottom: calc(28 * var(--s) + var(--composer-h, calc(50 * var(--s))));
+  z-index: 3;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  /*
+   * Uniform, and tight — 6, not the 20 this started on.
+   *
+   * The instinct from iMessage is to tighten the gaps inside a run from one
+   * speaker and open them between speakers; the reference does not do that.
+   * Every gap in its thread measures 17-20 device pixels, which is 5.7-6.7
+   * points, and the roominess of that stack is entirely inside the bubbles
+   * rather than between them. Getting this wrong in the other direction —
+   * short bubbles floated far apart — turns a dense column into a ladder.
+   */
+  gap: calc(6 * var(--s));
+  /*
+   * The avatar gutter.
+   *
+   * The most distinctive number in this layout: incoming bubbles do not start
+   * at the left edge, they start 108.5 of 393 points in, so the figure behind
+   * them is never covered. Both speakers share it, which is what keeps the left
+   * edge of the stack straight.
+   */
+  padding: calc(6 * var(--s)) calc(25.3 * var(--s)) calc(4 * var(--s)) calc(108.5 * var(--s));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#thread::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * No tail, no clipped corner, and no shadow.
+ *
+ * Every bubble is the same rounded rectangle on all four corners. A tail points
+ * at a speaker, and there is only one other speaker here and she is standing
+ * behind the message — so the tail has nothing to point at. The shadow went the
+ * same way: it is the obvious defensive move for white cards over an unknown
+ * video frame, and the reference does not have one. Sampling a pixel below a
+ * reference bubble and one 25 pixels below it returns the same colour, and the
+ * bubble's edge reaches the background in a single pixel. An opaque white card
+ * against a dark clip does not need help separating.
+ *
+ * The padding is where this layout's air lives: 13.4 above and below the text,
+ * 18 either side. That is most of the difference between the reference's dense
+ * column of fat pills and the thin slabs this had before.
+ */
+.msg {
+  /* 92.65% of the column is 241.8pt, the reference's widest bubble measured on
+     a clean body row rather than across the corner antialiasing. */
+  max-width: 92.65%;
+  padding: calc(13.4 * var(--s)) calc(18 * var(--s));
+  border-radius: var(--radius);
+  /*
+   * Set from the reference's ink, not from its wrap points.
+   *
+   * This was 19 for one round, chosen because it put five of seven line breaks
+   * where the reference has them — and it was wrong. It only fit because the
+   * bubbles were too small in the other direction; measuring the actual glyphs
+   * (ascender-to-descender 20.3pt, `d` 15.7pt) and fitting the ink width of
+   * five known strings both land on 20.5, and the baseline pitch measures 26.3
+   * to 27.3. Matching wraps by shrinking type is fitting the symptom.
+   */
+  font-size: calc(20.5 * var(--s));
+  line-height: calc(26.8 * var(--s));
+  /*
+   * `text-wrap: pretty` is off deliberately. It rebalances the last lines of a
+   * paragraph to avoid orphans, which is right for prose and wrong here: it
+   * pulled "get" down out of "we're going to get / along." even though the word
+   * fit, breaking a line the reference does not break.
+   */
+  text-wrap: wrap;
+  /*
+   * The stack's slide is in chat.ts; this is only the bubble's own arrival, and
+   * the two run for the same 260ms so they read as one motion.
+   *
+   * The opacity and the transform are deliberately on different clocks. Fading
+   * a white card over a moving video for the full 260 is a smear — it spends
+   * most of that time at 85-99% opaque, which is exactly the range where it
+   * looks like a rendering fault rather than an intention. The ink commits in
+   * 120ms; only the movement takes the full curve.
+   */
+  animation:
+    arrive-fade 120ms linear both,
+    arrive 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+ * Your own message does not fade in at all.
+ *
+ * You typed it and pressed Enter; it is not arriving from anywhere and it is
+ * not uncertain. A 260ms opacity ramp on your own words invents a network
+ * round trip that has not happened — and this app has a real one behind it, so
+ * inventing a fake one is actively misleading. It springs out at full strength
+ * instead.
+ */
+.msg[data-from='you'] {
+  animation: arrive-sent 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.msg[data-from='anna'] {
+  align-self: flex-start;
+  background: var(--bubble-in);
+  color: var(--ink-in);
+}
+
+/*
+ * Your bubble is flatter than hers — 10.9 of block padding against her 13.4.
+ *
+ * Both are set at the same size; the reference simply tightens the sent side,
+ * which makes a one-word reply a flat pill rather than the fat disc that equal
+ * padding produces. It is a small number doing visible work: "Hi" is the
+ * roundest thing on the screen and the eye goes straight to it.
+ */
+.msg[data-from='you'] {
+  align-self: flex-end;
+  padding-block: calc(10.9 * var(--s));
+  background: var(--bubble-out);
+  color: var(--ink-out);
+}
+
+/*
+ * The turn gets a beat; the run does not.
+ *
+ * Every gap between two of her consecutive bubbles is 6, and the one gap in the
+ * reference where the speaker changes is 12.3 — the extra space is how the
+ * stack says somebody else is talking now. Without it seven bubbles read as one
+ * undifferentiated run. `margin-bottom` rather than `margin-top` because the
+ * list is `column-reverse` with the newest first, so the physical bottom of the
+ * older sibling is the edge that faces the newer one.
+ */
+.msg[data-from='you'] + .msg[data-from='anna'],
+.msg[data-from='anna'] + .msg[data-from='you'] {
+  margin-bottom: calc(6.3 * var(--s));
+}
+
+@keyframes arrive {
+  from {
+    transform: translateY(calc(8 * var(--s))) scale(0.97);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arrive-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes arrive-sent {
+  from {
+    transform: scale(0.94);
+  }
+  to {
+    transform: scale(1);
   }
 }
 
 /*
- * The drag handle: a strip along the top edge, invisible but grabbable.
- * Only this region is draggable — a draggable parent would swallow clicks on
- * the input and the buttons underneath it.
+ * Her thinking, in her position in the stack — and it opens rather than pops.
+ *
+ * This was a `display: none` ↔ `flex` toggle, which cannot be animated and
+ * teleported everything above it by the bubble's height twice per turn: once
+ * when the dots appeared and once when they were replaced by her reply. With
+ * the send that is three separate jumps in a single exchange.
+ *
+ * The outer element is a one-row grid animating `0fr` → `1fr` and the bubble is
+ * inside it, so the height it contributes to the stack ramps instead of
+ * switching. The padding has to be on the inner element for the same reason:
+ * on the outer one it would leave a 37pt lozenge on screen at zero rows.
  */
-#grip {
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 26px;
-  -webkit-app-region: drag;
-  z-index: 5;
-}
-
-/* A faint bar so the handle is discoverable rather than a secret. */
-#grip::after {
-  content: '';
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  width: 34px;
-  height: 3px;
-  border-radius: 999px;
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.16);
-  transition: background 160ms ease;
-}
-
-#app:hover #grip::after {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* Nothing inside the panel should be draggable except the grip. */
-#composer,
-#say,
-#settings,
-#dismiss,
-#subtitle {
-  -webkit-app-region: no-drag;
-}
-
-
-/* ---------------------------------------------------------------------------
-   Subtitle
-   Anna is voice-first, so the subtitle is a courtesy, not the interface. It
-   fades in on speech and out a beat after she stops.
-   --------------------------------------------------------------------------- */
-
-#subtitle {
-  position: absolute;
-  inset: auto 12px 10px;
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1.45;
-  letter-spacing: 0.1px;
-  text-shadow: var(--glow);
-  text-align: center;
-  text-wrap: balance;
+#typing {
+  align-self: flex-start;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 220ms ease, transform 220ms ease;
-  pointer-events: none;
+  transform: scale(0.9);
+  transform-origin: 0 100%;
+  transition:
+    grid-template-rows 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms linear,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-#subtitle[data-visible='true'] {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* ---------------------------------------------------------------------------
-   Composer
-   Hidden until the pointer comes near or the user starts typing. A permanent
-   text box would make her a chat app with a mascot.
-   --------------------------------------------------------------------------- */
-
-/* On the bezel, not in the volume. A Proto has no interface inside the box. */
-#composer {
-  grid-row: 2;
-  margin: 0;
-  opacity: 0.55;
-  transform: translateY(0);
-  transition: opacity 180ms ease;
-}
-
-#app:hover #composer,
-#composer:focus-within {
-  opacity: 1;
-}
-
-#composer {
+#typing .dots {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: calc(4 * var(--s));
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(18.7 * var(--s)) calc(18 * var(--s));
+  border-radius: var(--radius);
+  background: var(--bubble-in);
 }
 
-#settings,
-#dismiss {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(18, 18, 22, 0.66);
-  backdrop-filter: blur(18px);
-  color: var(--ink-dim);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease;
-}
-
-#settings:hover,
-#dismiss:hover {
-  color: var(--ink);
-  border-color: rgba(142, 205, 255, 0.55);
+body[data-state='thinking'] #typing {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: scale(1);
 }
 
 /*
- * Going away.
+ * Some dot is always bright, and that is the whole requirement.
  *
- * She fades and sinks rather than blinking out. 240ms is long enough to read as
- * her leaving and short enough that it never feels like the button lagged; the
- * main process hides the window once it finishes.
+ * The first version held all three at their dimmest for 40% of the cycle —
+ * `0%, 60%, 100%` at 0.3 — with a stagger too tight to cover the hold, so for
+ * 300ms out of every 1250 the indicator sat completely still at its faintest.
+ * A frozen "thinking" indicator does not read as thinking, it reads as hung,
+ * which is worse than showing nothing at all. One third of the period between
+ * dots and no hold in the keyframe means the wave never stops travelling.
+ *
+ * The rise is 3, not 2. At 2 on a 6pt dot the vertical travel was below the
+ * threshold where anyone could see it, so it was costing frames for nothing.
  */
-#app[data-leaving='true'] {
-  opacity: 0;
-  transform: translateY(14px) scale(0.985);
-  pointer-events: none;
+#typing .dots i {
+  width: calc(6 * var(--s));
+  height: calc(6 * var(--s));
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.34);
+  animation: blink 1.05s ease-in-out infinite;
 }
 
-#say {
-  flex: 1;
-  padding: 11px 15px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(18, 18, 22, 0.66);
-  backdrop-filter: blur(18px) saturate(1.3);
-  color: var(--ink);
-  font: inherit;
-  font-size: 14px;
-  outline: none;
-  -webkit-user-select: text;
-  user-select: text;
-  transition: border-color 160ms ease, background 160ms ease;
+#typing .dots i:nth-child(2) {
+  animation-delay: 0.35s;
 }
 
-#say::placeholder {
-  color: var(--ink-dim);
+#typing .dots i:nth-child(3) {
+  animation-delay: 0.7s;
 }
 
-#say:focus {
-  border-color: rgba(142, 205, 255, 0.55);
-  background: rgba(18, 18, 22, 0.78);
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(calc(-3 * var(--s)));
+  }
 }
 
 /* ---------------------------------------------------------------------------
-   Trouble
-   Errors are shown in Anna's own register, quietly, and never as a dialog.
+   The composer
    --------------------------------------------------------------------------- */
 
+/*
+ * 20 from the bottom, and the arithmetic that got here is worth keeping.
+ *
+ * The reference's composer floats 42.3pt above the bottom of its screen, and 34
+ * of those are the iPhone home-indicator safe area — a strip the system
+ * reserves and this window does not have. Subtracting it leaves 8, which is
+ * what this was, and 8 is wrong for a different reason: at the design aspect
+ * the field's right cap lands at x=373, exactly where the window's 20pt corner
+ * starts curving away, so the sliver of video under the row gets swallowed by a
+ * corner instead of running out to one. Nothing actually clips — the field's
+ * lowest point is 13pt above where the arc begins — but it reads pinched.
+ *
+ * At 20 the field's bottom edge is tangent to the top of both corner arcs at
+ * every window aspect, and the chrome sits on one 20pt inset on three sides
+ * against 18 at the top, which is the right optical asymmetry. It also moves
+ * *toward* the reference rather than past it: its composer centreline is at
+ * 784.8 and ours goes from 819 to 807.
+ */
+#composer {
+  position: absolute;
+  bottom: calc(20 * var(--s));
+  z-index: 5;
+  display: flex;
+  /*
+   * The row is bottom-aligned, not centred, and this only shows up once the
+   * field can grow. Centred, the `+` rides up to the row's midline as the
+   * field gets taller — 14pt off the field's bottom edge at two lines and 48 at
+   * five, by which point the two controls are a whole button apart while the
+   * handset stays correctly pinned. The field's bottom cap is the line
+   * everything in this row sits on.
+   */
+  align-items: flex-end;
+  gap: calc(6 * var(--s));
+  padding: 0 calc(20 * var(--s)) 0 calc(22 * var(--s));
+}
+
+#plus {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(46 * var(--s));
+  height: calc(46 * var(--s));
+  /* Matches the handset's inset from the field's bottom, so the two agree. */
+  margin-bottom: calc(2 * var(--s));
+  border: 0;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--edge);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#plus svg {
+  width: calc(30.5 * var(--s));
+  height: calc(30.5 * var(--s));
+}
+
+#plus:hover {
+  background: var(--glass-strong);
+}
+
+/*
+ * The field is 4pt taller than the `+` beside it, and co-centred with it.
+ *
+ * That is not a rounding error in the reference — both centres land on the same
+ * pixel row and the pill is deliberately the larger of the two, which is what
+ * makes the row read as a text field with a button next to it rather than as
+ * two controls of equal weight.
+ */
+#field {
+  flex: 1;
+  display: flex;
+  /*
+   * Bottom-aligned, not centred, because the field grows upward when the
+   * message runs to a second line and the handset has to stay where the thumb
+   * left it. At one line the two are indistinguishable.
+   */
+  align-items: flex-end;
+  min-height: calc(50 * var(--s));
+  padding: calc(2 * var(--s)) calc(12 * var(--s)) calc(2 * var(--s)) 0;
+  border-radius: calc(25 * var(--s));
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--edge);
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#field:focus-within {
+  background: var(--glass-strong);
+}
+
+/*
+ * A textarea, not an input, and it grows.
+ *
+ * An `<input type="text">` cannot hold a line break, so the composer could not
+ * produce a two-line message at all — you could type a long one and watch it
+ * wrap inside a 50pt slot, and that was the entire range. Every messaging app
+ * this layout is drawn from grows the field to a few lines and sends on Enter
+ * with Shift+Enter for a newline.
+ *
+ * The geometry at rest is unchanged and that is deliberate: 23 of line plus
+ * 11.5 of padding either side is 46, which inside the field's 2pt padding is
+ * exactly the 50pt the reference measures. One line looks like it always did.
+ * `max-height` caps the growth at five lines, after which it scrolls — an
+ * unbounded composer eventually eats the conversation it belongs to.
+ */
+#say {
+  flex: 1;
+  min-width: 0;
+  height: calc(46 * var(--s));
+  min-height: calc(46 * var(--s));
+  max-height: calc(138 * var(--s));
+  /*
+   * 12.8 above and 10.2 below, not 11.5 and 11.5.
+   *
+   * Symmetric padding centres the *line box*, and the reference centres the
+   * text optically — its baseline sits 32.2 points below the field's top edge
+   * where a centred one lands at 30.9, so the placeholder read a point and a
+   * quarter high. The asymmetry is invisible at one line, which is the state
+   * the reference has and therefore the state this is matched to; at five it is
+   * faintly bottom-heavy, and there is no reference for that case to arbitrate.
+   * The total is still 23, so the field is still exactly 46 at one line.
+   */
+  padding: calc(12.8 * var(--s)) calc(6 * var(--s)) calc(10.2 * var(--s)) calc(16 * var(--s));
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(19 * var(--s));
+  line-height: calc(23 * var(--s));
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#say::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * 30% white, which is much fainter than it looks like it should be.
+ *
+ * The placeholder started at 72% — a value that reads fine in isolation and is
+ * wrong by more than a factor of two. At that strength "Your message" looks
+ * like text somebody already typed, and the field looks occupied. The
+ * reference's is a whisper.
+ */
+#say::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/*
+ * A rounded rectangle inside the pill rather than a third circle beside it.
+ * Two circles and a pill is a row of three unrelated shapes; a shape nested in
+ * the field reads as part of it.
+ */
+/*
+ * A squircle that nearly fills the pill's height — 46 inside 50 — rather than
+ * a small lozenge floating in it. The radius is 22% of the height, not the 38%
+ * it started at: at 38% it is a stadium and reads as a second pill inside the
+ * first, which is one shape too many.
+ */
+#voice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(56 * var(--s));
+  height: calc(46 * var(--s));
+  border: 0;
+  border-radius: calc(11 * var(--s));
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#voice svg {
+  width: calc(22 * var(--s));
+  height: calc(22 * var(--s));
+}
+
+#voice:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/*
+ * Listening. The one place colour appears in the chrome — and colour alone is
+ * not enough to carry it.
+ *
+ * Green plus a handset is what every phone on earth uses to mean "place a
+ * call", so a static green button reads as an offer rather than as a
+ * microphone that is already open. Worse, without motion a live microphone and
+ * a dead one differ only in hue, which is invisible to a good fraction of
+ * people. The halo is what makes the state legible: it is the only thing in the
+ * window that moves on its own while she is listening.
+ */
+#voice[data-on='true'] {
+  position: relative;
+  background: #2f8f5b;
+  color: #fff;
+}
+
+#voice[data-on='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 rgba(75, 210, 140, 0.55);
+  animation: listening 1.9s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes listening {
+  0% {
+    box-shadow: 0 0 0 0 rgba(75, 210, 140, 0.5);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 calc(9 * var(--s)) rgba(75, 210, 140, 0);
+  }
+}
+
+#voice[data-on='true']:hover {
+  background: #359e65;
+}
+
+/* ---------------------------------------------------------------------------
+   Being pressed, and being focused
+   --------------------------------------------------------------------------- */
+
+/*
+ * Every control here is a button on a video with no surface under it, so
+ * `:hover` was doing the entire job of saying "this is a control" — and hover
+ * is the one state that does not exist on the touch interface this layout is
+ * copied from. A click had no acknowledgement at all until whatever it did
+ * finished happening, which for `+` means waiting on a native file picker.
+ */
+#who:active,
+#settings:active,
+#plus:active,
+#voice:active {
+  transform: scale(0.94);
+  transition-duration: 90ms;
+}
+
+/*
+ * Five things are tabbable and none of them showed it.
+ *
+ * `:focus-visible` rather than `:focus` so a mouse click does not leave a ring
+ * behind it. The ring is white because everything behind it is a photograph and
+ * an accent colour would be invisible against some of them.
+ */
+#who:focus-visible,
+#settings:focus-visible,
+#plus:focus-visible,
+#voice:focus-visible {
+  outline: calc(2 * var(--s)) solid rgba(255, 255, 255, 0.85);
+  outline-offset: calc(2 * var(--s));
+}
+
+/*
+ * The field is not in that list. A text input matches `:focus-visible` when it
+ * is clicked as well as when it is tabbed to, so a ring here would appear on
+ * every click into the composer — and it does not need one: `#field` already
+ * lightens on `:focus-within`, which is a focus indicator that costs the layout
+ * nothing.
+ */
+
+/* ---------------------------------------------------------------------------
+   Trouble
+   --------------------------------------------------------------------------- */
+
+/*
+ * The leaving animation is gone with the button that triggered it.
+ *
+ * She used to fade and sink over 240ms when you clicked the ✕ beside her
+ * composer, and main hid the window once it finished. There is no ✕ any more —
+ * the bar this layout copies has two controls and a third would be the only
+ * thing on screen with no counterpart in it — so the only ways to send her away
+ * are ⌥⌘A and the menu bar item. Both of those are "get her off my screen
+ * now", and a quarter of a second of tasteful fade is the wrong answer to that
+ * request. Hiding is instant, and `data-leaving` is not set by anything.
+ */
+
+/*
+ * Sits on the composer's top edge, wherever that currently is — the same
+ * expression `#thread` uses. A fixed offset was right when the field could only
+ * be 50pt tall and would have been covered by it at three lines.
+ */
 #trouble {
   position: absolute;
-  inset: auto 18px 66px;
-  padding: 9px 13px;
-  border-radius: 12px;
-  background: rgba(60, 22, 22, 0.82);
-  backdrop-filter: blur(14px);
+  left: 50%;
+  bottom: calc(24 * var(--s) + var(--composer-h, calc(50 * var(--s))));
+  z-index: 5;
+  width: calc(345 * var(--s));
+  transform: translateX(-50%);
+  padding: calc(9 * var(--s)) calc(13 * var(--s));
+  border-radius: calc(12 * var(--s));
+  background: rgba(60, 22, 22, 0.86);
+  backdrop-filter: blur(calc(6 * var(--s)));
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: calc(13 * var(--s));
   line-height: 1.4;
 }
 
@@ -335,8 +911,19 @@ body[data-alive='true'] #still {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #subtitle,
-  #composer {
+  #still,
+  .msg,
+  #typing .dots i,
+  #voice[data-on='true']::after {
+    animation: none;
+  }
+
+  #app,
+  #who,
+  #settings,
+  #plus,
+  #field,
+  #voice {
     transition: none;
   }
 }

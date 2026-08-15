@@ -309,6 +309,17 @@ export const IPC = {
   bodyReport: 'anna:body:report',
   /** main -> renderer: demo script spoke on the user's behalf; echo it. */
   demoSaid: 'anna:demo:said',
+  /**
+   * main -> renderer: what the microphone turned out to have said.
+   *
+   * Typed input is already in the renderer's hands, but spoken input is only
+   * ever audio there — the transcription happens in main, and until this
+   * channel existed the window had no way to know what it had been. That was
+   * survivable when her body showed one fading line of her own speech; in a
+   * thread it means half the conversation is missing whenever you talk to her
+   * out loud instead of typing.
+   */
+  heard: 'anna:heard',
 } as const;
 
 // ---------------------------------------------------------------------------

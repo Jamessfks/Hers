@@ -10,3 +10,9 @@ out/
 data/
 release/
 native/build/
+# The harness page is source and is committed; the media it points at is a copy
+# of whatever avatar happens to be installed, so it is not.
+harness/*.mp4
+harness/*.jpg
+harness/*.png
+progress.html

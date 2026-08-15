@@ -10,6 +10,8 @@
 import type { AnnaConfig, LibraryView, PerformanceEvent } from '../shared/protocol.ts';
 import { SpeechPlayer } from './audio/player.ts';
 import { Hologram } from './avatar/hologram.ts';
+import { Thread } from './chat.ts';
+import { fitComposer } from './composer.ts';
 import { Microphone } from './audio/microphone.ts';
 import { Vision } from './senses/vision.ts';
 
@@ -19,12 +21,12 @@ declare global {
   }
 }
 
-const wellEl = document.querySelector<HTMLDivElement>('#well')!;
-const subtitleEl = document.querySelector<HTMLDivElement>('#subtitle')!;
-const composerEl = document.querySelector<HTMLDivElement>('#composer')!;
-const inputEl = document.querySelector<HTMLInputElement>('#say')!;
+const backdropEl = document.querySelector<HTMLDivElement>('#backdrop')!;
+const threadEl = document.querySelector<HTMLDivElement>('#thread')!;
+const inputEl = document.querySelector<HTMLTextAreaElement>('#say')!;
+const composerEl = document.querySelector<HTMLElement>('#composer')!;
+const voiceEl = document.querySelector<HTMLButtonElement>('#voice')!;
 const troubleEl = document.querySelector<HTMLDivElement>('#trouble')!;
-const appEl = document.querySelector<HTMLDivElement>('#app')!;
 
 window.addEventListener('error', (event) =>
   window.anna.report('error-uncaught', { message: String(event.message).slice(0, 200) }),
@@ -35,10 +37,12 @@ window.addEventListener('unhandledrejection', (event) =>
 const player = new SpeechPlayer();
 
 const hologram = new Hologram({
-  mount: wellEl,
+  mount: backdropEl,
   loadClip: (slot) => window.anna.getClip(slot),
   report: (event, detail) => window.anna.report(event, detail),
 });
+
+const thread = new Thread({ mount: threadEl });
 
 let config: AnnaConfig | null = null;
 
@@ -64,31 +68,22 @@ async function showAvatar(): Promise<void> {
 
   await hologram.setPortrait(URL.createObjectURL(new Blob([bytes as BlobPart])));
   hideTrouble();
-  fitPanelTo(hologram.shape);
   await applyLibrary(await window.anna.libraryStatus());
 }
 
-/**
- * Sizes the panel so the well is exactly the photograph's shape.
+/*
+ * The window no longer follows the photograph.
  *
- * The window height is asked for rather than the well being constrained, and
- * the difference matters. Putting an `aspect-ratio` on the well makes the well
- * the right shape inside a panel that is still the wrong height — which is what
- * a 1024x1024 portrait in a 420x680 frame looked like: a square photograph
- * sitting above 260px of empty bezel.
- *
- * The chrome — bezel padding, the gap, the composer — is *measured* rather than
- * written down, because all of it lives in CSS and any of it can change. The
- * difference between the panel's height and the well's is exactly that chrome,
- * whatever it currently happens to be.
+ * `fitPanelTo` used to measure her frame and ask main for a matching height, so
+ * the well was exactly her shape and nothing letterboxed. That was the correct
+ * answer to `object-fit: contain`, and it is the wrong one for a conversation:
+ * the window's proportions are now the thread's — tall, phone-shaped, fixed —
+ * and the clip fills it by cropping instead. A window that resized itself every
+ * time the avatar changed would also mean the whole layout reflowed underneath
+ * a live conversation, which is precisely the kind of motion this design is
+ * trying not to have. `window.anna.fitHeight` is left in the bridge; nothing
+ * calls it.
  */
-function fitPanelTo(shape: { width: number; height: number } | null): void {
-  if (!shape || shape.height === 0) return;
-
-  const chrome = appEl.clientHeight - wellEl.clientHeight;
-  const wanted = (wellEl.clientWidth * shape.height) / shape.width;
-  window.anna.fitHeight(chrome + wanted);
-}
 
 async function applyLibrary(view: LibraryView): Promise<void> {
   // The cache has to be dropped before idle is re-checked: this module records
@@ -125,12 +120,10 @@ window.addEventListener('drop', async (event) => {
 // Performance
 // ---------------------------------------------------------------------------
 
-let subtitleTimer: number | undefined;
-
 function perform(event: PerformanceEvent): void {
   switch (event.kind) {
     case 'say':
-      showSubtitle(event.text);
+      thread.say(event.text);
       break;
     case 'gesture':
       // Intensity is dropped. A generated clip has one performance baked into
@@ -144,27 +137,16 @@ function perform(event: PerformanceEvent): void {
       // expression is whichever clip is playing.
       break;
     case 'turn-end':
-      scheduleSubtitleFade(2600);
+      // Close the bubble she is mid-sentence in, so her next turn starts a new
+      // one rather than being glued onto the end of this one.
+      thread.seal();
       break;
     case 'barge-in':
       player.stop();
       hologram.silence();
-      scheduleSubtitleFade(0);
+      thread.seal();
       break;
   }
-}
-
-function showSubtitle(text: string): void {
-  window.clearTimeout(subtitleTimer);
-  subtitleEl.textContent = text;
-  subtitleEl.dataset['visible'] = 'true';
-}
-
-function scheduleSubtitleFade(afterMs: number): void {
-  window.clearTimeout(subtitleTimer);
-  subtitleTimer = window.setTimeout(() => {
-    subtitleEl.dataset['visible'] = 'false';
-  }, afterMs);
 }
 
 function showTrouble(message: string): void {
@@ -189,11 +171,26 @@ function hideTrouble(): void {
  * complexity now that she lives in a bounded panel.
  */
 
+const fitField = (): void => fitComposer(inputEl, composerEl);
+
+inputEl.addEventListener('input', fitField);
+// The field is sized in reference points, so it has to be re-snapped whenever
+// the window changes what a reference point is worth.
+window.addEventListener('resize', fitField);
+
 inputEl.addEventListener('keydown', async (event) => {
-  if (event.key !== 'Enter') return;
+  // Shift+Enter is a newline; Enter alone sends. The other way round — a send
+  // button and Enter for newline — is a chat app pretending to be a form.
+  if (event.key !== 'Enter' || event.shiftKey) return;
+  event.preventDefault();
   const text = inputEl.value.trim();
   if (!text) return;
   inputEl.value = '';
+  fitField();
+  // The bubble goes up before the send, not after an acknowledgement. A message
+  // that waits for the brain to admit it exists is the single most common way a
+  // chat UI feels slow, and this one has an LLM on the other end of it.
+  thread.said(text);
   await player.resume();
   window.anna.sense({ kind: 'user-typed', text, at: Date.now() });
 });
@@ -209,7 +206,7 @@ inputEl.addEventListener('keydown', async (event) => {
  */
 
 // ---------------------------------------------------------------------------
-// The two buttons
+// The four buttons
 // ---------------------------------------------------------------------------
 
 /*
@@ -222,20 +219,69 @@ inputEl.addEventListener('keydown', async (event) => {
  * They live in their own section now so the next deletion has to be deliberate.
  */
 
-document
-  .querySelector<HTMLButtonElement>('#settings')!
-  .addEventListener('click', () => window.anna.openSettings());
+/*
+ * Her name and the gear both open Settings, and that is not an oversight.
+ *
+ * Everything the name pill implies you can change about her — what she is
+ * called, her voice, her model, what she remembers — is on that one window.
+ * Splitting it into a profile sheet and a preferences sheet would be two
+ * screens for one page of content.
+ */
+for (const id of ['#who', '#settings']) {
+  document
+    .querySelector<HTMLButtonElement>(id)!
+    .addEventListener('click', () => window.anna.openSettings());
+}
 
-/** How long the leaving animation runs before the window is actually hidden. */
-const LEAVE_MS = 240;
-
-document.querySelector<HTMLButtonElement>('#dismiss')!.addEventListener('click', () => {
-  // Fade first, hide once it finishes, so she leaves rather than blinking out.
-  appEl.dataset['leaving'] = 'true';
-  player.stop();
-  hologram.silence();
-  window.setTimeout(() => window.anna.hide(), LEAVE_MS);
+/*
+ * `+` is where you change her face.
+ *
+ * Dropping a photograph on the window still works and is still the fastest
+ * path, but it is undiscoverable — nothing on screen says the window accepts a
+ * file. This is the same operation with a native picker in front of it.
+ */
+document.querySelector<HTMLButtonElement>('#plus')!.addEventListener('click', async () => {
+  const picked = await window.anna.pickPortrait();
+  if (!picked) return; // Cancelled.
+  if ('error' in picked) {
+    showTrouble(picked.error);
+    return;
+  }
+  await showAvatar();
+  if (picked.note) showTrouble(picked.note);
 });
+
+/*
+ * The handset toggles her microphone.
+ *
+ * In the app this layout comes from that button starts a voice call, which is a
+ * mode this app does not have and does not need — Anna is always listening when
+ * the microphone is on, so "call" and "hang up" are just that switch. The
+ * button carries the state so it is a control rather than a decoration.
+ */
+voiceEl.addEventListener('click', async () => {
+  if (!config) return;
+  const next = await window.anna.setConfig({ senses: { microphone: !config.senses.microphone } });
+  config = next;
+  showListening(next.senses.microphone);
+});
+
+/**
+ * Puts the handset into its listening state, or takes it out.
+ *
+ * The colour is not the whole signal, and it was. A green handset is the
+ * universal *place a call* affordance, so a static green button reads as an
+ * invitation to start rather than as a microphone that is already open — and a
+ * dead microphone and a live one were pixel-identical to anything that does not
+ * see colour. The pulse is the part that says "now", and `aria-pressed` is the
+ * part that says it to a screen reader.
+ */
+function showListening(on: boolean): void {
+  voiceEl.dataset['on'] = String(on);
+  voiceEl.setAttribute('aria-pressed', String(on));
+  voiceEl.setAttribute('aria-label', on ? 'Stop listening' : 'Listen');
+  voiceEl.title = on ? 'She is listening — click to stop' : 'Let her hear you';
+}
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -253,19 +299,15 @@ async function boot(): Promise<void> {
   });
   window.anna.onTrouble(showTrouble);
   window.anna.onDemoSaid((text) => {
-    // Echo the scripted line in the composer so a viewer can see both halves
-    // of the conversation, not just her side of it.
-    inputEl.value = text;
-    composerEl.dataset['visible'] = 'true';
-    window.setTimeout(() => {
-      inputEl.value = '';
-    }, 2000);
+    // Put the scripted line in the thread as though the viewer typed it, so a
+    // demo shows both halves of the conversation rather than only her side.
+    thread.said(text);
   });
-  window.anna.onVisibility((visible) => {
-    // Clear the fade when she is brought back, or the window would reappear
-    // still transparent and untouchable.
-    if (visible) delete appEl.dataset['leaving'];
 
+  // Spoken input, once main has transcribed it. The typed path adds its own
+  // bubble immediately; this is the other half of the same job.
+  window.anna.onHeard((text) => thread.said(text));
+  window.anna.onVisibility((visible) => {
     /*
      * Release the camera while she is away.
      *
@@ -308,6 +350,8 @@ async function boot(): Promise<void> {
    * the worst possible behaviour.
    */
   async function applySenses(next: AnnaConfig): Promise<void> {
+    showListening(next.senses.microphone);
+
     try {
       if (next.senses.microphone) await microphone.start();
       else microphone.stop();

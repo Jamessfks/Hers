@@ -23,8 +23,11 @@ The engineering bar is [Grok's Ani](docs/BENCHMARK.md).
 
 ## What makes this different
 
-Most companion apps are a chat window with a portrait on top. Three decisions
-separate Anna from that:
+Anna looks like a companion chat app, and deliberately so — the thread, the
+bubbles and the figure standing behind them are the form this genre has settled
+on, and inventing a new one would only cost the user the thing they already know
+how to use. The difference is not the layout. Three decisions separate her from
+the apps she resembles:
 
 **She is not an assistant, and the prompt fights hard to keep it that way.**
 Every frontier model reverts to "helpful assistant" under pressure. The persona
@@ -83,15 +86,15 @@ Two at minimum — one to think with, one to speak with.
 | Voice | Cartesia, ElevenLabs, Hume | [play.cartesia.ai](https://play.cartesia.ai/keys) |
 | Hearing | This Mac — no key needed | Built in, offline, default |
 
-Keys go in through **Settings** — from the menu bar item, the gear beside her
-composer, or ⌘,. Each one is checked with the provider before it is stored, so
+Keys go in through **Settings** — from the menu bar item, the gear at the top of
+her window, her name beside it, or ⌘,. Each one is checked with the provider before it is stored, so
 a bad key tells you immediately rather than leaving her mute later. They are
 then kept in the macOS Keychain through Electron's `safeStorage`, never written
 to the config file, and never handed to the window that draws her. See
 [docs/PRIVACY.md](docs/PRIVACY.md).
 
-**Sending her away.** The ✕ beside her composer fades her out and hides the
-window; ⌥⌘A brings her back, and so does the menu bar item. Hiding is not just
+**Sending her away.** ⌥⌘A hides the window, and so does the menu bar item;
+either brings her back. Hiding is not just
 a window state — she stops mid-sentence and will not speak first while she is
 gone, because being ambushed by a voice from something you deliberately
 dismissed is the fastest way to lose trust in an always-on app.
@@ -101,6 +104,40 @@ picker and the video-provider chooser, the sense toggles — which report which 
 granted and deep-link to the right System Settings pane — the limits on when she
 speaks first, and a memory inspector where you can read everything she knows and
 forget any of it one line at a time.
+
+### Her window
+
+**She is the background, and the conversation floats on her.** The window is a
+tall, phone-shaped frame — 406x880, an aspect of 0.461 — with her clip filling
+every pixel of it under a stack of instant-messaging bubbles. There is no bezel,
+no panel and no letterbox: a clip whose shape does not match the window loses
+its edges rather than gaining black bars, at any window size.
+
+The chrome is three things floating on her, with no surface behind any of them:
+her name and a settings gear at the top, and a composer at the bottom with a
+`+` that changes her photograph, a text field, and a handset that turns her
+microphone on and off. Sending her away is ⌥⌘A or the menu bar item.
+
+**The thread keeps the whole turn.** Anna's speech is already chunked at breath
+points for the voice path, and each of those clauses becomes its own bubble, so
+she sends four short messages rather than one paragraph. Your own lines appear
+the instant you press Enter — typed or, once main has transcribed it, spoken.
+Enter sends and Shift+Enter starts a new line; the field grows to five lines and
+then scrolls.
+
+Two things worth knowing about it. **The thread does not survive a restart** —
+it is built from live events and dies with the window, while her actual memory
+persists in `memory.db`; see [Not done yet](#not-done-yet). And **the window is
+excluded from screen capture** by default, so she cannot appear in a shared
+screen during a call. That also means a screenshot of her window comes out
+empty, which is the expected result and not a rendering failure. Set
+`ANNA_ALLOW_CAPTURE=1` when you actually want her in a recording.
+
+Every dimension in `renderer/styles.css` is a multiple of one variable, `--s`,
+which is a single point of a 393x852 reference screen expressed in this window's
+pixels. Resizing the window changes how large the layout is drawn and nothing
+else. The reasoning, and what it replaced, is in
+[ADR 0005](docs/adr/0005-chat-thread-ui.md).
 
 ### Her body
 
@@ -121,9 +158,14 @@ this frame and is supposed to return *to* it, so:
 - a frame that includes her hands unlocks the gestures that use them — a
   head-and-shoulders crop cannot wave, point, or put a hand to its chest.
 
-The output shape follows the photograph's own aspect ratio, and the panel
-resizes to match it, so a square portrait gives a square panel rather than one
-with black bars.
+**She fills the window, and the window does not follow her.** The panel is a
+fixed phone-shaped frame with the conversation floating on top of her, so a
+clip of any shape is cropped to fill it rather than letterboxed inside it. A
+square photograph loses its left and right edges, not its top and bottom —
+which is why the note about the shot above matters more than it used to: a
+subject who is off to one side of her own frame will be cropped out of the
+middle of the window. Nothing is ever pillarboxed or letterboxed at any window
+size.
 
 #### The clip library
 
@@ -190,8 +232,10 @@ written up in [docs/adr/0003-avatar-renderer.md](docs/adr/0003-avatar-renderer.m
                        │  PerformanceEvent + PCM
 ┌──────────────────────▼──────────────────────────────────┐
 │  renderer — the body. No keys, no disk, no network.     │
-│  Body: idle ⊕ gesture ⊕ speech    SpeechPlayer          │
+│  Hologram  her clip, filling the window                 │
+│  Thread    her clauses and yours, as bubbles on top     │
 │  Microphone (local VAD)           Vision (slow frames)  │
+│  SpeechPlayer                                           │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -254,6 +298,12 @@ most likely to bite, because the code around them reads as though they work.
 - **`stand_up` is generated from the wrong frame.** It is supposed to start from
   the last frame of `sit_down`; the anchor is computed and then dropped, so one
   clip per library is knowingly wrong.
+- **The conversation on screen does not survive a restart.** The thread is built
+  from the clauses she speaks and the lines you type, and it lives only in the
+  window that drew it. Her *memory* persists — the distilled facts in
+  `memory.db` are what she actually knows — but the bubbles do not, so relaunching
+  gives you an empty thread talking to someone who remembers you. Restoring it
+  needs a transcript store in main and one more call on the bridge.
 - **No sit/stand locomotion.** `sit_down` holds a pose; she does not walk.
 - **Ambient audio sensing is mic-triggered only.** She does not listen to the
   room when you are not talking to her, by design, but that also means she
