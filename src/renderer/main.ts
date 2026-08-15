@@ -71,18 +71,23 @@ async function showAvatar(): Promise<void> {
 /**
  * Sizes the panel so the well is exactly the photograph's shape.
  *
- * Measured rather than calculated: the chrome around the well is bezel padding,
- * a grip and a composer, all of which live in CSS and any of which can change.
- * Measuring `#app` after the aspect is applied means this stays correct when
- * the stylesheet does not.
+ * The window height is asked for rather than the well being constrained, and
+ * the difference matters. Putting an `aspect-ratio` on the well makes the well
+ * the right shape inside a panel that is still the wrong height — which is what
+ * a 1024x1024 portrait in a 420x680 frame looked like: a square photograph
+ * sitting above 260px of empty bezel.
+ *
+ * The chrome — bezel padding, the gap, the composer — is *measured* rather than
+ * written down, because all of it lives in CSS and any of it can change. The
+ * difference between the panel's height and the well's is exactly that chrome,
+ * whatever it currently happens to be.
  */
-async function fitPanelTo(shape: { width: number; height: number } | null): Promise<void> {
+function fitPanelTo(shape: { width: number; height: number } | null): void {
   if (!shape || shape.height === 0) return;
-  wellEl.style.aspectRatio = `${shape.width} / ${shape.height}`;
 
-  // One frame, so layout has actually run against the new aspect ratio.
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  window.anna.fitHeight(appEl.getBoundingClientRect().height);
+  const chrome = appEl.clientHeight - wellEl.clientHeight;
+  const wanted = (wellEl.clientWidth * shape.height) / shape.width;
+  window.anna.fitHeight(chrome + wanted);
 }
 
 async function applyLibrary(view: LibraryView): Promise<void> {
