@@ -316,7 +316,7 @@ export const IPC = {
 // ---------------------------------------------------------------------------
 
 /** What kind of provider a key belongs to. Maps onto the SecretName prefix. */
-export type KeyKind = 'llm' | 'tts' | 'stt';
+export type KeyKind = 'llm' | 'tts' | 'stt' | 'video';
 
 export interface KeyStatus {
   present: boolean;

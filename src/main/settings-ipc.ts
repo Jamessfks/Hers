@@ -23,6 +23,7 @@ import type { Secrets, SecretName } from './secrets.ts';
 import { createLlmProvider } from '../core/llm/index.ts';
 import { createSttProvider } from '../core/speech/stt.ts';
 import { createTtsProvider } from '../core/speech/index.ts';
+import { createVideoClipProvider } from '../core/avatar/video-provider.ts';
 import { looksMisplaced, validateKey } from './key-validation.ts';
 import { readPermissions } from './senses/permissions.ts';
 import {
@@ -81,6 +82,7 @@ export function registerSettingsHandlers(deps: SettingsDeps): void {
           llm: createLlmProvider,
           tts: createTtsProvider,
           stt: createSttProvider,
+          video: (provider, key) => createVideoClipProvider(provider, { apiKey: key }),
         },
       });
       if (!verdict.ok) return verdict;

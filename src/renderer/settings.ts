@@ -37,7 +37,24 @@ declare global {
 const api = window.anna;
 
 /** Provider menus, with the reason each one is worth choosing. */
-const PROVIDERS = {
+interface ProviderEntry {
+  id: string;
+  label: string;
+  url: string;
+  why?: string;
+  keyless?: boolean;
+}
+
+/**
+ * `video` starts empty and is filled from main at boot.
+ *
+ * The other three are static because their provider lists are: three model
+ * vendors, three voice vendors, three transcribers, all known at compile time.
+ * The video list carries a *price* per provider, and a price is a property of
+ * the adapter — Runway publishes a rate card, Hedra refuses to quote before
+ * ingest — so hardcoding it here is how it goes stale without anyone noticing.
+ */
+const PROVIDERS: Record<Kind, ProviderEntry[]> = {
   llm: [
     { id: 'anthropic', label: 'Anthropic (Claude)', url: 'https://console.anthropic.com/settings/keys' },
     { id: 'openai', label: 'OpenAI', url: 'https://platform.openai.com/api-keys' },
@@ -63,6 +80,7 @@ const PROVIDERS = {
       why: 'Takes an acting note per line, so Anna directs her own delivery.',
     },
   ],
+  video: [],
   stt: [
     {
       id: 'apple',
@@ -84,11 +102,28 @@ const PROVIDERS = {
       why: 'Best on languages other than English. Your voice is sent to OpenAI.',
     },
   ],
-} as const;
+};
 
+/**
+ * Where each kind's provider lives in the config.
+ *
+ * Three of the four sit at `config[kind].provider`, which is why the original
+ * `keyGroup` could index straight into the config with the kind. The video
+ * provider does not — it belongs to `avatar`, alongside the photograph it
+ * renders clips for. Rather than fork the whole key-group into a second
+ * near-identical copy for one field name, the path is a parameter.
+ */
+const PROVIDER_FIELD: Record<Kind, { read(): string; patch(value: string): Record<string, unknown> }> = {
+  llm: { read: () => config.llm.provider, patch: (value) => ({ llm: { provider: value } }) },
+  tts: { read: () => config.tts.provider, patch: (value) => ({ tts: { provider: value } }) },
+  stt: { read: () => config.stt.provider, patch: (value) => ({ stt: { provider: value } }) },
+  video: {
+    read: () => config.avatar.videoProvider,
+    patch: (value) => ({ avatar: { videoProvider: value } }),
+  },
+};
 
-
-type Kind = keyof typeof PROVIDERS;
+type Kind = 'llm' | 'tts' | 'stt' | 'video';
 
 let config: AnnaConfig;
 let permissions: PermissionReport | null = null;
@@ -122,7 +157,7 @@ function keyGroup(kind: Kind): void {
   for (const provider of PROVIDERS[kind]) {
     select.append(new Option(provider.label, provider.id));
   }
-  select.value = config[kind].provider;
+  select.value = PROVIDER_FIELD[kind].read();
 
   const currentProvider = () =>
     PROVIDERS[kind].find((entry) => entry.id === select.value);
@@ -130,7 +165,7 @@ function keyGroup(kind: Kind): void {
   /** Reflects what is stored for the selected provider. */
   const describe = async (): Promise<void> => {
     const chosen = currentProvider();
-    if (why && chosen && 'why' in chosen) why.textContent = chosen.why;
+    if (why && chosen?.why) why.textContent = chosen.why;
 
     /*
      * A provider that needs no key gets no key field.
@@ -140,7 +175,7 @@ function keyGroup(kind: Kind): void {
      * finished, and the whole point of the on-device option is that there is
      * nothing left to do.
      */
-    if (chosen && 'keyless' in chosen && chosen.keyless) {
+    if (chosen?.keyless) {
       for (const control of [input, button, reveal, forget]) control.hidden = true;
       status.dataset['tone'] = 'good';
       status.textContent = 'Ready. No key needed, and nothing is sent anywhere.';
@@ -185,7 +220,7 @@ function keyGroup(kind: Kind): void {
    * exact path that used to leave `claude-sonnet-5` configured against OpenAI.
    */
   select.addEventListener('change', async () => {
-    await patch({ [kind]: { provider: select.value } });
+    await patch(PROVIDER_FIELD[kind].patch(select.value));
     await describe();
     if (kind === 'llm') await loadModels({ refetch: true });
     if (kind === 'tts') await loadVoices();

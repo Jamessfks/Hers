@@ -19,6 +19,7 @@ import type {
   LlmProviderId,
   SttProviderId,
   TtsProviderId,
+  VideoProviderId,
 } from '../shared/protocol.ts';
 
 export type KeyVerdict = { ok: true } | { ok: false; reason: string };
@@ -27,6 +28,7 @@ export interface ProviderFactories {
   llm(provider: LlmProviderId, key: string): LlmProvider;
   tts(provider: TtsProviderId, key: string): TtsProvider;
   stt(provider: SttProviderId, key: string): SttProvider;
+  video(provider: VideoProviderId, key: string): { validateKey(): Promise<KeyVerdict> };
 }
 
 /**
@@ -114,6 +116,12 @@ export async function validateKey(input: ValidateInput): Promise<KeyVerdict> {
           .stt(input.provider as SttProviderId, key)
           .transcribe(wavOfSilence(0.1), 'audio/wav');
         return { ok: true };
+
+      case 'video':
+        // The video adapters check the balance as well as the key, because a
+        // valid key on an empty account fails at the first render — long after
+        // this screen, and with a message about billing rather than about setup.
+        return await input.factories.video(input.provider as VideoProviderId, key).validateKey();
 
       default:
         return { ok: false, reason: `Unknown key type: ${String(input.kind)}` };
