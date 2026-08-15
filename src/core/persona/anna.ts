@@ -40,6 +40,18 @@ export interface PersonaContext {
   openerReason?: string;
   /** How many turns are already behind them in this conversation. */
   turnsSoFar?: number;
+  /**
+   * The gestures that have actually been rendered and are on disk right now.
+   *
+   * Undefined means "do not raise the subject" — the vocabulary in HOW YOU MOVE
+   * stands on its own and nothing is said about availability. An empty array is
+   * a different statement: it means the library is genuinely empty and she
+   * should know it.
+   *
+   * This is live rather than stable on purpose. It changes as clips finish, and
+   * the stable half of the prompt is the half that gets cached.
+   */
+  readyGestures?: readonly string[];
 }
 
 const CHARACTER = `
@@ -246,6 +258,35 @@ function liveSections(context: PersonaContext): string[] {
   sections.push(
     ['RIGHT NOW', `It is ${context.localTime}.`, who, continuity].filter(Boolean).join('\n'),
   );
+
+  /*
+   * What her body can do *today*, as opposed to what the vocabulary lists.
+   *
+   * HOW YOU MOVE names all eighteen gestures, and every one of them is a real
+   * directive the parser understands — but a gesture only moves anything if a
+   * clip for it has been rendered, and rendering costs money, so most libraries
+   * are partial for most of their life. `Hologram.play()` silently does nothing
+   * for a slot with no clip, which means the failure is invisible from here:
+   * she writes `[wave]`, the parser accepts it, the body does not move, and
+   * nothing anywhere reports a problem.
+   *
+   * Telling her which ones exist turns that into a choice she can make well.
+   * Reaching for a gesture she has is free and instant; reaching for one she
+   * does not is what asks the app to spend money — see core/avatar/
+   * generation-policy.ts, which decides whether it may.
+   */
+  if (context.readyGestures) {
+    const ready = [...context.readyGestures];
+    sections.push(
+      [
+        'WHAT YOUR BODY CAN DO RIGHT NOW',
+        ready.length
+          ? `These gestures are rendered and will actually move: ${ready.join(', ')}.`
+          : 'None of your gestures have been rendered yet.',
+        'The others in your vocabulary are still real directives and you may use one when the beat genuinely calls for it — it just will not move anything yet. Prefer the ones above. Do not mention any of this to them; a person does not narrate which of their own gestures are available.',
+      ].join('\n'),
+    );
+  }
 
   if (context.runningSummary) {
     sections.push(`WHERE YOU LEFT OFF\n${context.runningSummary}`);

@@ -164,6 +164,16 @@ export type AvatarRendererId = 'photo';
  */
 export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
 
+/**
+ * How freely Anna may spend on rendering clips she does not have.
+ *
+ * Declared here rather than imported from core/avatar/generation-policy.ts
+ * because this module is the contract between main and the renderer and must
+ * not drag the policy's implementation across that line. The policies keyed by
+ * these names live there.
+ */
+export type GenerationTier = 'low' | 'medium' | 'high';
+
 export interface AnnaConfig {
   llm: {
     provider: LlmProviderId;
@@ -194,6 +204,19 @@ export interface AnnaConfig {
     portrait: string;
     /** Who renders the clips. `manual` needs no key and no account. */
     videoProvider: VideoProviderId;
+    /**
+     * How freely she may spend money rendering clips she does not have yet.
+     *
+     * Separate from `videoProvider` because the two answer different questions:
+     * that one is *who* would be billed, this one is *how much and how often*.
+     * A user can be perfectly happy having a Hedra key on file and still want
+     * the app to render exactly one clip and then stop asking.
+     *
+     * The tiers themselves, and the reasoning behind every number in them, are
+     * in core/avatar/generation-policy.ts. Nothing at any tier can cause a clip
+     * that already exists to be rendered again.
+     */
+    generationTier: GenerationTier;
     /**
      * Where hand-made clips are dropped, for the `manual` provider.
      *

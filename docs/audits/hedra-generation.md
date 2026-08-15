@@ -91,6 +91,58 @@ the architecture made impossible to write.
 
 ---
 
+## What was fixed
+
+Findings 1, 2, 4 and 5 are fixed, with tests that fail if they come back.
+
+| # | Fix |
+|---|---|
+| 1 | `awaitClip` catches a failed status check and retries it, reading the `retryable` flag the adapters were already computing. Six consecutive failures against a backoff reaching 30s separate a flaky network from a dead one; a provider that says "final" is still believed on the first try. |
+| 2 | `generateClip` reports the handle through a new `onSubmit` and **awaits it** before the first poll. `portrait.ts` uses it to call `attachJob` and save, so a paid job is durable before it is waited on. |
+| 4 | `adopt()` refuses while `#busy`, with a message the user can act on. |
+| 5 | `VideoProviderOptions` carries `fetch`, threaded to the `hedra` and `runway` factories. |
+
+**Finding 3 (the seam check) is not fixed.** Wiring it needs a video decoder,
+which only the renderer has, so it is a round trip — main writes a clip, the
+renderer measures it, main records the verdict — rather than a missing call.
+That is real work with its own design, not an oversight to patch here, and
+pretending otherwise would have meant a fake fix. It remains open in the
+README.
+
+## The generation tiers
+
+`core/avatar/generation-policy.ts`. Reuse is not one of the tiers: a clip that
+exists on disk is played from disk at every tier, and nothing in the module can
+cause a re-render. The tiers only govern what happens when a named motion is
+**missing**, which is the only moment money is at stake.
+
+| | low | medium (default) | high |
+|---|---|---|---|
+| Eligible slots | `idle` only | first 5 of `BUILD_ORDER` | all 19 |
+| Max per session | 1 | 3 | 6 |
+| Max in the library | 1 | 5 | 19 |
+| Cooldown | — | 10 min | 2 min |
+| Spend ceiling | $1 | $5 | $20 |
+| Mode | on demand | on demand | pre-warm |
+
+Four axes rather than one dial, because four different things go wrong and one
+number cannot stop all of them: *which slots* bounds the worst case at all,
+*how many* bounds a bad afternoon, *how often* bounds a runaway loop, and *how
+much* is the backstop that does not depend on the other three being right.
+
+The one anchoring figure is real: the single clip this project has actually paid
+for cost **$0.25**, recorded in a library manifest. Everything else is a choice,
+and the ceilings are in dollars rather than clip counts because Hedra bills on
+the driving audio and will not quote before ingest — a per-clip count would be a
+guess wearing a number's clothes.
+
+`low` is not "a bit less". It is one slot, because `idle` is the only clip whose
+absence means nothing on screen moves at all; every other gesture degrades
+silently, so a user who wants to spend nothing loses gestures and keeps the
+product.
+
+---
+
 ## Testing without spending
 
 The constraint on this work was that it must not spend a single real credit.

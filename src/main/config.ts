@@ -27,7 +27,15 @@ export const DEFAULT_CONFIG: AnnaConfig = {
   // `manual` by default because it is the only provider that needs no account
   // and cannot produce a bill. Choosing Hedra is a decision the user makes on
   // the settings screen, next to what it costs.
-  avatar: { renderer: 'photo', portrait: '', videoProvider: 'manual', clipFolder: '' },
+  avatar: {
+    renderer: 'photo',
+    portrait: '',
+    videoProvider: 'manual',
+    // Medium by default, matching DEFAULT_TIER: the idle loop plus the four
+    // gestures the persona reaches for constantly, rendered as she needs them.
+    generationTier: 'medium',
+    clipFolder: '',
+  },
   senses: {
     // Camera and microphone start off. A companion that switches on your camera
     // the first time you launch her has already lost the argument.
