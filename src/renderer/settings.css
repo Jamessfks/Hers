@@ -483,3 +483,19 @@ a {
     transition: none !important;
   }
 }
+
+/*
+ * The chosen photograph, shown back at the size decisions are made at.
+ *
+ * A thumbnail would be cheaper and useless: the question this answers is "is
+ * her face big enough, and is that the background you want behind her all day",
+ * and neither is visible at 64px.
+ */
+#portrait-preview {
+  display: block;
+  margin-top: 10px;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}

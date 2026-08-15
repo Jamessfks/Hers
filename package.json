@@ -18,18 +18,14 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --disable-warning=ExperimentalWarning \"src/**/*.test.ts\"",
     "lint": "tsc --noEmit",
-    "dist:mac": "npm run fetch:character && bash scripts/build-native.sh --required && electron-vite build && electron-builder --mac --publish never",
-    "fetch:character": "node scripts/fetch-character.mjs",
+    "dist:mac": "bash scripts/build-native.sh --required && electron-vite build && electron-builder --mac --publish never",
     "demo": "electron-vite build && ANNA_DEMO=1 electron out/main/index.js"
   },
   "dependencies": {
-    "@pixiv/three-vrm": "^3.5.5",
-    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/three": "^0.185.4",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
