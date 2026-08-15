@@ -89,12 +89,26 @@ body {
   position: relative;
   border-radius: 10px;
   overflow: hidden;
+  /*
+   * The back wall, and the floor it meets.
+   *
+   * The first version ran the gradient down to near-black and then relied on a
+   * faint wash to suggest a floor. Measured, the floor came out *darker* than
+   * the middle of the stage — so it read as shadow rather than as ground, which
+   * is the opposite of the cue that makes a figure look like it is standing on
+   * something.
+   *
+   * A cyclorama does not go black at the bottom. It curves into the floor, and
+   * the brightest part of the floor is the seam where the two meet, falling off
+   * toward the viewer. So the wall darkens to a floor tone rather than to
+   * nothing, and the horizon is the light line.
+   */
   background:
-    radial-gradient(75% 55% at 50% 12%, rgba(150, 205, 255, 0.20), transparent 70%),
-    linear-gradient(180deg, #2c3140 0%, #1b1f2a 62%, #12141b 100%);
+    radial-gradient(78% 52% at 50% 10%, rgba(150, 205, 255, 0.22), transparent 72%),
+    linear-gradient(180deg, #2f3446 0%, #232838 58%, #262c3b 78%, #20252f 100%);
   box-shadow:
-    inset 0 0 44px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 0 38px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 /*
@@ -107,11 +121,57 @@ body {
 #floor {
   position: absolute;
   inset: auto 0 0 0;
-  height: 22%;
+  height: 26%;
   pointer-events: none;
+  /*
+   * Layer order matters here, and it was wrong.
+   *
+   * Two mistakes: the light fell off in the wrong direction — brightening
+   * toward the bottom edge, when a floor lit from the wall is brightest at the
+   * seam and dims toward the viewer — and the contact shadow was a 46%-wide
+   * blob covering most of the band, so it darkened the entire floor instead of
+   * grounding the feet.
+   *
+   * Now: a bright horizon line where wall meets floor, a wash falling off
+   * toward the viewer, and a tight ellipse under the feet. The shadow sits at
+   * 82% down the band because that is where her feet actually land — the
+   * framing leaves ~27px of floor below them out of a 153px band.
+   */
   background:
-    radial-gradient(46% 26% at 50% 82%, rgba(0, 0, 0, 0.55), transparent 72%),
-    linear-gradient(180deg, transparent 0%, rgba(120, 150, 190, 0.10) 55%, rgba(140, 175, 215, 0.16) 100%);
+    /* Contact shadow: small, dark, directly beneath her. */
+    radial-gradient(20% 9% at 50% 82%, rgba(0, 0, 0, 0.62), transparent 74%),
+    /* Soft occlusion spreading a little further out. */
+    radial-gradient(38% 18% at 50% 82%, rgba(0, 0, 0, 0.26), transparent 76%),
+    /* The lit ground plane, brightest at the seam. */
+    linear-gradient(
+      180deg,
+      rgba(168, 200, 240, 0.30) 0%,
+      rgba(150, 182, 222, 0.20) 26%,
+      rgba(120, 148, 186, 0.11) 62%,
+      rgba(96, 118, 152, 0.06) 100%
+    );
+}
+
+/*
+ * The seam itself.
+ *
+ * One bright hairline where the wall curves into the floor. It is the single
+ * detail that tells the eye there are two surfaces rather than one gradient,
+ * and it costs a pseudo-element.
+ */
+#floor::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(190, 220, 255, 0.34) 22%,
+    rgba(200, 228, 255, 0.42) 50%,
+    rgba(190, 220, 255, 0.34) 78%,
+    transparent 100%
+  );
 }
 
 /*
