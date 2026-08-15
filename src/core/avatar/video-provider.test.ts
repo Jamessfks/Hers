@@ -229,9 +229,12 @@ test('the provider table matches the registry, and admits what is a stub', () =>
     assert.equal(provider.id, info.id);
     assert.ok(info.why.length > 20, `${info.id} needs a reason to exist`);
   }
+  // Hedra joined `manual` once its endpoints were read off the published spec
+  // and checked against a live key; the other three are still guesses nobody
+  // has verified, and this assertion is what stops one being quietly promoted.
   assert.deepEqual(
     VIDEO_PROVIDER_INFO.filter((info) => info.status === 'wired').map((info) => info.id),
-    ['manual'],
+    ['manual', 'hedra'],
   );
 });
 
