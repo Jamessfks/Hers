@@ -73,6 +73,18 @@ function transport(routes: Array<[string, () => { status?: number; json?: unknow
 
 const uploaded = { url: 'https://files.hedra.com/abc?sig=xyz', content_type: 'image/jpeg' };
 
+/** Just enough JPEG for the sniffer: SOI, a JFIF segment, then SOF0. */
+function jpegHeader(width: number, height: number): Uint8Array {
+  return new Uint8Array([
+    0xff, 0xd8,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0,
+    0xff, 0xc0, 0x00, 0x11, 0x08,
+    (height >> 8) & 0xff, height & 0xff,
+    (width >> 8) & 0xff, width & 0xff,
+    0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1,
+  ]);
+}
+
 function clipRequest(overrides: Partial<ClipRequest> = {}): ClipRequest {
   return {
     slot: 'nod',
@@ -253,7 +265,7 @@ test('a photograph named .png but holding JPEG bytes is uploaded as JPEG', async
   const spy = (async (url: string, init: RequestInit = {}) => {
     if (String(url).endsWith('/files') && init.body instanceof FormData) {
       const file = init.body.get('file');
-      if (file instanceof File && file.name.startsWith('source')) uploadedType = file.type;
+      if (file instanceof Blob && file.type.startsWith('image/')) uploadedType = file.type;
     }
     return fetch(url as never, init as never);
   }) as unknown as typeof globalThis.fetch;
