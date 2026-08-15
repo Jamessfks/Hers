@@ -20,6 +20,18 @@ import { test } from 'node:test';
 const here = new URL('.', import.meta.url).pathname;
 const html = readFileSync(join(here, 'index.html'), 'utf8');
 const main = readFileSync(join(here, 'main.ts'), 'utf8');
+const settingsHtml = readFileSync(join(here, 'settings.html'), 'utf8');
+const settings = readFileSync(join(here, 'settings.ts'), 'utf8');
+
+/**
+ * Controls the settings window drives through an attribute rather than an id.
+ *
+ * The key groups are deliberately generic — one function wires all four from
+ * `[data-provider]`, `[data-key]` and friends — so their ids exist only for the
+ * `<label for>` associations. Requiring `#video-key` to appear in settings.ts
+ * would be asking for the duplication the data attributes exist to avoid.
+ */
+const WIRED_BY_ATTRIBUTE = /-(provider|key)$/;
 
 /** Ids of controls a user can actually click or type into. */
 function interactiveIds(markup: string): string[] {
@@ -42,5 +54,32 @@ test('every interactive control is wired up in main.ts', () => {
       main.includes(`#${id}`),
       `#${id} exists in index.html but is never referenced in main.ts — it will render and do nothing`,
     );
+  }
+});
+
+/**
+ * The same check for the settings window, which is where the dead-button risk
+ * actually lives now: it has thirty-odd controls to the panel's three, and the
+ * newest of them spend money.
+ */
+test('every settings control is wired up in settings.ts', () => {
+  for (const id of interactiveIds(settingsHtml)) {
+    if (WIRED_BY_ATTRIBUTE.test(id)) continue;
+    assert.ok(
+      settings.includes(`#${id}`),
+      `#${id} exists in settings.html but is never referenced in settings.ts — it will render and do nothing`,
+    );
+  }
+});
+
+test('the video provider group exists and follows the shared key-group contract', () => {
+  // The whole reason `keyGroup` could be pointed at a fourth kind without being
+  // rewritten. If this markup drifts, the group silently stops being wired.
+  const group = /<div class="key-group" data-kind="video">([\s\S]*?)<\/div>\s*<\/section>/.exec(
+    settingsHtml,
+  );
+  assert.ok(group, 'the video key group is missing from settings.html');
+  for (const attribute of ['data-provider', 'data-key', 'data-save', 'data-reveal', 'data-forget', 'data-status', 'data-why']) {
+    assert.ok(group[1]!.includes(attribute), `the video group is missing ${attribute}`);
   }
 });

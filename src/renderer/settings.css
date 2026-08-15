@@ -499,3 +499,26 @@ a {
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
+
+/*
+ * The price, above the button that spends it.
+ *
+ * Given its own tone rather than the muted grey the other notes use. This is
+ * the only sentence on the screen that is about money, and a user who skims
+ * past it and then sees a charge has been failed by the layout, not by their
+ * attention.
+ */
+.price-note {
+  margin: 10px 0 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.price-note:empty {
+  display: none;
+}
