@@ -62,6 +62,8 @@ export function createManualProvider(dropDir: string): VideoClipProvider {
       usdPerClip: 0,
       assumedUsdPerClip: 0,
       pricingUrl: null,
+      // Nothing is charged because nothing is called. As observed as it gets.
+      basis: 'observed',
       verified: true,
     },
     // A person, not a GPU. The build driver is not really the intended caller

@@ -55,7 +55,13 @@ function fakeProvider(states: ClipJobState[], bytes = new Uint8Array([9, 9])): {
   const provider: VideoClipProvider = {
     id: 'manual',
     label: 'Fake',
-    cost: { usdPerClip: 0.2, assumedUsdPerClip: 0.2, pricingUrl: null, verified: true },
+    cost: {
+      usdPerClip: 0.2,
+      assumedUsdPerClip: 0.2,
+      pricingUrl: null,
+      basis: 'observed',
+      verified: true,
+    },
     timeoutMs: 60_000,
     async submit() {
       calls.submits += 1;
@@ -178,7 +184,7 @@ test('an abort stops the loop', async () => {
 
 test('a verified price gives a firm number', () => {
   const estimate = estimateLibraryCost(
-    { usdPerClip: 0.25, assumedUsdPerClip: 0.25, pricingUrl: null, verified: true },
+    { usdPerClip: 0.25, assumedUsdPerClip: 0.25, pricingUrl: null, basis: 'published', verified: true },
     CLIP_SLOT_NAMES.length,
   );
   assert.equal(estimate.low, estimate.high);
@@ -188,7 +194,7 @@ test('a verified price gives a firm number', () => {
 
 test('an unverified price gives a range and says so', () => {
   const estimate = estimateLibraryCost(
-    { usdPerClip: null, assumedUsdPerClip: 0.3, pricingUrl: null, verified: false },
+    { usdPerClip: null, assumedUsdPerClip: 0.3, pricingUrl: null, basis: 'unknown', verified: false },
     19,
   );
   assert.equal(estimate.confident, false);
@@ -210,7 +216,7 @@ test('bringing your own clips costs nothing here', () => {
 // -- the registry -----------------------------------------------------------
 
 test('the unwired adapters fail where the fix is obvious', async () => {
-  for (const id of ['runway', 'luma', 'kling'] as const) {
+  for (const id of ['luma', 'kling'] as const) {
     const provider = createVideoClipProvider(id, { apiKey: 'not-a-real-key' });
     await assert.rejects(
       () => provider.submit(request()),
@@ -229,12 +235,12 @@ test('the provider table matches the registry, and admits what is a stub', () =>
     assert.equal(provider.id, info.id);
     assert.ok(info.why.length > 20, `${info.id} needs a reason to exist`);
   }
-  // Hedra joined `manual` once its endpoints were read off the published spec
-  // and checked against a live key; the other three are still guesses nobody
+  // Hedra and Runway joined `manual` once their endpoints were read off each
+  // vendor's published OpenAPI document; Luma and Kling are still guesses nobody
   // has verified, and this assertion is what stops one being quietly promoted.
   assert.deepEqual(
     VIDEO_PROVIDER_INFO.filter((info) => info.status === 'wired').map((info) => info.id),
-    ['manual', 'hedra'],
+    ['manual', 'hedra', 'runway'],
   );
 });
 
