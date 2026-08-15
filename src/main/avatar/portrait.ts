@@ -31,6 +31,7 @@ import {
   libraryProgress,
   pendingWork,
   resumableJobs,
+  attachJob,
   startGenerating,
   type ClipLibrary,
   type ClipSlotName,
@@ -149,8 +150,29 @@ export class PortraitLibrary extends EventEmitter {
     return accepted;
   }
 
-  /** Stores the photograph and opens (or resumes) its clip library. */
+  /**
+   * Stores the photograph and opens (or resumes) its clip library.
+   *
+   * Refused outright while a build is running, and that is not conservatism.
+   * `build()` takes `#busy` and then holds `library` in a local for minutes at a
+   * time while a paid render finishes; `#finish` writes through `this.#library`
+   * when it lands. Swapping the photograph in between left an in-flight clip
+   * writing into the *new* photograph's directory against the new manifest —
+   * a clip of one person filed under another, and a slot marked ready that
+   * nothing had rendered.
+   *
+   * Failing the swap is the right way round. The build finishes in minutes and
+   * the user can change the photograph then; the alternative silently corrupts
+   * a library they paid for.
+   */
   async adopt(bytes: Uint8Array): Promise<PortraitAccepted | PortraitProblem> {
+    if (this.#busy) {
+      return {
+        ok: false,
+        reason: 'Anna is still rendering a clip. Give her a moment, then choose the photo again.',
+      };
+    }
+
     const inspected = PortraitLibrary.inspect(bytes);
     if (!inspected.ok) return inspected;
 
@@ -242,6 +264,28 @@ export class PortraitLibrary extends EventEmitter {
             {
               onState: (state) => {
                 this.emit('progress', { slot, state });
+              },
+              /*
+               * Write the handle down before waiting on it.
+               *
+               * `attachJob` existed, was exported, was tested, and had no call
+               * site anywhere in the app — so a slot sat in `generating` with
+               * `job: null` for the entire render, and `resumableJobs` skips
+               * exactly that. Crash or quit in those minutes and the next build
+               * could not tell a paid, still-running job from one that had never
+               * started, so it submitted again and the user paid twice.
+               *
+               * The comment on `awaitClip` promises a crash mid-build is free
+               * because a recovered job re-enters without a submit. The recovery
+               * path was real; this is the line that gives it something to find.
+               */
+              onSubmit: async (job) => {
+                this.#library = attachJob(this.#library!, slot, {
+                  providerId: job.providerId,
+                  id: job.id,
+                  submittedAt: job.submittedAt,
+                });
+                await this.#store.save(this.#library);
               },
             },
           ),

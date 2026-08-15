@@ -230,6 +230,18 @@ export interface ClipRunOptions {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   onState?: (state: ClipJobState) => void;
+  /**
+   * Fires with the handle the instant the provider accepts the job, and is
+   * awaited before the first poll.
+   *
+   * The awaiting is the whole point. A submit that has been accepted has been
+   * billed, and until the handle reaches durable storage the only record of a
+   * paid job is a local variable inside a promise that has not resolved yet.
+   * Quit the app in that window and the money is spent on something nothing can
+   * find again. Callers use this to write the handle down first and wait
+   * second.
+   */
+  onSubmit?: (job: ClipJobHandle) => void | Promise<void>;
   signal?: AbortSignal;
 }
 
@@ -250,6 +262,21 @@ const DEFAULT_POLL_MS = 5_000;
 const POLL_BACKOFF = 1.5;
 const MAX_POLL_MS = 30_000;
 
+/**
+ * How many times in a row a status check may fail before the wait gives up.
+ *
+ * Not a tuning knob so much as an answer to "what is a poll error worth?". The
+ * job on the other end has already been billed — Hedra charges on ingest — so
+ * the cost of trying again is one HTTP request and the cost of not trying again
+ * is the whole clip. Six consecutive failures, against a backoff that reaches
+ * 30s, is several minutes of a service being unreachable before this concludes
+ * the job is unreachable too.
+ *
+ * Consecutive, not cumulative: a single success resets it, because a job that
+ * answers intermittently over a long render is a flaky network, not a failure.
+ */
+const MAX_POLL_FAILURES = 6;
+
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -262,6 +289,8 @@ export async function generateClip(
   options: ClipRunOptions = {},
 ): Promise<ClipResult> {
   const job = await provider.submit(request);
+  // Before the first poll, not after the last one. See `onSubmit`.
+  await options.onSubmit?.(job);
   return awaitClip(provider, job, options);
 }
 
@@ -282,10 +311,40 @@ export async function awaitClip(
   const deadline = now() + (options.timeoutMs ?? provider.timeoutMs);
   let wait = options.pollIntervalMs ?? DEFAULT_POLL_MS;
 
+  let failures = 0;
+
   for (;;) {
     options.signal?.throwIfAborted();
 
-    const state = await provider.poll(job, options.signal);
+    /*
+     * A status check that throws is not the render failing.
+     *
+     * This used to be a bare `await provider.poll(...)`, and any throw from it —
+     * a 429, a 502, a socket reset, a laptop that slept — propagated out of this
+     * function and marked the slot failed. The job was untouched by that: it was
+     * still running on the provider's queue, and it had already been billed,
+     * because these services charge on ingest. The app had simply stopped
+     * watching something the user had paid for.
+     *
+     * The adapters already distinguish the two. `failure()` in
+     * hedra-provider.ts sets `retryable` from the vendor's own flag, falling
+     * back to 429-and-5xx, with a comment saying the service knows which of its
+     * errors are worth repeating. Nothing on this path read it. Now it does, and
+     * anything that is not a transport-level throw is trusted when it says the
+     * request should not be repeated.
+     */
+    let state: ClipJobState;
+    try {
+      state = await provider.poll(job, options.signal);
+      failures = 0;
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      if (!worthRepeating(error) || (failures += 1) >= MAX_POLL_FAILURES) throw error;
+      await sleep(wait);
+      wait = Math.min(MAX_POLL_MS, Math.round(wait * POLL_BACKOFF));
+      continue;
+    }
+
     options.onState?.(state);
 
     if (state.status === 'succeeded') {
@@ -312,6 +371,24 @@ export async function awaitClip(
   }
 }
 
+/**
+ * Whether a failed status check is worth making again.
+ *
+ * A `VideoClipError` carries the provider's own verdict and is believed in both
+ * directions — including when it says no, because a 401 or a 422 will say no
+ * just as firmly on the tenth attempt.
+ *
+ * Anything else reaching here is a transport-level throw: `fetch` rejects with
+ * a `TypeError` for DNS and connection failures, and those are exactly the
+ * conditions worth waiting out. An unrecognised error is treated as repeatable
+ * for the same reason the retry exists at all — the job is already paid for, so
+ * the asymmetry favours trying again.
+ */
+function worthRepeating(error: unknown): boolean {
+  if (error instanceof VideoClipError) return error.retryable === true;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -323,6 +400,19 @@ export interface VideoProviderOptions {
    * Ignored by the hosted providers.
    */
   dropDir?: string;
+  /**
+   * The transport. Injected by tests; defaults to the global.
+   *
+   * The adapters have taken an injectable `fetch` since they were written, and
+   * until this was added the seam stopped here: every caller in the app reaches
+   * a provider through {@link createVideoClipProvider}, and this bag had no way
+   * to pass one down. So the adapters were testable in isolation and the path
+   * the app actually runs was not testable at all — which is why two defects
+   * that bill the user twice survived in it. Against an API that charges on
+   * ingest, "you cannot write that test" and "you cannot afford to find that
+   * bug" are the same sentence.
+   */
+  fetch?: typeof globalThis.fetch;
 }
 
 /**
@@ -333,8 +423,16 @@ export interface VideoProviderOptions {
  */
 const FACTORIES: Record<VideoProviderId, (options: VideoProviderOptions) => VideoClipProvider> = {
   manual: (options) => createManualProvider(options.dropDir ?? ''),
-  hedra: (options) => createHedraProvider({ apiKey: options.apiKey ?? '' }),
-  runway: (options) => createRunwayProvider({ apiKey: options.apiKey ?? '' }),
+  hedra: (options) =>
+    createHedraProvider({
+      apiKey: options.apiKey ?? '',
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    }),
+  runway: (options) =>
+    createRunwayProvider({
+      apiKey: options.apiKey ?? '',
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    }),
   luma: (options) => createLumaProvider(options.apiKey ?? ''),
   kling: (options) => createKlingProvider(options.apiKey ?? ''),
 };
