@@ -11,7 +11,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { GESTURE_CLIPS } from '../../renderer/avatar/poses.ts';
 import { GESTURE_NAMES } from '../../shared/protocol.ts';
 import { CLIP_SLOT_NAMES, IDLE_SLOT } from './clips.ts';
 import {
@@ -36,16 +35,25 @@ test('the idle clip has a prompt too', () => {
   for (const slot of CLIP_SLOT_NAMES) assert.ok(CLIP_PROMPTS[slot], `missing prompt for ${slot}`);
 });
 
-test('clip timing matches the VRM renderer beat for beat', () => {
-  // The same `[nod]` has to read at the same speed whichever renderer draws
-  // her, otherwise the persona's timing is tuned against one of them and wrong
-  // on the other.
+/*
+ * This used to assert that every clip's beat matched the VRM renderer's
+ * keyframed clip of the same name, millisecond for millisecond, so that `[nod]`
+ * read at one speed whichever renderer drew her. There is only one renderer
+ * now, and the file it compared against is gone.
+ *
+ * What survives the deletion is the reason the comparison existed: a beat is a
+ * human gesture and has a speed a human recognises. A 200ms "nod" is a twitch.
+ *
+ * The upper bound is loose on purpose. The slowest slot, `sway`, is 3200ms and
+ * is correct at that length — it is a weight shift, not a beat, and hurrying it
+ * would make her fidget. The tight ceiling belongs to the next test, which
+ * checks each beat against the clip actually being paid for.
+ */
+test('every beat reads at human speed', () => {
   for (const name of GESTURE_NAMES) {
-    assert.equal(
-      CLIP_PROMPTS[name].beatMs,
-      GESTURE_CLIPS[name].durationMs,
-      `${name} disagrees with poses.ts`,
-    );
+    const beat = CLIP_PROMPTS[name].beatMs;
+    assert.ok(beat >= 400, `${name} is ${beat}ms — too fast to read as a gesture`);
+    assert.ok(beat <= 4000, `${name} is ${beat}ms — slower than anyone gestures`);
   }
 });
 

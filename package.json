@@ -66,13 +66,6 @@
     },
     "extraResources": [
       {
-        "from": "resources/characters",
-        "to": "characters",
-        "filter": [
-          "**/*.vrm"
-        ]
-      },
-      {
         "from": "native/build/anna-transcribe.app",
         "to": "anna-transcribe.app"
       }
