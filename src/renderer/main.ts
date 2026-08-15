@@ -7,11 +7,9 @@
  * docs/ARCHITECTURE.md for why the line is drawn there.
  */
 
-import type { AnnaConfig, PerformanceEvent } from '../shared/protocol.ts';
-import { Body } from './avatar/body.ts';
+import type { AnnaConfig, LibraryView, PerformanceEvent } from '../shared/protocol.ts';
 import { SpeechPlayer } from './audio/player.ts';
-import { createPlaceholder, type Placeholder } from './avatar/placeholder.ts';
-import { createStage, frameFullBody, frameHeight, loadVrm } from './avatar/stage.ts';
+import { Hologram } from './avatar/hologram.ts';
 import { Microphone } from './audio/microphone.ts';
 import { Vision } from './senses/vision.ts';
 
@@ -21,14 +19,13 @@ declare global {
   }
 }
 
-const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
+const wellEl = document.querySelector<HTMLDivElement>('#well')!;
 const subtitleEl = document.querySelector<HTMLDivElement>('#subtitle')!;
 const composerEl = document.querySelector<HTMLDivElement>('#composer')!;
 const inputEl = document.querySelector<HTMLInputElement>('#say')!;
 const troubleEl = document.querySelector<HTMLDivElement>('#trouble')!;
 const appEl = document.querySelector<HTMLDivElement>('#app')!;
 
-const stage = createStage(canvas);
 window.addEventListener('error', (event) =>
   window.anna.report('error-uncaught', { message: String(event.message).slice(0, 200) }),
 );
@@ -37,8 +34,12 @@ window.addEventListener('unhandledrejection', (event) =>
 );
 const player = new SpeechPlayer();
 
-let body: Body | null = null;
-let placeholder: Placeholder | null = null;
+const hologram = new Hologram({
+  mount: wellEl,
+  loadClip: (slot) => window.anna.getClip(slot),
+  report: (event, detail) => window.anna.report(event, detail),
+});
+
 let config: AnnaConfig | null = null;
 
 // ---------------------------------------------------------------------------
