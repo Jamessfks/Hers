@@ -485,9 +485,10 @@ async function main(): Promise<void> {
    */
   const portraits = new PortraitLibrary({
     store: new ClipLibraryStore({ root: join(app.getPath('userData'), 'libraries') }),
-    providerId: config.get().avatar.videoProvider,
-    apiKey: () => secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
-    dropDir: config.get().avatar.clipFolder,
+    providerId: () => config.get().avatar.videoProvider,
+    apiKey: () =>
+      secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
+    dropDir: () => config.get().avatar.clipFolder || undefined,
   });
 
   portraits.on('changed', (view: LibraryView) => send(IPC.libraryChanged, view));

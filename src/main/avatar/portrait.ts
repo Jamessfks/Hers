@@ -79,10 +79,18 @@ export interface PortraitAccepted {
 
 export interface PortraitStoreOptions {
   store: ClipLibraryStore;
-  providerId: VideoProviderId;
-  /** Resolves the provider's key at call time, so a key set later is picked up. */
+  /**
+   * Every one of these is resolved at call time rather than captured.
+   *
+   * They all live in config or the keychain, and all three can change while the
+   * app is running — that is the entire purpose of the settings window. Reading
+   * them once in the constructor is how "I switched to Runway and it still
+   * charged my Hedra account" happens, and the user would have no way to tell
+   * except the bill.
+   */
+  providerId: () => VideoProviderId;
   apiKey: () => string | undefined;
-  dropDir?: string;
+  dropDir: () => string | undefined;
 }
 
 export class PortraitLibrary extends EventEmitter {
@@ -149,7 +157,7 @@ export class PortraitLibrary extends EventEmitter {
 
     this.#library = await this.#store.open(
       { bytes, mimeType: inspected.info.mimeType },
-      { providerId: this.#options.providerId },
+      { providerId: this.#options.providerId() },
     );
     this.#emit();
     return inspected;
@@ -312,13 +320,14 @@ export class PortraitLibrary extends EventEmitter {
 
   #provider(): VideoClipProvider {
     const key = this.#options.apiKey();
-    const id = this.#options.providerId;
+    const id = this.#options.providerId();
+    const dropDir = this.#options.dropDir();
     if (id !== 'manual' && !key) {
       throw new VideoClipError(`No ${id} key is set, so nothing can be rendered.`, { provider: id });
     }
     return createVideoClipProvider(id, {
       ...(key !== undefined && { apiKey: key }),
-      ...(this.#options.dropDir !== undefined && { dropDir: this.#options.dropDir }),
+      ...(dropDir !== undefined && { dropDir }),
     });
   }
 
