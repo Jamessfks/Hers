@@ -12,6 +12,14 @@ machine except the provider calls you configured.
 The reference point is Joi from *Blade Runner 2049* — presence, not assistance.
 The engineering bar is [Grok's Ani](docs/BENCHMARK.md).
 
+| | | |
+|:--:|:--:|:--:|
+| ![Anna's window on first run](docs/screenshots/first-run.png) | ![A conversation in progress](docs/screenshots/thread.png) | ![Anna composing a reply](docs/screenshots/thinking.png) |
+| **She is the window.** Her clip fills every pixel of it, cropped rather than letterboxed at any size. | **One clause, one bubble.** Her speech is chunked at breath points for the voice path, and each becomes its own message. | **Thinking.** The three dots sit in her place in the stack while the model is still answering. |
+
+<sub>Real captures of the running app, at its default 406×880. The avatar is
+whatever photograph you gave her — nothing is bundled.</sub>
+
 > **Status: v1.0.0.** Runs from source on Apple Silicon; packages to a `.dmg`
 > with `npm run dist:mac`. She ships with a settings window and a menu bar item,
 > but **no body until you give her a photograph** — see
