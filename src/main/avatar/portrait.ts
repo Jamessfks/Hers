@@ -27,7 +27,6 @@ import { EventEmitter } from 'node:events';
 import {
   BUILD_ORDER,
   IDLE_SLOT,
-  attachJob,
   failClip,
   libraryProgress,
   pendingWork,
@@ -276,31 +275,41 @@ export class PortraitLibrary extends EventEmitter {
     this.#emit();
 
     try {
-      if (library.clips[slot].status === 'pending') {
+      /*
+       * Get the slot into `generating` whatever it was.
+       *
+       * This used to only fire for `pending`, which quietly broke every retry:
+       * a slot left `failed` by an earlier attempt stayed `failed`, so the
+       * `attachJob` below threw "there is no job to attach" — *after* the render
+       * had finished and been billed. The clip was paid for and discarded.
+       */
+      if (library.clips[slot].status !== 'generating') {
         this.#library = startGenerating(library, slot);
         await this.#store.save(this.#library);
       }
 
       const result = await run();
 
-      this.#library = attachJob(this.#library!, slot, {
-        providerId: provider.id,
-        id: result.job.id,
-        submittedAt: result.job.submittedAt,
+      /*
+       * Bytes to disk before anything else touches the manifest.
+       *
+       * At this point the render has been paid for, so from here on the only
+       * acceptable failure is a cosmetic one. Bookkeeping used to come first —
+       * `attachJob` before `writeClip` — and when a bookkeeping precondition was
+       * wrong the exception took a finished, billed clip with it. Written first,
+       * the worst case is a file on disk that the manifest has not caught up
+       * with, and `reconcile` promotes exactly that on the next load.
+       */
+      const written = await this.#store.writeClip(this.#library!, slot, result.bytes, {
+        durationMs: Math.round((result.seconds ?? 0) * 1000),
+        costUsd: result.costUsd ?? 0,
       });
 
-      // Bytes first, manifest second. A crash between the two leaves a clip on
-      // disk that `reconcile` finds and promotes; the other order leaves a
-      // manifest pointing at a file that was paid for and never written.
-      //
       // The seam is deliberately not set here. Measuring it needs a video
       // decoder, which only the renderer has, so the clip lands playable but
       // unverified and the renderer reports back — see completeClip on what
       // that distinction costs.
-      this.#library = await this.#store.writeClip(this.#library!, slot, result.bytes, {
-        durationMs: Math.round((result.seconds ?? 0) * 1000),
-        costUsd: result.costUsd ?? 0,
-      });
+      this.#library = written;
       await this.#store.save(this.#library);
     } catch (error) {
       const reason =
@@ -309,8 +318,19 @@ export class PortraitLibrary extends EventEmitter {
           : error instanceof Error
             ? error.message
             : 'That clip did not render.';
-      this.#library = failClip(this.#library!, slot, reason);
-      await this.#store.save(this.#library);
+      /*
+       * Recording a failure must never throw.
+       *
+       * A throw here escapes the catch that is handling the original problem,
+       * replaces its message with a state-machine complaint, and takes down the
+       * rest of the build. Whatever goes wrong, the user gets the real reason.
+       */
+      try {
+        this.#library = failClip(this.#library!, slot, reason);
+        await this.#store.save(this.#library);
+      } catch {
+        // The manifest could not record it. The message still gets out.
+      }
       this.emit('trouble', reason);
     } finally {
       this.#building = null;

@@ -256,11 +256,22 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
         signal: request.signal ?? null,
         body: JSON.stringify({
           input,
-          // Replays the original acknowledgement instead of enqueueing a
-          // duplicate. Worth the two lines: without it, a submit whose response
-          // is lost to a dropped connection is a second charge, and the retry
-          // path in awaitClip makes that a realistic way to pay twice.
-          idempotency_key: `anna-${request.slot}-${hash(`${request.prompt}|${request.seconds}`)}`,
+          /*
+           * Keyed on the request body, not on the slot.
+           *
+           * It was `anna-<slot>-<hash of prompt>`, which is stable across
+           * attempts — and the body is not, because every attempt uploads the
+           * image and the audio afresh and gets new presigned URLs. Retrying a
+           * failed clip therefore sent a *different* body under a *reused* key,
+           * which Hedra correctly refuses with `409 Idempotency-Key already used
+           * with a different request body`. The slot became unrenderable.
+           *
+           * Hashing the body gives the semantics the header is actually for: an
+           * identical request replays the original acknowledgement instead of
+           * enqueueing a duplicate, and a genuinely different request is a
+           * genuinely different job.
+           */
+          idempotency_key: `anna-${request.slot}-${hash(JSON.stringify(input))}`,
         }),
       });
 
@@ -381,7 +392,11 @@ export function createHedraProvider(options: HedraOptions): VideoClipProvider {
             'That key works, but the Hedra account has no credit — every render would fail. Top it up first.',
         };
       }
-      return { ok: true as const };
+      const amount = typeof body.balance === 'number' ? body.balance.toFixed(2) : '?';
+      // No clip count here, unlike Runway: Hedra bills by the second of driving
+      // audio and will not quote before ingest, so any per-clip figure would be
+      // invented. The balance is the only honest number available.
+      return { ok: true as const, note: `$${amount} on the API wallet.` };
     },
   };
 }
@@ -407,18 +422,36 @@ function promptFor(request: ClipRequest): string {
 }
 
 /**
- * A silent WAV of the requested length.
+ * A near-silent WAV of the requested length.
  *
  * Hedra's avatar models require driving audio — there is no prompt-only mode,
  * and the minimum accepted length is 0.5s. The library these clips belong to is
  * silent by design: eighteen of the nineteen slots are idle and gesture loops
  * that get played under Anna's own TTS, so anything spoken here would fight it.
  *
- * What this establishes and what it does not: the request will be *accepted*,
- * and the clip will be the right length. Whether a silent track yields a closed,
- * still mouth — rather than an idling one — has not been observed, because the
- * account balance is $0.00 and no render has run. Check the first clip before
- * building the other eighteen.
+ * ## Why this is not digital silence
+ *
+ * It was, and the first real render failed with:
+ *
+ * > The audio contains targeted harassment and encourages the listener to
+ * > commit suicide.
+ *
+ * Against a buffer of nothing but zero samples. Hedra moderates the driving
+ * audio by transcribing it first, and ASR models of that family are known to
+ * hallucinate fluent text out of pure silence — there is nothing to latch onto,
+ * so the decoder free-runs on its language prior. The classifier then dutifully
+ * flags whatever it invented. Nothing was wrong with the request; the safety
+ * layer was reading tea leaves.
+ *
+ * A floor of low-level noise fixes it by giving the recogniser something that is
+ * unambiguously not speech. The amplitude below is about -66 dBFS — two or three
+ * bits out of sixteen, inaudible on any real playback, and far under the level
+ * that would drive a mouth open.
+ *
+ * The generator is a seeded LCG rather than `Math.random` so that the same slot
+ * produces the same track twice. A clip regenerated after a failed seam check
+ * should differ because the *model* re-rolled, not because its driving audio
+ * silently changed underneath the comparison.
  *
  * 16-bit PCM, mono, 16 kHz: the smallest thing that is unambiguously a WAV.
  */
@@ -447,7 +480,15 @@ export function silentWav(seconds: number): Uint8Array {
   view.setUint16(34, 16, true); // bits per sample
   ascii(36, 'data');
   view.setUint32(40, dataBytes, true);
-  // The samples themselves are already zero — silence is the absence of writes.
+
+  // The noise floor. Peak amplitude 16/32768 is about -66 dBFS: below the noise
+  // of any microphone, above the digital zero that made the moderator
+  // hallucinate. See this function's header for what that cost to find out.
+  let state = 0x2f6e2b1 >>> 0;
+  for (let i = 0; i < frames; i += 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    view.setInt16(44 + i * 2, ((state >>> 16) % 33) - 16, true);
+  }
 
   return new Uint8Array(buffer);
 }

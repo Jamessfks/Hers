@@ -287,13 +287,22 @@ export function createRunwayProvider(options: RunwayOptions): VideoClipProvider 
 
       const body = (await response.json()) as { creditBalance?: number };
       const credits = body.creditBalance ?? 0;
+      const perClip = 5 * CREDITS_PER_SECOND;
       if (credits < CREDITS_PER_SECOND * MIN_SECONDS) {
         return {
           ok: false as const,
-          reason: `That key works, but the account has ${credits} credits — not enough for one clip. A five-second clip costs ${5 * CREDITS_PER_SECOND}.`,
+          reason: `That key works, but the account has ${credits} credits — not enough for one clip. A five-second clip costs ${perClip}.`,
         };
       }
-      return { ok: true as const };
+
+      // Credits are Runway's unit; dollars and clips are the user's. All three,
+      // because "500 credits" answers nothing on its own.
+      const dollars = (credits * USD_PER_CREDIT).toFixed(2);
+      const clips = Math.floor(credits / perClip);
+      return {
+        ok: true as const,
+        note: `${credits} credits (about $${dollars}) — roughly ${clips} clip${clips === 1 ? '' : 's'}.`,
+      };
     },
   };
 }

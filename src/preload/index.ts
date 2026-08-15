@@ -162,7 +162,7 @@ const api = {
     kind: string,
     provider: string,
     key: string,
-  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  ): Promise<{ ok: true; note?: string } | { ok: false; reason: string }> {
     return ipcRenderer.invoke(IPC.keyValidate, kind, provider, key);
   },
 

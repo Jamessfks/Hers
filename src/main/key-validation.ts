@@ -22,7 +22,10 @@ import type {
   VideoProviderId,
 } from '../shared/protocol.ts';
 
-export type KeyVerdict = { ok: true } | { ok: false; reason: string };
+export type KeyVerdict =
+  /** `note` carries anything worth saying about a key that works — a balance, a plan limit. */
+  | { ok: true; note?: string }
+  | { ok: false; reason: string };
 
 export interface ProviderFactories {
   llm(provider: LlmProviderId, key: string): LlmProvider;

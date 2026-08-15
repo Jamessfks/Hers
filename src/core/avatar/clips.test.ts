@@ -346,3 +346,35 @@ test('a failed clip still records what it cost', () => {
   });
   assert.equal(next.clips.nod.spentUsd, 0.35);
 });
+
+// ---------------------------------------------------------------------------
+// Regressions from the first live render
+// ---------------------------------------------------------------------------
+
+test('a slot can fail twice without the second failure throwing', () => {
+  // This cost a paid clip. `failed -> failed` was missing from the transition
+  // table, so the second failClip threw *inside the catch block* handling the
+  // first — replacing the real error and aborting the rest of the build.
+  let library = createLibrary({ sourceHash: 'h', sourceFile: 's.jpg', providerId: 'hedra' });
+  library = failClip(startGenerating(library, IDLE_SLOT), IDLE_SLOT, 'moderation refused it');
+  assert.equal(library.clips[IDLE_SLOT].status, 'failed');
+
+  const again = failClip(library, IDLE_SLOT, 'and again');
+  assert.equal(again.clips[IDLE_SLOT].status, 'failed');
+  assert.equal(again.clips[IDLE_SLOT].error, 'and again');
+});
+
+test('a failed slot can be generated again', () => {
+  // The other half of the same bug: a retry left the slot `failed`, so nothing
+  // downstream would accept the finished clip.
+  let library = createLibrary({ sourceHash: 'h', sourceFile: 's.jpg', providerId: 'hedra' });
+  library = failClip(startGenerating(library, IDLE_SLOT), IDLE_SLOT, 'first attempt');
+
+  const retry = startGenerating(library, IDLE_SLOT);
+  assert.equal(retry.clips[IDLE_SLOT].status, 'generating');
+  assert.equal(retry.clips[IDLE_SLOT].attempts, 2, 'the retry counts against the attempt limit');
+
+  const done = completeClip(retry, IDLE_SLOT, { file: 'idle.mp4', durationMs: 5000, costUsd: 0.25 });
+  assert.equal(done.clips[IDLE_SLOT].status, 'ready');
+  assert.equal(done.clips[IDLE_SLOT].error, null);
+});

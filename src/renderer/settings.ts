@@ -285,6 +285,10 @@ function keyGroup(kind: Kind): void {
 
     if (result.ok) {
       await describe();
+      // `describe` has just written "Saved and working — <hint>". A note from
+      // the provider — the credit balance, for the video adapters — is the part
+      // the user actually wanted to know, so it is appended rather than lost.
+      if (result.note) status.textContent = `${status.textContent} · ${result.note}`;
       if (kind === 'llm') await loadModels({ refetch: true });
       if (kind === 'tts') await loadVoices();
     } else {

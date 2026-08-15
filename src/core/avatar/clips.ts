@@ -181,7 +181,11 @@ export const CLIP_TRANSITIONS: Record<ClipStatus, readonly ClipStatus[]> = {
   pending: ['pending', 'generating', 'ready'],
   generating: ['pending', 'ready', 'failed'],
   ready: ['pending', 'generating', 'ready'],
-  failed: ['pending', 'generating', 'ready'],
+  // `failed -> failed` was missing, and its absence was not theoretical: a slot
+  // that fails twice is ordinary, and the second `failClip` threw *inside the
+  // catch block* that was handling the first failure. That replaced the real
+  // error with a confusing one and aborted the whole build.
+  failed: ['pending', 'generating', 'ready', 'failed'],
 };
 
 export function canTransition(from: ClipStatus, to: ClipStatus): boolean {

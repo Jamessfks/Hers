@@ -106,6 +106,10 @@ export async function extractClipFrames(
  * MediaRecorder's WebM reports `Infinity` until it has been seeked past the
  * end. The seek-to-huge trick below is the standard workaround and is why this
  * is not simply `await metadata`.
+ *
+ * Waits for `loadeddata` rather than `loadedmetadata`: metadata gives the
+ * duration but no decoded frame, so the first `grab(0)` would draw an empty
+ * canvas and report a seam against nothing.
  */
 function loadDuration(video: HTMLVideoElement): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -113,7 +117,7 @@ function loadDuration(video: HTMLVideoElement): Promise<number> {
     video.addEventListener('error', fail, { once: true });
 
     video.addEventListener(
-      'loadedmetadata',
+      'loadeddata',
       () => {
         if (Number.isFinite(video.duration) && video.duration > 0) {
           resolve(video.duration);
@@ -133,30 +137,83 @@ function loadDuration(video: HTMLVideoElement): Promise<number> {
 }
 
 /**
- * Seeks, and waits until the frame is actually on screen.
+ * How long to wait for a presented-frame callback before painting anyway.
+ *
+ * Two frames at 60Hz is 33ms; 120ms is generous for a decode that has already
+ * completed its seek, and short enough that nineteen clips do not add up to a
+ * visible stall.
+ */
+const PRESENT_TIMEOUT_MS = 120;
+
+/**
+ * How long to wait for `seeked` before assuming it is never coming.
+ *
+ * Long enough that a genuine seek on a large clip is never cut short, short
+ * enough that nineteen of them is a pause rather than a hang.
+ */
+const SEEK_TIMEOUT_MS = 400;
+
+/**
+ * Seeks, and waits until the frame is actually available to draw.
  *
  * `seeked` means the seek completed, not that the new frame has been painted —
- * drawing on `seeked` alone intermittently captures the previous frame.
- * `requestVideoFrameCallback` fires when a frame is genuinely presented, which
- * is the guarantee this needs; the rAF pair is the fallback where it is absent.
+ * drawing on `seeked` alone intermittently captures the previous frame. So the
+ * original version waited for `requestVideoFrameCallback`, which fires when a
+ * frame is genuinely presented.
+ *
+ * That was wrong in a way that only shows up at runtime, and it hung this
+ * module forever. **`requestVideoFrameCallback` does not fire for a paused
+ * video after a seek** — it is tied to presentation, and a paused element
+ * presents nothing. Measured here against a real clip: `seeked` fires in 36ms
+ * and the callback never arrives at all, attached to the document or not. Since
+ * the whole point of this module is to seek a paused video, the one signal it
+ * waited on was the one signal it could never get.
+ *
+ * Now it races: the callback if it comes, an rAF pair otherwise, and a timeout
+ * behind both. The frame data is already decoded once `seeked` has fired — the
+ * wait is only to let the compositor catch up, so painting slightly early is a
+ * far smaller risk than never painting at all.
  */
 function seekTo(video: HTMLVideoElement, time: number): Promise<void> {
   return new Promise((resolve) => {
-    const done = (): void => resolve();
+    let settled = false;
+    const done = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const afterPaint = (): void => {
+      requestAnimationFrame(() => requestAnimationFrame(done));
+      setTimeout(done, PRESENT_TIMEOUT_MS);
+    };
+
     video.addEventListener(
       'seeked',
       () => {
         const withCallback = video as HTMLVideoElement & {
           requestVideoFrameCallback?: (cb: () => void) => number;
         };
-        if (typeof withCallback.requestVideoFrameCallback === 'function') {
-          withCallback.requestVideoFrameCallback(done);
-        } else {
-          requestAnimationFrame(() => requestAnimationFrame(done));
-        }
+        withCallback.requestVideoFrameCallback?.(done);
+        afterPaint();
       },
       { once: true },
     );
+
     video.currentTime = time;
+
+    /*
+     * The unconditional safety net, and it is not belt-and-braces.
+     *
+     * Assigning `currentTime` a value it already holds fires no `seeked` event
+     * at all — and the very first frame this module asks for is time 0 on a
+     * video whose `currentTime` is already 0. So the most common call was the
+     * one guaranteed to wait forever.
+     *
+     * Guarding on `readyState` instead was tried and is not enough: after
+     * `loadedmetadata` the element is at HAVE_METADATA, so the guard reads as
+     * "not ready", falls through to the assignment, and hangs anyway. A timer
+     * that always runs is the only version that cannot deadlock.
+     */
+    setTimeout(afterPaint, SEEK_TIMEOUT_MS);
   });
 }

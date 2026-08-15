@@ -145,8 +145,16 @@ export interface VideoClipProvider {
   poll(job: ClipJobHandle, signal?: AbortSignal): Promise<ClipJobState>;
   /** The finished bytes. Only legal once {@link poll} has returned 'succeeded'. */
   download(job: ClipJobHandle, state: SucceededState, signal?: AbortSignal): Promise<Uint8Array>;
-  /** Cheap credential check for the setup screen. Never spends anything. */
-  validateKey(): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /**
+   * Cheap credential check for the setup screen. Never spends anything.
+   *
+   * `note` on success is what the balance comes back in. A key check that
+   * answers only "saved" leaves the user's actual question — *do I have enough
+   * credit to render anything* — unanswered until the first render fails, and
+   * these adapters are already asking the balance endpoint to decide whether
+   * the key is usable at all. Throwing that number away would be perverse.
+   */
+  validateKey(): Promise<{ ok: true; note?: string } | { ok: false; reason: string }>;
 }
 
 export class VideoClipError extends Error {

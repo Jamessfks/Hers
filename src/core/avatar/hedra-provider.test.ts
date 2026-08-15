@@ -151,46 +151,38 @@ test('the negative prompt is folded into the prompt rather than dropped', async 
   assert.match(input['prompt']!, /Avoid: camera movement, cuts/);
 });
 
-test('submit is idempotent per slot and prompt, so a retried submit cannot double-charge', async () => {
-  const keys: string[] = [];
-  const { fetch } = transport([
-    ['/files', () => ({ status: 201, json: uploaded })],
-    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
-  ]);
-  const provider = createHedraProvider({ apiKey: 'k:s', fetch });
+test('the idempotency key follows the request body, not the slot', async () => {
+  // A key that is stable per slot but sent with a body that is not is a 409:
+  // "Idempotency-Key already used with a different request body". Every attempt
+  // re-uploads the image and audio and gets new presigned URLs, so the body
+  // changes on every retry — which made a failed slot permanently unrenderable.
+  const keyFor = async (
+    overrides: Partial<ClipRequest>,
+    uploadUrl = uploaded.url,
+  ): Promise<string> => {
+    const { fetch, calls } = transport([
+      ['/files', () => ({ status: 201, json: { ...uploaded, url: uploadUrl } })],
+      ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
+    ]);
+    await createHedraProvider({ apiKey: 'k:s', fetch }).submit(clipRequest(overrides));
+    return String((calls.at(-1)!.body as { idempotency_key: string }).idempotency_key);
+  };
 
-  const capture = transport([
-    ['/files', () => ({ status: 201, json: uploaded })],
-    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
-  ]);
-  const second = createHedraProvider({ apiKey: 'k:s', fetch: capture.fetch });
+  const first = await keyFor({});
+  assert.equal(await keyFor({}), first, 'an identical request replays rather than duplicating');
 
-  await provider.submit(clipRequest());
-  await second.submit(clipRequest());
-  keys.push(
-    String((capture.calls.at(-1)!.body as { idempotency_key: string }).idempotency_key),
+  // The realistic retry: same clip, freshly uploaded files.
+  assert.notEqual(
+    await keyFor({}, 'https://files.hedra.com/second?sig=new'),
+    first,
+    'a re-uploaded retry is a new job and must not reuse the key',
   );
 
-  const third = transport([
-    ['/files', () => ({ status: 201, json: uploaded })],
-    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
-  ]);
-  await createHedraProvider({ apiKey: 'k:s', fetch: third.fetch }).submit(clipRequest());
-  keys.push(String((third.calls.at(-1)!.body as { idempotency_key: string }).idempotency_key));
-
-  assert.equal(keys[0], keys[1], 'the same clip requested twice reuses one key');
-
-  const different = transport([
-    ['/files', () => ({ status: 201, json: uploaded })],
-    ['/models/', () => ({ status: 202, json: { job_id: 'j', status: 'IN_QUEUE' } })],
-  ]);
-  await createHedraProvider({ apiKey: 'k:s', fetch: different.fetch }).submit(
-    clipRequest({ slot: 'lean_in', prompt: 'She leans in.' }),
+  assert.notEqual(
+    await keyFor({ slot: 'lean_in', prompt: 'She leans in.' }),
+    first,
+    'a different clip must not replay the first one',
   );
-  const other = String(
-    (different.calls.at(-1)!.body as { idempotency_key: string }).idempotency_key,
-  );
-  assert.notEqual(other, keys[0], 'a different clip must not replay the first one');
 });
 
 test('omnihuman is clamped to the only aspect ratio it accepts, and gets no duration', async () => {
@@ -483,9 +475,16 @@ test('an empty balance fails the check, with the fix in the message', async () =
   assert.match(result.ok ? '' : result.reason, /[Tt]op it up/);
 });
 
-test('a funded key passes', async () => {
+test('a funded key passes, and reports the wallet', async () => {
   const { fetch } = transport([['/balance', () => ({ json: { balance: 12.5, currency: 'USD' } })]]);
-  assert.deepEqual(await createHedraProvider({ apiKey: 'k:s', fetch }).validateKey(), { ok: true });
+  const result = await createHedraProvider({ apiKey: 'k:s', fetch }).validateKey();
+
+  assert.equal(result.ok, true);
+  const note = result.ok ? (result.note ?? '') : '';
+  assert.match(note, /\$12\.50/);
+  // Deliberately no clip count: Hedra bills by audio duration and will not
+  // quote, so any per-clip figure here would be invented.
+  assert.doesNotMatch(note, /clip/);
 });
 
 test('a rejected key says the key is wrong, not that the balance is', async () => {
@@ -510,7 +509,7 @@ test('an unreachable service is not reported as a bad key', async () => {
 // silence
 // ---------------------------------------------------------------------------
 
-test('the generated silence is a real WAV of the requested length', () => {
+test('the generated track is a real WAV of the requested length', () => {
   const wav = silentWav(4);
   const text = new TextDecoder().decode(wav.subarray(0, 4));
   assert.equal(text, 'RIFF');
@@ -522,7 +521,33 @@ test('the generated silence is a real WAV of the requested length', () => {
   assert.equal(view.getUint32(24, true), 16_000);
   // 4s at 16kHz, 16-bit mono, plus the 44-byte header.
   assert.equal(wav.length, 44 + 4 * 16_000 * 2);
-  assert.ok(wav.subarray(44).every((byte) => byte === 0), 'and it is actually silent');
+});
+
+test('the track is near-silent but never digitally silent', () => {
+  // Digital silence made Hedra's moderator hallucinate speech and refuse the
+  // job. This asserts both halves of the fix: there is a signal, and it is far
+  // too quiet to hear or to drive a mouth.
+  const wav = silentWav(1);
+  const samples = new Int16Array(wav.buffer, 44, 16_000);
+
+  let peak = 0;
+  let nonZero = 0;
+  for (const sample of samples) {
+    peak = Math.max(peak, Math.abs(sample));
+    if (sample !== 0) nonZero += 1;
+  }
+
+  assert.ok(nonZero > samples.length / 4, 'a track of mostly zeros is still silence to an ASR');
+  assert.ok(peak > 0, 'digital silence is the thing that got rejected');
+  // -66 dBFS. Inaudible, and nowhere near enough to open a mouth.
+  assert.ok(peak <= 32, `peak was ${peak}, which would be audible`);
+});
+
+test('the same length gives the same track twice', () => {
+  // Seeded rather than Math.random: a clip regenerated after a failed seam check
+  // should differ because the model re-rolled, not because its driving audio
+  // quietly changed underneath the comparison.
+  assert.deepEqual(silentWav(2), silentWav(2));
 });
 
 test('silence never falls under Hedra’s half-second floor', () => {

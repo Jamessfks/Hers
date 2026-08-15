@@ -370,9 +370,17 @@ test('download re-reads the task, because output URLs expire in a day or two', a
 // validateKey
 // ---------------------------------------------------------------------------
 
-test('a funded account passes', async () => {
+test('a funded account passes, and says what the balance buys', async () => {
   const { fetch } = transport([['/v1/organization', () => ({ json: { creditBalance: 500 } })]]);
-  assert.deepEqual(await createRunwayProvider({ apiKey: 'k', fetch }).validateKey(), { ok: true });
+  const result = await createRunwayProvider({ apiKey: 'k', fetch }).validateKey();
+
+  assert.equal(result.ok, true);
+  // Credits are Runway's unit. Dollars and clips are the user's, and "500
+  // credits" on its own answers neither question they are actually asking.
+  const note = result.ok ? (result.note ?? '') : '';
+  assert.match(note, /500 credits/);
+  assert.match(note, /\$5\.00/);
+  assert.match(note, /20 clips/);
 });
 
 test('an account that cannot afford one clip fails, and says the price', async () => {
