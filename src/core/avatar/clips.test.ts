@@ -303,7 +303,7 @@ test('a library survives a save and load round trip through JSON', () => {
 test('a clip that does not close is failed, not marked ready', () => {
   // The whole seamlessness claim rests on this. Bytes used to be accepted on
   // the strength of a prompt that *asked* the model to return to the pose.
-  const library = startLibrary();
+  const library = fixture();
   const next = completeClip(library, 'nod', {
     file: 'nod.webm',
     durationMs: 5000,
@@ -315,7 +315,7 @@ test('a clip that does not close is failed, not marked ready', () => {
 });
 
 test('a measured clip is marked verified and cut where it actually closes', () => {
-  const library = startLibrary();
+  const library = fixture();
   const next = completeClip(library, 'nod', {
     file: 'nod.webm',
     durationMs: 5000,
@@ -329,7 +329,7 @@ test('a measured clip is marked verified and cut where it actually closes', () =
 test('an unmeasured clip still plays, but does not claim to be seamless', () => {
   // A hand-dropped clip has bytes and no verdict. Refusing it would make the
   // manual provider unusable; implying it was checked would be a lie.
-  const library = startLibrary();
+  const library = fixture();
   const next = completeClip(library, 'nod', { file: 'nod.webm', durationMs: 5000 });
   assert.equal(next.clips.nod.status, 'ready');
   assert.equal(next.clips.nod.verified, undefined);
@@ -337,7 +337,7 @@ test('an unmeasured clip still plays, but does not claim to be seamless', () => 
 
 test('a failed clip still records what it cost', () => {
   // The money was spent whether or not the frame came back clean.
-  const library = startLibrary();
+  const library = fixture();
   const next = completeClip(library, 'nod', {
     file: 'nod.webm',
     durationMs: 5000,
