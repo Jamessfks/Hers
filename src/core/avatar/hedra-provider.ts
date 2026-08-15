@@ -114,6 +114,7 @@ export const HEDRA_COST: ClipCostModel = {
   usdPerClip: null,
   assumedUsdPerClip: 0.25,
   pricingUrl: 'https://www.hedra.com/pricing',
+  basis: 'unknown',
   verified: false,
 };
 

@@ -35,6 +35,7 @@
 import type { ClipSlotName } from './clips.ts';
 import { createHedraProvider } from './hedra-provider.ts';
 import { createManualProvider } from './manual-provider.ts';
+import { createRunwayProvider } from './runway-provider.ts';
 
 /**
  * Video providers are a different axis from `AvatarRendererId` in
@@ -112,7 +113,23 @@ export interface ClipCostModel {
   assumedUsdPerClip: number;
   /** Where a human goes to confirm the real number. */
   pricingUrl: string | null;
-  /** True only once someone has checked the price against a live account. */
+  /**
+   * Where {@link usdPerClip} came from.
+   *
+   * Added because the two wired providers land in genuinely different places and
+   * a single boolean flattened them into the same "unverified" bucket. Runway
+   * publishes a rate card — 5 credits per second, one credit a cent — so a clip
+   * costs $0.25 and that is arithmetic, not a guess. Hedra bills by the second
+   * of driving audio and *refuses* to quote before ingest, so no figure exists
+   * to state at all. Showing "$0.25" and "somewhere between $2 and $10" with the
+   * same confidence would be the misleading part.
+   */
+  basis: 'observed' | 'published' | 'unknown';
+  /**
+   * Whether {@link usdPerClip} is good enough to show as a figure rather than a
+   * range. True for a published rate card as well as for an observed invoice —
+   * both beat the category envelope.
+   */
   verified: boolean;
 }
 
@@ -310,7 +327,7 @@ export interface VideoProviderOptions {
 const FACTORIES: Record<VideoProviderId, (options: VideoProviderOptions) => VideoClipProvider> = {
   manual: (options) => createManualProvider(options.dropDir ?? ''),
   hedra: (options) => createHedraProvider({ apiKey: options.apiKey ?? '' }),
-  runway: (options) => createRunwayProvider(options.apiKey ?? ''),
+  runway: (options) => createRunwayProvider({ apiKey: options.apiKey ?? '' }),
   luma: (options) => createLumaProvider(options.apiKey ?? ''),
   kling: (options) => createKlingProvider(options.apiKey ?? ''),
 };
@@ -346,16 +363,16 @@ export const VIDEO_PROVIDER_INFO: ReadonlyArray<{
   {
     id: 'hedra',
     label: 'Hedra',
-    why: 'The only one of these wired up against a real API reference. Audio-driven rather than prompt-driven, renders portrait 9:16 at up to 1080p, and bills by the second of driving audio — so a library of short clips is cheap and a monologue is not.',
+    why: 'Audio-driven: hand it a waveform and it lip-syncs the photograph to it. The only one here that can make her mouth match a line she is about to say. Bills by the second of driving audio and will not quote a price beforehand.',
     site: 'https://www.hedra.com',
     status: 'wired',
   },
   {
     id: 'runway',
     label: 'Runway',
-    why: 'Image-to-video with the strongest published control over camera and motion, which is the axis these prompts live or die on.',
-    site: 'https://runwayml.com',
-    status: 'stub',
+    why: 'Prompt-driven rather than audio-driven, so a silent gesture clip is what it does natively. Publishes its rate, so a library costs a knowable $4.75 rather than a surprise.',
+    site: 'https://dev.runwayml.com',
+    status: 'wired',
   },
   {
     id: 'luma',
@@ -436,22 +453,13 @@ function notWired(
   };
 }
 
-// TODO(video): fill in the six items listed above from Runway's API reference.
-function createRunwayProvider(_apiKey: string): VideoClipProvider {
-  return notWired('runway', 'Runway', {
-    usdPerClip: null,
-    assumedUsdPerClip: CLIP_PRICE_ENVELOPE.high,
-    pricingUrl: null,
-    verified: false,
-  });
-}
-
 // TODO(video): fill in the six items listed above from Luma's API reference.
 function createLumaProvider(_apiKey: string): VideoClipProvider {
   return notWired('luma', 'Luma Dream Machine', {
     usdPerClip: null,
     assumedUsdPerClip: CLIP_PRICE_ENVELOPE.low,
     pricingUrl: null,
+    basis: 'unknown',
     verified: false,
   });
 }
@@ -463,6 +471,7 @@ function createKlingProvider(_apiKey: string): VideoClipProvider {
     usdPerClip: null,
     assumedUsdPerClip: CLIP_PRICE_ENVELOPE.low,
     pricingUrl: null,
+    basis: 'unknown',
     verified: false,
   });
 }
