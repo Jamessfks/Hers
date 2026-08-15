@@ -121,7 +121,15 @@ body {
 #floor {
   position: absolute;
   inset: auto 0 0 0;
-  height: 26%;
+  /*
+   * 12%, not 26%.
+   *
+   * Her feet land 32px above the bottom of a 590px stage. A 26% band puts the
+   * wall-to-floor seam 121px above that — level with her knees — so she read as
+   * standing in a shallow box rather than on a floor. At 12% the seam sits 39px
+   * behind her feet, which is where the back of a small stage actually is.
+   */
+  height: 12%;
   pointer-events: none;
   /*
    * Layer order matters here, and it was wrong.
@@ -138,10 +146,11 @@ body {
    * framing leaves ~27px of floor below them out of a 153px band.
    */
   background:
-    /* Contact shadow: small, dark, directly beneath her. */
-    radial-gradient(20% 9% at 50% 82%, rgba(0, 0, 0, 0.62), transparent 74%),
+    /* Contact shadow: small, dark, directly beneath her, at 55% down the
+       shortened band — which is exactly where her feet are. */
+    radial-gradient(17% 22% at 50% 55%, rgba(0, 0, 0, 0.6), transparent 74%),
     /* Soft occlusion spreading a little further out. */
-    radial-gradient(38% 18% at 50% 82%, rgba(0, 0, 0, 0.26), transparent 76%),
+    radial-gradient(34% 44% at 50% 55%, rgba(0, 0, 0, 0.24), transparent 78%),
     /* The lit ground plane, brightest at the seam. */
     linear-gradient(
       180deg,
@@ -164,12 +173,14 @@ body {
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
+  /* Softer than it was: a seam, not a rule. A hard bright line across a small
+     stage reads as a horizon on a stage set, which is the wrong scale. */
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(190, 220, 255, 0.34) 22%,
-    rgba(200, 228, 255, 0.42) 50%,
-    rgba(190, 220, 255, 0.34) 78%,
+    rgba(180, 210, 248, 0.16) 24%,
+    rgba(196, 224, 255, 0.24) 50%,
+    rgba(180, 210, 248, 0.16) 76%,
     transparent 100%
   );
 }
