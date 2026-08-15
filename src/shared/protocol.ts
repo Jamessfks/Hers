@@ -141,7 +141,28 @@ export type TtsProviderId = 'cartesia' | 'elevenlabs' | 'hume';
  * after the user has already paid for a language model and a voice.
  */
 export type SttProviderId = 'apple' | 'deepgram' | 'openai';
-export type AvatarRendererId = 'vrm' | 'heygen' | 'tavus';
+/**
+ * How Anna is drawn.
+ *
+ * This used to be `'vrm' | 'heygen' | 'tavus'` — one implemented renderer and
+ * two streaming services named as if they were nearly wired. Both of those bets
+ * have now been settled by the market rather than by us: Hedra's realtime avatar
+ * returns `410 Gone`, and the whole per-minute streaming-avatar category is
+ * priced for a kiosk rather than for something left running all day.
+ *
+ * What is left is one renderer: a photograph, and short clips generated from it
+ * ahead of time. A union of one is kept rather than deleted because the field is
+ * in every user's config file on disk, and because the next renderer — if there
+ * is one — should have to be added here deliberately.
+ */
+export type AvatarRendererId = 'photo';
+
+/**
+ * Who renders the clip library. Declared here rather than in core/avatar so
+ * that shared/ stays a leaf: the config needs the name, and importing core into
+ * the protocol would point the dependency the wrong way.
+ */
+export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
 
 export interface AnnaConfig {
   llm: {
