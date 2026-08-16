@@ -43,6 +43,7 @@ const ui = new Ui({
   onLoadProfile: () => connection.send({ t: 'profile.load' }),
   onSaveProfile: (files) => connection.send({ t: 'profile.save', files }),
   onUploadFace: (file) => void uploadFace(file),
+  onClaim: () => connection.connect(),
   onRenderGesture: (gesture) => {
     connection.send({ t: 'avatar.render', gesture });
     ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);
@@ -109,8 +110,14 @@ const vision = new Vision({
 });
 
 const connection = new Connection({
-  onOpen: () => ui.toast('Connected.', 1600),
+  // Only worth saying after a drop. Announcing a successful first connection is
+  // telling someone the thing they are looking at is on screen.
+  onOpen: (reconnected) => {
+    ui.setSuperseded(false);
+    if (reconnected) ui.toast('Reconnected.', 1800);
+  },
   onClose: () => ui.setState('asleep'),
+  onSuperseded: () => ui.setSuperseded(true),
   onAudio: (pcm) => player.enqueue(pcm),
   onMessage: (message) => onMessage(message),
 });

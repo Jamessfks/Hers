@@ -32,6 +32,18 @@ export const MediaKind = {
 
 export type MediaKind = (typeof MediaKind)[keyof typeof MediaKind];
 
+/**
+ * Close codes this application defines for itself.
+ *
+ * RFC 6455 §7.4.2 reserves 4000-4999 for private use, and a code in that range
+ * is delivered to the browser's `onclose` handler — which is the whole point.
+ * Closing an evicted tab with 1000 "normal closure" gave it no way to tell
+ * "you were replaced, stop" from "the network blipped, try again", so it tried
+ * again, evicting the tab that replaced it, forever. Measured at 47 sockets in
+ * 25 seconds before this existed.
+ */
+export const CLOSE_SUPERSEDED = 4001;
+
 /** Sample rate Gemini Live expects on the way in. */
 export const INPUT_SAMPLE_RATE = 16_000;
 /** Sample rate Gemini Live produces on the way out. */

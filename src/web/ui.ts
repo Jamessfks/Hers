@@ -10,6 +10,7 @@
 
 import type { AvatarView, MoodReadout, SenseName, ServerMessage } from '../shared/protocol.ts';
 import { PROFILE_ORDER } from './profile-order.ts';
+import { tidyCaption } from './caption.ts';
 
 function need<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -25,6 +26,8 @@ export interface UiHandlers {
   onSaveProfile(files: Record<string, string>): void;
   onUploadFace(file: File): void;
   onRenderGesture(gesture: string): void;
+  /** Take the conversation back from whichever tab has it. */
+  onClaim(): void;
 }
 
 export class Ui {
@@ -57,6 +60,7 @@ export class Ui {
   readonly #gestureList = need('gesture-list');
   readonly #spend = need('spend');
   readonly #giveFace = need<HTMLButtonElement>('give-face');
+  readonly #takeover = need('takeover');
 
   readonly #senseButtons = new Map<SenseName, HTMLButtonElement>();
   /** The in-progress line per speaker, replaced until the turn closes. */
@@ -109,6 +113,10 @@ export class Ui {
 
     need('face-open').addEventListener('click', () => this.#face.showModal());
     this.#giveFace.addEventListener('click', () => this.#face.showModal());
+    need('takeover-claim').addEventListener('click', () => {
+      this.#takeover.hidden = true;
+      this.#handlers.onClaim();
+    });
 
     const picker = need<HTMLInputElement>('face-file');
     picker.addEventListener('change', () => {
@@ -277,11 +285,20 @@ export class Ui {
     this.#scroll();
   }
 
+  /**
+   * A picture she sent.
+   *
+   * The caption goes underneath, small and muted, rather than into the line
+   * where her words go. It is derived from a file name — for anything she
+   * generated, a slug of what she asked for — so rendering it as dialogue put
+   * "evening warm indoor light buoyant looking at the" on screen as though she
+   * had said it out loud.
+   */
   media(url: string, kind: 'image' | 'clip', caption?: string): void {
     this.#empty.hidden = true;
     const element = this.#newLine('anna');
     const said = element.querySelector('.said');
-    if (said) said.textContent = caption ?? '';
+    said?.remove();
 
     if (kind === 'clip') {
       const video = document.createElement('video');
@@ -295,6 +312,14 @@ export class Ui {
       image.alt = caption ?? 'A picture from Anna';
       image.loading = 'lazy';
       element.append(image);
+    }
+
+    const label = tidyCaption(caption);
+    if (label) {
+      const figcaption = document.createElement('p');
+      figcaption.className = 'said-caption';
+      figcaption.textContent = label;
+      element.append(figcaption);
     }
     this.#scroll();
   }
@@ -356,6 +381,11 @@ export class Ui {
     this.#moving = true;
     this.#clip.src = `/avatar/clips/${encodeURIComponent(gesture)}`;
     void this.#clip.play().catch(() => this.#settle());
+  }
+
+  /** Another tab has her, and this one has stopped trying. */
+  setSuperseded(superseded: boolean): void {
+    this.#takeover.hidden = !superseded;
   }
 
   setMicLevel(level: number): void {

@@ -23,6 +23,7 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
 import {
+  CLOSE_SUPERSEDED,
   MediaKind,
   decodeMediaFrame,
   encodeMediaFrame,
@@ -108,11 +109,15 @@ export class WebBridge {
     const previous = this.#socket;
     this.#socket = socket;
     if (previous && previous.readyState === previous.OPEN) {
-      sendJson(previous, {
-        t: 'trouble',
-        message: 'You opened Anna in another tab. She is over there now.',
-      });
-      previous.close(1000, 'superseded');
+      /*
+       * The code matters more than the message.
+       *
+       * Closed with 1000, the evicted tab reads a normal closure and
+       * reconnects — which evicts the tab that just replaced it, which
+       * reconnects, and so on at about two hertz for as long as both are open.
+       * A private-use code is a fact the other end can act on: it stops.
+       */
+      previous.close(CLOSE_SUPERSEDED, 'superseded');
     }
 
     // The companion outlives the socket on purpose: a tab reload should not end

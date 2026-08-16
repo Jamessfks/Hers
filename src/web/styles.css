@@ -198,6 +198,15 @@ button {
     grid-template-rows: auto 1fr;
     gap: 14px;
   }
+
+  /* On a phone the transcript is the page; she is the header for it. */
+  .portrait {
+    --portrait-cap: 26vh;
+  }
+
+  .presence {
+    gap: 12px;
+  }
 }
 
 .presence {
@@ -360,6 +369,13 @@ button {
 
 .line[data-pending='true'] .said {
   color: var(--text-faint);
+}
+
+.said-caption {
+  margin: 6px 0 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .line img,
@@ -702,10 +718,22 @@ button {
    set — a video element shows a black frame while it buffers, and a black
    flash on every gesture is worse than no gesture. */
 
+/*
+ * Sized to fit both a width budget and a height budget, keeping the ratio.
+ *
+ * `aspect-ratio` alone is not enough, because the photograph's shape is the
+ * user's choice and some of them are very tall. A 768x1376 portrait — a real
+ * one, uploaded over Telegram — came out 412px high in a 572px stage and left
+ * no room for anything under it. Solving for both caps keeps her the shape she
+ * is and keeps the page the shape it is.
+ */
 .portrait {
+  --portrait-ratio: 1;
+  --portrait-width: clamp(140px, 20vw, 220px);
+  --portrait-cap: 38vh;
   position: relative;
-  width: clamp(150px, 22vw, 230px);
-  aspect-ratio: var(--portrait-ratio, 1);
+  width: min(var(--portrait-width), calc(var(--portrait-cap) * var(--portrait-ratio)));
+  height: min(var(--portrait-cap), calc(var(--portrait-width) / var(--portrait-ratio)));
   border-radius: 18px;
   overflow: hidden;
   background: var(--bg-sunken);
@@ -866,4 +894,52 @@ button {
 
 .gesture[data-rendering='true'] .mark {
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
+   Superseded
+   --------------------------------------------------------------------------
+   One conversation, and a tab that has lost it says so.
+
+   The alternative — which is what this replaces — is both tabs reconnecting
+   over each other forever, each one evicting the other about twice a second,
+   with the state label strobing between asleep and listening. Silence is not a
+   better failure than a sentence. */
+
+.takeover {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 8, 13, 0.82);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+}
+
+.takeover[hidden] {
+  display: none;
+}
+
+.takeover-card {
+  max-width: 30rem;
+  margin: 24px;
+  padding: 26px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  text-align: center;
+}
+
+.takeover-card h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
+
+.takeover-card p {
+  margin: 0 0 20px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
 }

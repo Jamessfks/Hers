@@ -12,7 +12,7 @@ import { WebSocket } from 'ws';
 import { Brain } from '../core/session/brain.ts';
 import { loadConfig } from './config.ts';
 import { WebBridge } from './ws.ts';
-import { MediaKind, decodeMediaFrame } from '../shared/protocol.ts';
+import { CLOSE_SUPERSEDED, MediaKind, decodeMediaFrame } from '../shared/protocol.ts';
 import type { ServerMessage } from '../shared/protocol.ts';
 
 /**
@@ -164,6 +164,40 @@ test('a second tab takes the conversation and the first is told why', async () =
     await new Promise((resolve) => second.on('open', resolve));
 
     assert.match(await warned, /another tab/);
+    second.close();
+  } finally {
+    await app.close();
+  }
+});
+
+test('an evicted tab is told it was evicted, not that the network blipped', async () => {
+  /*
+   * The bug this guards is not subtle once seen: closed with 1000 "normal
+   * closure", an evicted tab reconnects — which evicts the tab that replaced
+   * it, which reconnects. Measured in a browser at 47 sockets and 96 state
+   * changes in 25 seconds, with the status label strobing asleep/listening.
+   *
+   * RFC 6455 §7.4.2 reserves 4000-4999 for private use and the code reaches
+   * the browser's close handler, so it is the one place a "stop trying" can
+   * be said.
+   */
+  const app = await bridge();
+  const origin = `http://127.0.0.1:${app.port}`;
+  try {
+    const first = new WebSocket(app.url, { origin });
+    await new Promise((resolve) => first.on('open', resolve));
+
+    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+      first.on('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    });
+
+    const second = new WebSocket(app.url, { origin });
+    await new Promise((resolve) => second.on('open', resolve));
+
+    const event = await closed;
+    assert.equal(event.code, CLOSE_SUPERSEDED, `closed with ${event.code}, which reads as "retry"`);
+    assert.notEqual(event.code, 1000, 'a normal closure is indistinguishable from a blip');
+    assert.match(event.reason, /superseded/);
     second.close();
   } finally {
     await app.close();
