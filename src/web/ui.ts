@@ -243,6 +243,10 @@ export class Ui {
         this.setMemory(message.facts, message.summary);
         return;
 
+      case 'history':
+        this.setHistory(message.turns);
+        return;
+
       case 'move':
         this.move(message.gesture);
         return;
@@ -415,6 +419,19 @@ export class Ui {
     this.#moving = true;
     this.#clip.src = `/avatar/clips/${encodeURIComponent(gesture)}`;
     void this.#clip.play().catch(() => this.#settle());
+  }
+
+  /**
+   * The conversation so far, wherever it happened.
+   *
+   * Replaces whatever is on screen rather than appending: this arrives on
+   * connect, and a reconnect that appended would show the last hour twice.
+   */
+  setHistory(turns: readonly { speaker: 'user' | 'anna'; text: string }[]): void {
+    this.#transcript.replaceChildren(this.#empty);
+    this.#pending.clear();
+    this.#empty.hidden = turns.length > 0;
+    for (const turn of turns) this.line(turn.speaker, turn.text, true);
   }
 
   /**

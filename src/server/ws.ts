@@ -160,6 +160,14 @@ export class WebBridge {
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
     sendJson(socket, { t: 'avatar', avatar: brain.avatar.state() });
+    sendJson(socket, {
+      t: 'history',
+      turns: brain.memory.liveTranscript(40).map((turn) => ({
+        speaker: turn.speaker,
+        text: turn.text,
+        at: turn.at,
+      })),
+    });
     if (this.#companion.live) sendJson(socket, { t: 'state', state: 'listening' });
 
     socket.on('message', (data, isBinary) => {

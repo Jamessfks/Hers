@@ -97,7 +97,10 @@ test('she never goes more than three minutes without speaking', () => {
   // An hour of nobody saying anything, with the delay drawn at its longest.
   clock.advance(60 * 60_000);
 
-  assert.ok(opened.length >= 19, `expected ~20 openers in an hour, got ${opened.length}`);
+  // Every gap while she is still trying must be inside the ceiling. She stops
+  // after two unanswered openers, which is a separate promise — see the test
+  // about not talking to an empty room.
+  assert.ok(opened.length > 0, 'she never spoke at all');
   let previous = 0;
   for (const opener of opened) {
     const gap = opener.at - previous;
@@ -142,6 +145,27 @@ test('being poked resets the clock', () => {
     initiative.poke();
   }
   assert.equal(opened.length, 0, 'she opened despite the conversation being alive');
+});
+
+test('she stops talking to an empty room rather than repeating herself', () => {
+  const { clock, initiative, opened } = build({ random: () => 0 });
+  initiative.start();
+  clock.advance(60 * 60_000);
+
+  assert.ok(opened.length <= 3, `opened ${opened.length} times into silence`);
+  assert.equal(initiative.waiting, true, 'she should be waiting for a reason, not a clock');
+});
+
+test('a person coming back is a reason, and she starts again', () => {
+  const { clock, initiative, opened } = build({ random: () => 0 });
+  initiative.start();
+  clock.advance(60 * 60_000);
+  const beforeReturn = opened.length;
+
+  initiative.poke();
+  assert.equal(initiative.waiting, false);
+  clock.advance(5 * 60_000);
+  assert.ok(opened.length > beforeReturn, 'she never spoke again after they came back');
 });
 
 test('openers nobody answers back her off without breaking the promise', () => {

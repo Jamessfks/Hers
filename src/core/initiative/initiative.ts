@@ -35,6 +35,23 @@ export const DEFAULT_MIN_SILENCE_MS = 45 * 1000;
 /** How long to wait before re-checking when the moment arrived mid-turn. */
 const BUSY_RETRY_MS = 4000;
 
+/**
+ * Openers in a row with no answer before she stops offering.
+ *
+ * The ceiling is a promise about a *conversation*, not a licence to talk into
+ * an empty room forever. Left running, the old backoff settled at exactly the
+ * ceiling and stayed there — a real transcript has her at 9:56, 9:59 and 10:02,
+ * the last two identical word for word:
+ *
+ *     "Mm. I'm gonna leave you to it. Catch me later."
+ *     "Mm. I'm gonna leave you to it. Catch me later."
+ *
+ * After this many she goes quiet and waits for something to actually happen:
+ * the person coming back, touching something, or arriving in front of the
+ * camera. That is the difference between a companion and a notification.
+ */
+const GIVE_UP_AFTER = 2;
+
 export interface InitiativeOptions {
   /** Hard ceiling on silence. */
   maxSilenceMs?: number;
@@ -90,11 +107,21 @@ export class Initiative {
     this.#clear();
   }
 
-  /** Anything happened that counts as the conversation being alive. */
+  /**
+   * Anything happened that counts as the conversation being alive.
+   *
+   * This is also what brings her back after she has given up: a person doing
+   * something is the reason to speak that an expired timer never was.
+   */
   poke(): void {
     if (!this.#running) return;
     this.#unanswered = 0;
     this.#arm();
+  }
+
+  /** True while she is waiting for a reason rather than for the clock. */
+  get waiting(): boolean {
+    return this.#running && this.#unanswered >= GIVE_UP_AFTER;
   }
 
   /** Anna finished a turn. The clock restarts, but she is now owed an answer. */
@@ -115,6 +142,9 @@ export class Initiative {
   #arm(): void {
     this.#clear();
     if (!this.#running) return;
+    // Two unanswered openers is an empty room. She stops until `poke` says
+    // otherwise; the three-minute ceiling governs conversations, not silence.
+    if (this.#unanswered >= GIVE_UP_AFTER) return;
     const timer = this.#options.setTimer ?? setTimeout;
     this.#timer = timer(() => this.#fire(), this.#delay());
     // "Maybe say something in two minutes" is not a reason for a process to

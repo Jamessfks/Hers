@@ -300,6 +300,9 @@ export class Companion {
     const isBack = tabVisible && idleSeconds < 30;
     if (wasAway && isBack && before.presence.at > 0) {
       this.#emitMood(false, () => this.#brain.mood.feel('returned'));
+      // Somebody is here again. If she had given up on the room, that is the
+      // reason to look up that a timer running out never was.
+      this.#initiative.poke();
     }
   }
 

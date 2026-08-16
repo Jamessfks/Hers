@@ -103,6 +103,20 @@ export interface LiveSocket {
 const COMPRESSION_TRIGGER_TOKENS = '96000';
 const COMPRESSION_TARGET_TOKENS = '32000';
 
+/**
+ * How long transcription must go quiet before a turn counts as finished.
+ *
+ * Google documents no ordering between `outputTranscription` and
+ * `turnComplete`, and in practice chunks do arrive after it. Emitting the
+ * moment the turn closed therefore cut sentences mid-word — a real one, out of
+ * a real conversation: "Thought you might still be buried under that prese".
+ *
+ * Waiting for the text to stop arriving is the only correct rule when the
+ * ordering is undefined. A third of a second is imperceptible in a chat and is
+ * far longer than the gap between consecutive chunks.
+ */
+const SETTLE_MS = 350;
+
 /** Backoff between reconnect attempts, in milliseconds. */
 const BACKOFF_MS = [400, 900, 2000, 4000, 8000, 15000];
 
@@ -129,6 +143,11 @@ export class LiveConversation {
   /** Transcript fragments waiting for the turn to close. */
   #userBuffer = '';
   #annaBuffer = '';
+  /** Pending settle: see `#settle`. */
+  #settleTimer: ReturnType<typeof setTimeout> | null = null;
+  #turnEnded = false;
+  /** True between a completion signal and the settle it scheduled. */
+  #awaitingSettle = false;
   /** Guards against a stale socket's callbacks reaching a live session. */
   #generation = 0;
 
@@ -351,6 +370,7 @@ export class LiveConversation {
 
       this.#socket = socket;
       this.#attempt = 0;
+      this.#discardPartial();
       this.#setState('live');
     } catch (error) {
       if (generation !== this.#generation || this.#closing) return;
@@ -435,6 +455,7 @@ export class LiveConversation {
     if (process.env.ANNA_DEBUG) console.error(`[live] reconnecting — ${reason}`);
     if (this.#closing || this.#reconnectTimer) return;
     this.#socket = null;
+    this.#discardPartial();
     this.#setState('reconnecting');
 
     const delay = BACKOFF_MS[Math.min(this.#attempt, BACKOFF_MS.length - 1)] ?? 15000;
@@ -480,7 +501,24 @@ export class LiveConversation {
     const content = message.serverContent;
     if (!content) return;
 
+    /*
+     * A second completion signal is a hard boundary.
+     *
+     * Trailing transcription and the opening words of the next turn look
+     * identical — both are text arriving after a completion flag — so the
+     * settle window cannot tell them apart on its own. What it can tell apart
+     * is another *flag*: if one turn has already ended and a new one is ending
+     * too, whatever is buffered belonged to the first. Flushing here keeps two
+     * turns from merging into "firstsecond" while still letting a few
+     * milliseconds of trailing text land where it belongs.
+     */
+    if (this.#awaitingSettle && (content.generationComplete || content.turnComplete)) {
+      this.#settle();
+    }
+
     if (content.interrupted) {
+      if (this.#settleTimer) clearTimeout(this.#settleTimer);
+      this.#settleTimer = null;
       this.#annaBuffer = '';
       this.#options.handlers.onInterrupted();
     }
@@ -499,12 +537,15 @@ export class LiveConversation {
     if (heard) {
       this.#userBuffer += heard;
       this.#options.handlers.onUserText(this.#userBuffer, false);
+      // More text means the turn was not over after all.
+      if (this.#awaitingSettle) this.#scheduleSettle();
     }
 
     const said = content.outputTranscription?.text;
     if (said) {
       this.#annaBuffer += said;
       this.#options.handlers.onAnnaText(this.#annaBuffer, false);
+      if (this.#awaitingSettle) this.#scheduleSettle();
     }
 
     /*
@@ -522,26 +563,68 @@ export class LiveConversation {
      * Splitting here also gets the chat right: two things she said become two
      * messages rather than one wall.
      */
-    const closing = Boolean(content.generationComplete || content.turnComplete);
+    if (content.turnComplete) this.#turnEnded = true;
+    if (content.generationComplete || content.turnComplete) {
+      this.#awaitingSettle = true;
+      this.#scheduleSettle();
+    }
+  }
+
+  /**
+   * Emits the finished lines once the transcript has stopped moving.
+   *
+   * Scheduled rather than immediate, and rescheduled by every chunk that
+   * arrives — so a turn ends when the words end, not when a flag says so.
+   */
+  #scheduleSettle(): void {
+    if (this.#settleTimer) clearTimeout(this.#settleTimer);
+    this.#settleTimer = setTimeout(() => {
+      this.#settleTimer = null;
+      this.#settle();
+    }, SETTLE_MS);
+    this.#settleTimer.unref?.();
+  }
+
+  #settle(): void {
+    if (this.#settleTimer) clearTimeout(this.#settleTimer);
+    this.#settleTimer = null;
+    this.#awaitingSettle = false;
 
     // The user finished speaking before she started answering, so their line is
     // recorded first — memory replays the transcript in order, and an exchange
     // stored answer-then-question reads as her talking to herself.
-    if (closing && this.#userBuffer.trim()) {
+    if (this.#userBuffer.trim()) {
       this.#options.handlers.onUserText(this.#userBuffer, true);
-      this.#userBuffer = '';
     }
+    this.#userBuffer = '';
 
-    if (closing && this.#annaBuffer.trim()) {
+    if (this.#annaBuffer.trim()) {
       this.#options.handlers.onAnnaText(this.#annaBuffer, true);
-      this.#annaBuffer = '';
     }
+    this.#annaBuffer = '';
 
-    if (content.turnComplete) {
-      this.#userBuffer = '';
-      this.#annaBuffer = '';
+    if (this.#turnEnded) {
+      this.#turnEnded = false;
       this.#options.handlers.onTurnComplete();
     }
+  }
+
+  /**
+   * Everything half-said, dropped.
+   *
+   * Called whenever the socket underneath changes. A partial turn belongs to
+   * the connection that was carrying it: kept across a reconnect it becomes the
+   * *prefix* of the next thing she says, which is how "a picture of you" ended
+   * up glued to the front of "I did. Playing coy on screen like that, huh?" in
+   * a real conversation.
+   */
+  #discardPartial(): void {
+    if (this.#settleTimer) clearTimeout(this.#settleTimer);
+    this.#settleTimer = null;
+    this.#userBuffer = '';
+    this.#annaBuffer = '';
+    this.#turnEnded = false;
+    this.#awaitingSettle = false;
   }
 
   /**

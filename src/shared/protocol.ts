@@ -190,7 +190,22 @@ export type ServerMessage =
    * play a clip that does not exist would show a broken video element.
    */
   | { t: 'move'; gesture: string }
-  | { t: 'memory'; facts: RememberedFact[]; summary: string };
+  | { t: 'memory'; facts: RememberedFact[]; summary: string }
+  /**
+   * The conversation so far, whichever surface it happened on.
+   *
+   * Sent once on connect. Memory is already shared between Telegram and the
+   * web — one `Brain`, one database — but the transcript was not *shown*
+   * anywhere except the session that produced it, so opening the web after
+   * talking on your phone looked like she had forgotten the whole thing.
+   */
+  | { t: 'history'; turns: PastTurn[] };
+
+export interface PastTurn {
+  speaker: 'user' | 'anna';
+  text: string;
+  at: number;
+}
 
 /**
  * One thing she remembers, as the editor needs it.

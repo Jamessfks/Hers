@@ -108,6 +108,8 @@ async function fixture(env: Record<string, string> = {}) {
  * gallery look empty when it was not.
  */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+/** Long enough for a turn's transcript to go quiet. See live.ts SETTLE_MS. */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 500));
 
 test('waking builds a prompt that actually contains who she is', async () => {
   const f = await fixture();
@@ -166,6 +168,7 @@ test('a finished user turn is written to memory and lifts her mood', async () =>
   f.socket().emit({
     serverContent: { inputTranscription: { text: 'my sister is called Mei' }, turnComplete: true },
   } as unknown as LiveServerMessage);
+  await settled();
 
   const turns = f.brain.memory.liveTranscript(10);
   assert.equal(turns.at(-1)?.text, 'my sister is called Mei');
@@ -185,6 +188,7 @@ test('both halves of a turn reach the transcript and memory', async () => {
       turnComplete: true,
     },
   } as unknown as LiveServerMessage);
+  await settled();
 
   const speakers = f.brain.memory.liveTranscript(10).map((turn) => turn.speaker);
   assert.deepEqual(speakers, ['user', 'anna']);

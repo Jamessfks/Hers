@@ -109,6 +109,15 @@ function fixture(
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+/**
+ * Long enough for the transcript to go quiet.
+ *
+ * Finished lines are emitted once transcription stops arriving rather than the
+ * instant a completion flag lands, because Google documents no ordering between
+ * the two — so a test that asserts immediately is asserting before the turn is
+ * over.
+ */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 500));
 
 // -- setup ------------------------------------------------------------------
 
@@ -256,6 +265,7 @@ test('audio parts become audio and transcripts accumulate until the turn closes'
   socket.emit({
     serverContent: { outputTranscription: { text: 'early.' }, turnComplete: true },
   } as unknown as LiveServerMessage);
+  await settled();
 
   assert.equal(f.audio.length, 1);
   assert.equal(f.audio[0]?.toString(), 'hi');
@@ -273,10 +283,12 @@ test('two generations in one turn are two utterances, not one run-on', async () 
   socket.emit({
     serverContent: { outputTranscription: { text: "Great, huh? What's up?" }, generationComplete: true },
   } as unknown as LiveServerMessage);
+  await settled();
   socket.emit({
     serverContent: { outputTranscription: { text: 'You know, you could use a friend.' } },
   } as unknown as LiveServerMessage);
   socket.emit({ serverContent: { turnComplete: true } } as unknown as LiveServerMessage);
+  await settled();
 
   const finals = f.annaText.filter((line) => line.final).map((line) => line.text);
   assert.deepEqual(finals, ["Great, huh? What's up?", 'You know, you could use a friend.']);
@@ -293,6 +305,7 @@ test('a generation and its turn arriving together emit once, not twice', async (
       turnComplete: true,
     },
   } as unknown as LiveServerMessage);
+  await settled();
 
   const finals = f.annaText.filter((line) => line.final);
   assert.equal(finals.length, 1, 'the usual case must not double up');
@@ -310,6 +323,7 @@ test('the transcript buffer resets between turns', async () => {
   socket.emit({
     serverContent: { outputTranscription: { text: 'second' }, turnComplete: true },
   } as unknown as LiveServerMessage);
+  await settled();
 
   assert.equal(f.annaText.at(-1)?.text, 'second', 'a turn must not inherit the last one');
 });
@@ -326,6 +340,7 @@ test('being interrupted clears what she was going to say', async () => {
   socket.emit({
     serverContent: { outputTranscription: { text: 'Sorry.' }, turnComplete: true },
   } as unknown as LiveServerMessage);
+  await settled();
 
   assert.equal(f.interruptions, 1);
   assert.equal(
