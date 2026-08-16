@@ -30,6 +30,8 @@ import {
   failClip,
   libraryProgress,
   pendingWork,
+  evictClip,
+  notePlayed,
   recordSeam,
   resumableJobs,
   unverifiedClips,
@@ -105,6 +107,8 @@ export interface PortraitStoreOptions {
    * running. Absent means the default tier.
    */
   tier?: () => GenerationTier;
+  /** How many clips the library may hold. Resolved at call time. */
+  maxClips?: () => number;
 }
 
 export class PortraitLibrary extends EventEmitter {
@@ -292,10 +296,35 @@ export class PortraitLibrary extends EventEmitter {
          * because the refusals are not all terminal: an ineligible slot at this
          * tier says nothing about the next slot, which may well be eligible.
          */
-        const verdict = mayGenerate(slot, this.#library!, tier, this.#session);
+        const verdict = mayGenerate(slot, this.#library!, tier, {
+          ...this.#session,
+          maxClips: this.#options.maxClips?.(),
+        });
         if (!verdict.allowed) {
           refusals.push(verdict.reason);
           continue;
+        }
+
+        /*
+         * Making room, and saying so.
+         *
+         * The eviction happens before the submit rather than after the download,
+         * which is the safe order for the only failure that matters: if the
+         * render never lands, the user has lost a clip they had. The other order
+         * risks two clips on disk against a manifest that expects one, and a cap
+         * the user set being quietly exceeded.
+         *
+         * Losing something you paid for is not a thing to do silently, so it is
+         * announced rather than logged — this is the one place the app spends
+         * money and discards an asset in the same breath.
+         */
+        if (verdict.evict) {
+          this.emit('wants', {
+            wants: slot,
+            giving: verdict.evict,
+            message: `Anna wants a ${humanise(slot)} clip. Her library is full, so she is giving up ${humanise(verdict.evict)} — the one she has reached for least.`,
+          });
+          await this.#evict(verdict.evict);
         }
         const built = buildClipPrompt(slot);
         const bytes = await this.portraitBytes();
@@ -494,6 +523,39 @@ export class PortraitLibrary extends EventEmitter {
     return this.view();
   }
 
+  /** Records that a clip was reached for, so eviction knows what she uses. */
+  async notePlayed(slot: ClipSlotName): Promise<void> {
+    if (!this.#library) return;
+    const next = notePlayed(this.#library, slot);
+    if (next === this.#library) return;
+    this.#library = next;
+    // Not emitted: this changes no status and a library-changed event per
+    // gesture would put an IPC message on every beat of every sentence.
+    await this.#store.save(this.#library);
+  }
+
+  /**
+   * Gives up a clip, on disk and in the manifest.
+   *
+   * The file is deleted rather than orphaned. Leaving it would mean `reconcile`
+   * finding bytes for a slot the manifest calls `pending` and promoting it back
+   * to ready on the next launch — undoing the eviction and putting the library
+   * back over the cap.
+   */
+  async #evict(slot: ClipSlotName): Promise<void> {
+    const path = this.#store.clipPath(this.#library!, slot);
+    this.#library = evictClip(this.#library!, slot);
+    await this.#store.save(this.#library);
+
+    if (path) {
+      const { rm } = await import('node:fs/promises');
+      // A file that will not delete is untidy, not broken: the manifest is
+      // already correct and reconcile only promotes slots it can read.
+      await rm(path, { force: true }).catch(() => {});
+    }
+    this.#emit();
+  }
+
   readyGestures(): string[] {
     if (!this.#library) return [];
     return Object.entries(this.#library.clips)
@@ -539,4 +601,9 @@ export class PortraitLibrary extends EventEmitter {
   #emit(): void {
     this.emit('changed', this.view());
   }
+}
+
+/** `look_away_thinking` -> `look away thinking`, for a sentence a person reads. */
+function humanise(slot: string): string {
+  return slot.replace(/_/g, ' ');
 }

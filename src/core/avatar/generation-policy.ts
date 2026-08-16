@@ -32,7 +32,13 @@
  */
 
 import type { GenerationTier } from '../../shared/protocol.ts';
-import { BUILD_ORDER, IDLE_SLOT, type ClipLibrary, type ClipSlotName } from './clips.ts';
+import {
+  BUILD_ORDER,
+  IDLE_SLOT,
+  evictionCandidate,
+  type ClipLibrary,
+  type ClipSlotName,
+} from './clips.ts';
 
 export type { GenerationTier };
 
@@ -136,10 +142,20 @@ export interface GenerationState {
   generatedThisSession: number;
   /** When the last render was submitted. Null when none has been. */
   lastGeneratedAt: number | null;
+  /**
+   * How many clips the library may hold, from config. Undefined means no
+   * capacity limit and the tier's own ceiling is the only one.
+   */
+  maxClips?: number;
 }
 
 export type GenerationVerdict =
-  | { allowed: true }
+  /**
+   * `evict` names a clip that must be given up first — the library is at
+   * capacity and this is the one it can afford to lose. Absent means there was
+   * room. A caller that ignores it will exceed the cap the user set.
+   */
+  | { allowed: true; evict?: ClipSlotName }
   /**
    * `reason` is written to be shown to the user, not logged. Every refusal here
    * is a decision they configured, so it should read as the app respecting a
@@ -184,12 +200,34 @@ export function mayGenerate(
     };
   }
 
+  /*
+   * Two different ceilings on how many clips exist, and they mean different
+   * things.
+   *
+   * The tier's `maxTotal` is a spending limit expressed in clips — it is about
+   * how much of the library is worth buying at all. `maxClips` is a *capacity*:
+   * how many she keeps at once. Hitting the tier limit is a stop. Hitting
+   * capacity is not, because the library rotates — the least-recently-played
+   * clip is given up and the new one takes its place, which costs money but not
+   * disk, and is the behaviour a small library is for.
+   */
   const ready = readyCount(library);
   if (ready >= policy.maxTotal) {
     return {
       allowed: false,
       reason: `Her library has ${ready} clips, which is the ${tier} limit.`,
     };
+  }
+
+  if (state.maxClips !== undefined && ready >= state.maxClips) {
+    const giving = evictionCandidate(library);
+    if (!giving) {
+      return {
+        allowed: false,
+        reason: `Her library is full at ${state.maxClips} and there is nothing she can give up.`,
+      };
+    }
+    return { allowed: true, evict: giving };
   }
 
   const spent = spentUsd(library);

@@ -237,6 +237,19 @@ export interface AnnaConfig {
      */
     generationTier: GenerationTier;
     /**
+     * How many clips her library may hold at once.
+     *
+     * Separate from the tier, which governs how freely she may *spend*. This
+     * governs how much she may *keep* — and the two are different questions, so
+     * a user can allow generous spending on a small rotating set, or a tight
+     * budget on a library that never evicts.
+     *
+     * When the library is full and she reaches for something she does not have,
+     * the least-recently-played clip is given up to make room.  is never
+     * a candidate; see evictionCandidate in core/avatar/clips.ts.
+     */
+    maxClips: number;
+    /**
      * Where hand-made clips are dropped, for the `manual` provider.
      *
      * Empty until chosen. It is a real folder the user opens in Finder, which is

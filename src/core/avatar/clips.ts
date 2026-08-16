@@ -138,6 +138,19 @@ export interface ClipEntry {
   /** What this slot has cost so far. Failed attempts are often billed too. */
   spentUsd: number;
   updatedAt: number;
+  /**
+   * When this clip was last reached for, as opposed to last written.
+   *
+   * Distinct from `updatedAt`, which moves on every bookkeeping change and so
+   * says nothing about use. This is the only ordering that can answer "which of
+   * these is she not actually using", which is the question eviction asks when
+   * the library is full and she wants a gesture she does not have.
+   *
+   * Absent means never played. Those are evicted first, and deliberately: a clip
+   * that has been on disk through a whole conversation without once being the
+   * right thing to do is the cheapest one to lose.
+   */
+  lastPlayedAt?: number;
 }
 
 export interface ClipLibrary {
@@ -457,6 +470,87 @@ export function recordSeam(
       verified: true,
       error: null,
       job: null,
+    },
+    now,
+  );
+}
+
+/** Records that a clip was reached for, for the eviction ordering. */
+export function notePlayed(
+  library: ClipLibrary,
+  slot: ClipSlotName,
+  now = Date.now(),
+): ClipLibrary {
+  const entry = library.clips[slot];
+  if (entry.status !== 'ready') return library;
+  // Straight through rather than via `withEntry`: this is not a state change and
+  // must not touch `updatedAt`, which several other things read as "when did
+  // this slot last actually change".
+  return {
+    ...library,
+    clips: { ...library.clips, [slot]: { ...entry, lastPlayedAt: now } },
+  };
+}
+
+/**
+ * The clip worth losing when the library is full and she wants another.
+ *
+ * Least-recently-played, with never-played first — a clip that has sat through
+ * a whole conversation without once being the right thing to do is the cheapest
+ * one to give up.
+ *
+ * `idle` is never a candidate, and that is not a preference. It is the only
+ * clip that plays when nothing else is happening, which for a companion is
+ * almost all of the time; evicting it would take her from a person standing
+ * there back to a photograph, to buy a gesture she uses once.
+ *
+ * Returns null when there is nothing to evict, which is a real answer rather
+ * than an error: a library holding only `idle` cannot make room.
+ */
+export function evictionCandidate(library: ClipLibrary): ClipSlotName | null {
+  let worst: { slot: ClipSlotName; at: number } | null = null;
+
+  for (const slot of BUILD_ORDER) {
+    if (slot === IDLE_SLOT) continue;
+    const entry = library.clips[slot];
+    if (entry.status !== 'ready' || !entry.file) continue;
+
+    const at = entry.lastPlayedAt ?? 0;
+    if (!worst || at < worst.at) worst = { slot, at };
+  }
+
+  return worst?.slot ?? null;
+}
+
+/**
+ * Returns a slot to `pending` so its place can be used by something else.
+ *
+ * The manifest entry is reset but `spentUsd` is kept, because the money was
+ * spent and a library that forgets what it cost under-reports forever. Deleting
+ * the file is the caller's job — this module never touches a disk.
+ */
+export function evictClip(
+  library: ClipLibrary,
+  slot: ClipSlotName,
+  now = Date.now(),
+): ClipLibrary {
+  const entry = library.clips[slot];
+  if (entry.status !== 'ready') throw new Error(`${slot} is not ready, so there is nothing to evict`);
+
+  return withEntry(
+    library,
+    slot,
+    {
+      status: 'pending',
+      file: null,
+      durationMs: 0,
+      job: null,
+      error: null,
+      verified: false,
+      // Attempts reset too: this slot is being given up for room, not because
+      // anything about it failed, and carrying a strike into its next life
+      // would exhaust a perfectly renderable gesture.
+      attempts: 0,
     },
     now,
   );

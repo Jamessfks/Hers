@@ -679,6 +679,27 @@ function wireBody(): void {
    * to find out is to press the one below it, and that one is billed on ingest
    * whatever comes back.
    */
+  /*
+   * How many clips she keeps, as opposed to how many she may buy.
+   *
+   * A separate control from the tier because they answer different questions,
+   * and a user can reasonably want a generous budget on a small rotating set.
+   * Clamped on the way in rather than trusted: this is a number field, and a
+   * zero here would mean a library that can never hold anything while
+   * cheerfully spending money trying.
+   */
+  const maxClips = document.querySelector<HTMLInputElement>('#max-clips')!;
+
+  function showMaxClips(): void {
+    maxClips.value = String(config.avatar.maxClips ?? 3);
+  }
+
+  maxClips.addEventListener('change', async () => {
+    const wanted = Math.max(1, Math.min(CLIP_COUNT, Math.round(Number(maxClips.value) || 3)));
+    config = await api.setConfig({ avatar: { maxClips: wanted } });
+    showMaxClips();
+  });
+
   const check = document.querySelector<HTMLButtonElement>('#check-video')!;
   const checkStatus = document.querySelector<HTMLSpanElement>('#video-check-status')!;
 
@@ -714,6 +735,7 @@ function wireBody(): void {
   api.onLibrary(showLibrary);
   showPrice();
   showTier();
+  showMaxClips();
   void showPortrait();
   void api.libraryStatus().then(showLibrary);
 }

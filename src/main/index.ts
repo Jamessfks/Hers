@@ -149,6 +149,9 @@ async function main(): Promise<void> {
         perform: (event) => {
           diag.noteEvent(event.kind);
           if (event.kind === 'turn-end') diag.endTurn();
+          // Main knows which gesture fired because main sent it, so the
+          // eviction ordering needs no round trip to the window.
+          if (event.kind === 'gesture') void portraits.notePlayed(event.name);
           send(IPC.perform, event);
         },
         audio: (clauseId, chunk) => {
@@ -495,10 +498,14 @@ async function main(): Promise<void> {
       secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
     dropDir: () => config.get().avatar.clipFolder || undefined,
     tier: () => config.get().avatar.generationTier,
+    maxClips: () => config.get().avatar.maxClips,
   });
 
   portraits.on('changed', (view: LibraryView) => send(IPC.libraryChanged, view));
   portraits.on('trouble', (message: string) => send(IPC.trouble, message));
+  // She is about to spend money and give up a clip the user paid for. Both are
+  // worth saying out loud, on the channel the window already listens to.
+  portraits.on('wants', (event: { message: string }) => send(IPC.trouble, event.message));
 
   void portraits.resume(config.get().avatar.portrait).then((library: unknown) => {
     diag.note('portrait-resumed', { found: Boolean(library), hash: config.get().avatar.portrait });

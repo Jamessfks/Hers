@@ -34,6 +34,9 @@ export const DEFAULT_CONFIG: AnnaConfig = {
     // Medium by default, matching DEFAULT_TIER: the idle loop plus the four
     // gestures the persona reaches for constantly, rendered as she needs them.
     generationTier: 'medium',
+    // Three: enough for an idle loop and two gestures that carry most turns,
+    // small enough that the library is a rotating set rather than a purchase.
+    maxClips: 3,
     clipFolder: '',
   },
   senses: {
