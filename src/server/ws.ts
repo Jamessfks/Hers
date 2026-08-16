@@ -126,6 +126,8 @@ export class WebBridge {
       configured: Boolean(brain.config.geminiApiKey),
       telegram: Boolean(brain.config.telegram),
       livekit: Boolean(brain.config.livekit),
+      cameraFps: brain.config.cameraFps,
+      screenFps: brain.config.screenFps,
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
     if (this.#companion.live) sendJson(socket, { t: 'state', state: 'listening' });

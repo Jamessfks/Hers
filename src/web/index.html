@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Anna</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='%23b48cff'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div class="app" id="app" data-state="asleep">
+      <header class="bar">
+        <div class="identity">
+          <span class="dot" id="dot" aria-hidden="true"></span>
+          <span class="name" id="name">Anna</span>
+          <span class="mood" id="mood"></span>
+        </div>
+        <div class="bar-actions">
+          <span class="state" id="state">asleep</span>
+          <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
+        </div>
+      </header>
+
+      <p class="notice" id="notice" role="status" hidden></p>
+
+      <main class="stage">
+        <div class="presence">
+          <div class="orb" id="orb">
+            <div class="orb-core"></div>
+            <div class="orb-ring"></div>
+          </div>
+          <button class="wake" id="wake" type="button">Wake her</button>
+          <p class="hint" id="hint">Turn on a sense and she can hear you.</p>
+        </div>
+
+        <section class="transcript" id="transcript" aria-live="polite" aria-label="Conversation">
+          <p class="empty" id="empty">Nothing yet.</p>
+        </section>
+      </main>
+
+      <div class="previews" id="previews" hidden>
+        <figure class="preview" id="preview-camera" hidden>
+          <figcaption>You</figcaption>
+        </figure>
+        <figure class="preview" id="preview-screen" hidden>
+          <figcaption>Your screen</figcaption>
+        </figure>
+      </div>
+
+      <footer class="controls">
+        <div class="senses" role="group" aria-label="Senses">
+          <button class="sense" id="sense-hearing" type="button" aria-pressed="false" aria-label="Hearing — let her hear you">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>
+            <span>Hearing</span>
+          </button>
+          <button class="sense" id="sense-sight" type="button" aria-pressed="false" aria-label="Sight — let her see you">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></svg>
+            <span>Sight</span>
+          </button>
+          <button class="sense" id="sense-screen" type="button" aria-pressed="false" aria-label="Screen — let her see your screen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <span>Screen</span>
+          </button>
+        </div>
+
+        <form class="composer" id="composer">
+          <input
+            id="input"
+            type="text"
+            placeholder="Say something to her…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="send" type="submit" aria-label="Send">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+          </button>
+        </form>
+      </footer>
+    </div>
+
+    <dialog class="settings" id="settings">
+      <form method="dialog" class="settings-head">
+        <h2>Who she is</h2>
+        <button class="ghost" value="close" aria-label="Close">Close</button>
+      </form>
+      <p class="settings-note">
+        These are the files in her profile folder. Changes take effect the next time she wakes.
+      </p>
+      <nav class="tabs" id="tabs"></nav>
+      <textarea id="editor" spellcheck="false" aria-label="Profile file"></textarea>
+      <div class="settings-foot">
+        <span id="saved"></span>
+        <button class="primary" id="save" type="button">Save</button>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

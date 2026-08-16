@@ -129,6 +129,15 @@ export type ServerMessage =
       configured: boolean;
       telegram: boolean;
       livekit: boolean;
+      /**
+       * Frames per second the server will actually forward.
+       *
+       * Sent so the browser can throttle at the source. The server enforces the
+       * same limit regardless — this is to stop the bytes being produced, not
+       * to be trusted.
+       */
+      cameraFps: number;
+      screenFps: number;
     }
   | { t: 'state'; state: ConnectionState }
   | { t: 'mood'; mood: MoodReadout }
