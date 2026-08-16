@@ -1,53 +1,59 @@
 /*
  * Anna's interface.
  *
- * The design brief, such as it is: this window is open all day, in the corner
- * of someone's attention, next to their real work. So it is dark, it is quiet,
- * and it does not compete. There is one moving thing on the screen — her — and
- * it only moves when she is actually doing something.
+ * A companion window, not a dashboard. Two halves: she is on the left at the
+ * size a person is, and the conversation is on the right in bubbles. That shape
+ * is borrowed deliberately from Replika, where the avatar is the larger half of
+ * the screen and the chat sits beside it — the point of a companion app is that
+ * you are looking at someone, not reading a log.
  *
- * The mood drives colour. `--mood-hue` and `--mood-lift` are set from the mood
- * vector by the app, and everything warm on the page derives from them, so a
- * flat mood is visibly cooler and dimmer than a good one without a single
- * word about it anywhere.
+ * Light, and not by accident. The previous version read as an instrument panel;
+ * this is meant to read as a room with the curtains open. One accent colour,
+ * derived from her mood, and otherwise paper, ink, and a lot of air.
+ *
+ * `--mood-hue` and `--mood-lift` are written from the mood vector by the app,
+ * so a flat mood is visibly cooler and a good one warmer, without a word about
+ * it anywhere on screen.
  */
 
 :root {
-  --bg: #0c0d12;
-  --bg-raised: #14151d;
-  --bg-sunken: #090a0e;
-  --line: #22242f;
-  --text: #e9e8f2;
-  --text-dim: #9a99ab;
-  --text-faint: #63627a;
+  color-scheme: light;
+
+  --paper: #fbfaf8;
+  --card: #ffffff;
+  --sunken: #f3f1ee;
+  --line: #e7e3dd;
+  --line-soft: #f0ede8;
+
+  --ink: #1c1b1a;
+  --ink-soft: #5f5b56;
+  --ink-faint: #9a948c;
 
   --mood-hue: 268;
   --mood-lift: 0.55;
-  --accent: hsl(var(--mood-hue) 70% calc(52% + var(--mood-lift) * 12%));
-  --accent-soft: hsl(var(--mood-hue) 60% 62% / 0.16);
+  --accent: hsl(var(--mood-hue) 62% calc(54% - var(--mood-lift) * 7%));
+  --accent-ink: #ffffff;
+  --accent-wash: hsl(var(--mood-hue) 70% 97%);
+  --accent-edge: hsl(var(--mood-hue) 45% 88%);
 
-  --radius: 14px;
-  --radius-sm: 9px;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --bubble: 20px;
+
+  --shadow-sm: 0 1px 2px rgb(28 27 26 / 0.05);
+  --shadow: 0 6px 22px -8px rgb(28 27 26 / 0.14);
+  --shadow-lg: 0 24px 60px -22px rgb(28 27 26 / 0.28);
 
   --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto,
     'Helvetica Neue', Arial, sans-serif;
-
-  color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-  margin: 0;
-}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font);
   font-size: 15px;
   line-height: 1.55;
@@ -55,891 +61,468 @@ body {
   overflow: hidden;
 }
 
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
+button { font: inherit; color: inherit; cursor: pointer; }
 
-/* --------------------------------------------------------------------------
-   Shell
-   -------------------------------------------------------------------------- */
-
-.app {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
-  height: 100dvh;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 clamp(14px, 3vw, 28px);
-}
+/* -------------------------------------------------------------------------- */
 
 /*
- * A standing problem, as opposed to a passing notification.
+ * Flex rather than three named grid rows.
  *
- * "There is no API key" is not a toast: it is true until someone does
- * something about it, and a floating panel that never leaves ends up parked
- * over the controls it is telling you to use. This is in the layout, so it
- * takes up room instead of covering something.
+ * `grid-template-rows: auto auto 1fr` assumes three children, and the notice is
+ * `hidden` most of the time — a hidden child leaves the grid entirely, so
+ * everything shifted up and the stage landed in the `auto` row while the `1fr`
+ * row sat empty at 497px. Her portrait rendered 67px tall on an 800px screen.
+ * A column that simply gives the leftover space to the stage cannot have that
+ * bug, whatever is or is not present above it.
  */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 clamp(12px, 2.5vw, 28px);
+}
+
 .notice {
   margin: 12px 0 0;
   padding: 10px 14px;
-  border: 1px solid hsl(38 60% 50% / 0.32);
+  border: 1px solid #efd9a8;
   border-radius: var(--radius-sm);
-  background: hsl(38 60% 50% / 0.08);
-  color: #e3c78b;
+  background: #fdf6e6;
+  color: #7a5c14;
   font-size: 13px;
 }
-
-.notice[hidden] {
-  display: none;
-}
+.notice[hidden] { display: none; }
 
 .bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 2px 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 16px 4px 14px;
 }
 
-.identity {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
+.identity { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 
 .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-faint);
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-faint); align-self: center; flex: none;
   transition: background 400ms ease, box-shadow 400ms ease;
-  align-self: center;
-  flex: none;
 }
-
 .app[data-state='listening'] .dot,
 .app[data-state='speaking'] .dot {
   background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--accent-wash);
 }
+.app[data-state='connecting'] .dot,
+.app[data-state='reconnecting'] .dot { background: #d9a441; animation: pulse 1.4s ease-in-out infinite; }
+.app[data-state='error'] .dot { background: #d0655c; }
 
-.app[data-state='reconnecting'] .dot,
-.app[data-state='connecting'] .dot {
-  background: #d8a657;
-  animation: pulse 1.4s ease-in-out infinite;
-}
+.name { font-weight: 600; font-size: 17px; letter-spacing: -0.02em; }
+.mood { color: var(--ink-faint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.app[data-state='error'] .dot {
-  background: #e0685f;
-}
-
-.name {
-  font-weight: 560;
-  letter-spacing: -0.01em;
-}
-
-.mood {
-  color: var(--text-faint);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-}
-
-.state {
-  color: var(--text-faint);
-  font-size: 12px;
-  font-variant: small-caps;
-  letter-spacing: 0.06em;
-}
+.bar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.state { color: var(--ink-faint); font-size: 11px; font-variant: small-caps; letter-spacing: 0.08em; margin-right: 4px; }
 
 .ghost {
-  background: none;
+  background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 5px 11px;
+  border-radius: 999px;
+  padding: 7px 14px;
   font-size: 13px;
-  color: var(--text-dim);
-  transition: border-color 160ms ease, color 160ms ease;
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
+.ghost:hover { border-color: var(--accent-edge); color: var(--ink); }
+.ghost:active { transform: translateY(1px); }
 
-.ghost:hover {
-  border-color: #34364a;
-  color: var(--text);
-}
-
-/* --------------------------------------------------------------------------
-   Stage
-   -------------------------------------------------------------------------- */
+/* -- Stage: she is the larger half ---------------------------------------- */
 
 .stage {
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(220px, 300px) 1fr;
-  gap: clamp(16px, 4vw, 44px);
+  grid-template-columns: minmax(300px, 0.9fr) 1fr;
+  gap: clamp(16px, 2.5vw, 32px);
   min-height: 0;
-  padding: 20px 0;
+  padding-bottom: clamp(12px, 2vw, 22px);
 }
 
-@media (max-width: 760px) {
-  .stage {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    gap: 14px;
-  }
-
-  /* On a phone the transcript is the page; she is the header for it. */
-  .portrait {
-    --portrait-cap: 26vh;
-  }
-
-  .presence {
-    gap: 12px;
-  }
+@media (max-width: 900px) {
+  .stage { grid-template-columns: 1fr; grid-template-rows: auto 1fr; gap: 12px; }
 }
 
 .presence {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  text-align: center;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; min-height: 0;
 }
 
 /*
- * The orb.
+ * Her panel. Deliberately the biggest thing on the page.
  *
- * `--level` is written from the audio meters, 0..1. Scale and glow are driven
- * from it directly rather than from an animation, so what is on screen is the
- * actual amplitude of what is being said rather than a loop that looks like it.
+ * Height-led rather than width-led: a companion is a portrait, and a window is
+ * usually wider than it is tall, so the constraint that actually binds is
+ * vertical. Width follows from her photograph's own shape — `--portrait-ratio`
+ * is written from the image rather than assumed, so a tall phone photo and a
+ * square crop both sit here without letterboxing or pushing the page around.
  */
-/* `display` beats the `hidden` attribute, so an element given `display` has to
-   opt back out of it explicitly or it can never be hidden. */
-.orb[hidden] {
-  display: none;
+.portrait {
+  --portrait-ratio: 1;
+  position: relative;
+  /*
+   * Height-led: it takes the space the column has, up to a ceiling, and the
+   * width follows from the photograph's own shape.
+   *
+   * `height: min(100%, …)` was wrong twice over — a percentage height against
+   * a flex parent whose height is content-derived collapses, and then
+   * flex-shrink took what was left. It rendered 46x82.
+   */
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 66vh;
+  aspect-ratio: var(--portrait-ratio);
+  width: auto;
+  max-width: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--sunken);
+  box-shadow: var(--shadow-lg);
+  transition: box-shadow 300ms ease;
+}
+.portrait[hidden] { display: none; }
+
+.app[data-state='speaking'] .portrait,
+.app[data-state='listening'] .portrait {
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--accent-edge),
+    0 0 calc(22px + var(--level, 0) * 58px)
+      hsl(var(--mood-hue) 70% 62% / calc(0.14 + var(--level, 0) * 0.32));
 }
 
+.portrait img, .portrait video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.portrait video { opacity: 0; }
+.portrait[data-moving='true'] video { opacity: 1; }
+.app[data-state='asleep'] .portrait img { filter: saturate(0.55) contrast(0.96); transition: filter 700ms ease; }
+
+/* Stands in until there is a photograph. */
 .orb {
   --level: 0;
   position: relative;
-  width: clamp(120px, 20vw, 168px);
+  flex: 0 1 auto;
+  width: min(52vh, 300px);
+  max-height: 52vh;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
 }
-
+.orb[hidden] { display: none; }
 .orb-core {
-  position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 34% 30%,
-    hsl(var(--mood-hue) 88% calc(66% + var(--mood-lift) * 14%)),
-    hsl(calc(var(--mood-hue) - 28) 72% 42%) 62%,
-    hsl(calc(var(--mood-hue) - 42) 62% 26%)
-  );
-  transform: scale(calc(1 + var(--level) * 0.16));
-  box-shadow: 0 0 calc(24px + var(--level) * 46px) hsl(var(--mood-hue) 80% 60% / calc(0.22 + var(--level) * 0.4));
-  transition: transform 90ms ease-out, box-shadow 140ms ease-out, background 900ms ease;
+  position: absolute; inset: 16%; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%,
+    hsl(var(--mood-hue) 90% 88%), hsl(var(--mood-hue) 62% 72%) 58%,
+    hsl(calc(var(--mood-hue) - 24) 52% 60%));
+  transform: scale(calc(1 + var(--level) * 0.12));
+  box-shadow: 0 18px 50px -18px hsl(var(--mood-hue) 60% 55% / 0.6);
+  transition: transform 90ms ease-out, box-shadow 200ms ease, background 900ms ease;
 }
-
 .orb-ring {
-  position: absolute;
-  inset: 6%;
-  border-radius: 50%;
-  border: 1px solid hsl(var(--mood-hue) 60% 66% / calc(0.1 + var(--level) * 0.34));
-  transform: scale(calc(1 + var(--level) * 0.07));
-  transition: transform 160ms ease-out, border-color 160ms ease-out;
+  position: absolute; inset: 2%; border-radius: 50%;
+  border: 1px solid hsl(var(--mood-hue) 50% 72% / calc(0.25 + var(--level) * 0.4));
+  transform: scale(calc(1 + var(--level) * 0.05));
+  transition: transform 160ms ease-out;
 }
+.app[data-state='asleep'] .orb-core { filter: saturate(0.4); }
 
-.app[data-state='asleep'] .orb-core,
-.app[data-state='error'] .orb-core {
-  filter: saturate(0.25) brightness(0.5);
-}
+.presence-actions { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 .wake {
-  background: var(--accent);
-  color: #0b0a10;
-  border: none;
-  border-radius: 999px;
-  padding: 9px 22px;
-  font-weight: 560;
-  font-size: 14px;
+  background: var(--accent); color: var(--accent-ink);
+  border: none; border-radius: 999px;
+  padding: 11px 26px; font-weight: 600; font-size: 14px;
+  box-shadow: var(--shadow);
   transition: filter 160ms ease, transform 160ms ease;
 }
+.wake:hover { filter: brightness(1.06); }
+.wake:active { transform: translateY(1px); }
+.wake[data-awake='true'] { background: var(--card); border: 1px solid var(--line); color: var(--ink-soft); box-shadow: var(--shadow-sm); }
 
-.wake:hover {
-  filter: brightness(1.08);
+.give-face {
+  background: var(--card);
+  border: 1px dashed var(--accent-edge);
+  border-radius: 999px; padding: 10px 20px;
+  font-size: 13px; color: var(--ink-soft);
+  transition: border-color 160ms ease, color 160ms ease;
 }
+.give-face:hover { border-color: var(--accent); color: var(--ink); }
+.give-face[hidden] { display: none; }
 
-.wake:active {
-  transform: translateY(1px);
-}
+.hint { flex: none; margin: 0; max-width: 30ch; color: var(--ink-faint); font-size: 12.5px; text-align: center; }
 
-.wake[data-awake='true'] {
-  background: none;
+/* -- Conversation ---------------------------------------------------------- */
+
+.conversation {
+  display: grid; grid-template-rows: 1fr auto auto;
+  min-height: 0;
+  background: var(--card);
   border: 1px solid var(--line);
-  color: var(--text-dim);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
-.hint {
-  margin: 0;
-  max-width: 26ch;
-  color: var(--text-faint);
-  font-size: 13px;
+.transcript {
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 18px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 
 /*
- * The first thing to do, offered rather than hidden.
+ * Bubbles. Hers on the left, yours on the right.
  *
- * Uploading a photograph is the step everything else about her appearance
- * depends on, and it used to live behind a button in the header labelled
- * "Face" — discoverable only by someone who already knew. It shows only while
- * there is no photograph, and gets out of the way for good once there is.
+ * The tail is one squared corner rather than a drawn triangle — it reads the
+ * same at a glance and survives being resized, wrapped, or filled with an image
+ * without any of the seams a pseudo-element tail collects.
  */
-.give-face {
-  background: none;
-  border: 1px dashed #3a3c52;
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 13px;
-  color: var(--text-dim);
-  transition: border-color 160ms ease, color 160ms ease;
-}
-
-.give-face:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.give-face[hidden] {
-  display: none;
-}
-
-/* --------------------------------------------------------------------------
-   Transcript
-   -------------------------------------------------------------------------- */
-
-.transcript {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 4px 6px 4px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
-}
-
 .line {
-  display: grid;
-  gap: 2px;
-  animation: rise 260ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  display: flex; flex-direction: column;
+  max-width: min(80%, 46ch);
+  animation: rise 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
+.line[data-who='anna'] { align-self: flex-start; align-items: flex-start; }
+.line[data-who='user'] { align-self: flex-end; align-items: flex-end; }
 
-.line .who {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
+.line .who { font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); padding: 0 10px 3px; }
+/* One speaker in a row only needs saying once. */
+.line[data-same='true'] .who { display: none; }
+.line[data-same='true'] { margin-top: -6px; }
 
 .line .said {
-  margin: 0;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
+  margin: 0; padding: 10px 15px;
+  border-radius: var(--bubble);
+  white-space: pre-wrap; word-break: break-word;
 }
+.line[data-who='anna'] .said { background: var(--sunken); color: var(--ink); border-bottom-left-radius: 6px; }
+.line[data-who='user'] .said { background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 6px; }
+/* Still being transcribed: present, but not yet a finished thought. */
+.line[data-pending='true'] .said { opacity: 0.62; }
 
-.line[data-who='user'] .said {
-  color: var(--text-dim);
-}
-
-.line[data-pending='true'] .said {
-  color: var(--text-faint);
-}
-
-.said-caption {
-  margin: 6px 0 0;
-  color: var(--text-faint);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.line img,
-.line video {
+/*
+ * Capped by height as well as width.
+ *
+ * Her pictures are portraits — the photograph is 768x1376 — so a width-only
+ * cap of 320px produces a 573px-tall bubble that fills the whole panel and
+ * pushes the conversation off screen. Height is the binding constraint for a
+ * portrait in a chat, and `width: auto` keeps the shape while it applies.
+ */
+.line img, .line video {
   margin-top: 6px;
-  max-width: min(340px, 100%);
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  display: block;
-}
-
-.empty {
-  margin: auto;
-  color: var(--text-faint);
-  font-size: 13px;
-}
-
-/* --------------------------------------------------------------------------
-   Previews
-   -------------------------------------------------------------------------- */
-
-.previews {
-  display: flex;
-  gap: 10px;
-  padding-bottom: 10px;
-}
-
-.preview {
-  margin: 0;
-  position: relative;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--bg-sunken);
-  line-height: 0;
-}
-
-.preview video {
-  display: block;
-  width: 148px;
+  max-width: min(260px, 100%);
+  max-height: 300px;
+  width: auto;
   height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  display: block;
+  box-shadow: var(--shadow-sm);
 }
+.said-caption { margin: 5px 10px 0; color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
+.empty { margin: auto; color: var(--ink-faint); font-size: 13px; }
 
-.preview figcaption {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  padding: 3px 7px;
-  font-size: 10px;
-  line-height: 1.4;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
-}
-
-/* --------------------------------------------------------------------------
-   Controls
-   -------------------------------------------------------------------------- */
+/* -- Composer -------------------------------------------------------------- */
 
 .controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 0 max(16px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px; border-top: 1px solid var(--line-soft);
+  background: var(--card); flex-wrap: wrap;
 }
 
-.senses {
-  display: flex;
-  gap: 6px;
-}
+.senses { display: flex; gap: 5px; }
 
 .sense {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 7px 14px 7px 11px;
-  font-size: 13px;
-  color: var(--text-dim);
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 50%; color: var(--ink-faint);
   transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
-
-.sense svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.sense:hover {
-  border-color: #34364a;
-  color: var(--text);
-}
-
-.sense[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: hsl(var(--mood-hue) 60% 62% / 0.42);
-  color: var(--text);
-}
+/* Visually hidden, still read aloud. */
+.sense span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.sense svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sense:hover { border-color: var(--accent-edge); color: var(--ink-soft); }
+.sense[aria-pressed='true'] { background: var(--accent-wash); border-color: var(--accent-edge); color: var(--accent); }
 
 .composer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 240px;
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  display: flex; align-items: center; gap: 8px;
+  flex: 1 1 220px;
+  background: var(--sunken);
+  border: 1px solid transparent; border-radius: 999px;
   padding: 4px 4px 4px 16px;
-  transition: border-color 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease;
 }
-
-.composer:focus-within {
-  border-color: hsl(var(--mood-hue) 55% 58% / 0.5);
-}
-
-.composer input {
-  flex: 1;
-  min-width: 0;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font: inherit;
-  padding: 7px 0;
-}
-
-.composer input::placeholder {
-  color: var(--text-faint);
-}
+.composer:focus-within { background: var(--card); border-color: var(--accent-edge); }
+.composer input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--ink); font: inherit; padding: 8px 0; }
+.composer input::placeholder { color: var(--ink-faint); }
 
 .send {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #0b0a10;
+  flex: none; width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border: none; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
   transition: filter 160ms ease;
 }
+.send:hover { filter: brightness(1.06); }
+.send svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.send:hover {
-  filter: brightness(1.1);
+/* -- Previews -------------------------------------------------------------- */
+
+.previews { display: flex; gap: 8px; padding: 0 12px 10px; }
+.previews[hidden] { display: none; }
+.preview { margin: 0; position: relative; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line); background: var(--sunken); line-height: 0; }
+.preview video { display: block; width: 108px; height: auto; }
+.preview figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 3px 7px; font-size: 10px; line-height: 1.4; letter-spacing: 0.04em;
+  color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / 0.6));
 }
 
-.send svg {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* --------------------------------------------------------------------------
-   Settings
-   -------------------------------------------------------------------------- */
+/* -- Panels ---------------------------------------------------------------- */
 
 .settings {
-  width: min(760px, 92vw);
-  max-height: 86vh;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-  color: var(--text);
-  padding: 0;
-  overflow: hidden;
+  width: min(820px, 94vw); max-height: 88vh;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); color: var(--ink);
+  padding: 0; overflow: auto; box-shadow: var(--shadow-lg);
 }
-
-.settings::backdrop {
-  background: rgba(6, 6, 10, 0.66);
-  backdrop-filter: blur(3px);
-}
+.settings::backdrop { background: rgb(28 27 26 / 0.32); backdrop-filter: blur(3px); }
 
 .settings-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 22px 12px; position: sticky; top: 0; background: var(--card); z-index: 1;
 }
+.settings-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.settings-note { margin: 0; padding: 0 22px 14px; color: var(--ink-faint); font-size: 13px; }
 
-.settings-head h2 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 560;
-  letter-spacing: -0.01em;
-}
-
-.settings-note {
-  margin: 0;
-  padding: 0 20px 14px;
-  color: var(--text-faint);
-  font-size: 13px;
-}
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  padding: 0 20px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tabs button {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 6px 8px 8px;
-  font-size: 13px;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
-.tabs button[aria-selected='true'] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
+.tabs { display: flex; gap: 2px; padding: 0 22px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line-soft); }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 10px; font-size: 13px; color: var(--ink-faint); white-space: nowrap; }
+.tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
 
 #editor {
-  display: block;
-  width: calc(100% - 40px);
-  margin: 14px 20px;
-  height: 46vh;
-  resize: none;
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  display: block; width: calc(100% - 44px); margin: 16px 22px; height: 40vh;
+  resize: vertical; background: var(--sunken); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
   padding: 14px 16px;
-  font: 13px/1.65 ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  outline: none;
-  tab-size: 2;
+  font: 13px/1.7 ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  outline: none; tab-size: 2;
 }
+#editor:focus { border-color: var(--accent-edge); }
 
-#editor:focus {
-  border-color: hsl(var(--mood-hue) 55% 58% / 0.5);
-}
-
-.settings-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  padding: 0 20px 18px;
-  color: var(--text-faint);
-  font-size: 13px;
-}
+.settings-foot { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 22px 20px; color: var(--ink-faint); font-size: 13px; }
 
 .primary {
-  background: var(--accent);
-  color: #0b0a10;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 8px 18px;
-  font-weight: 560;
-  font-size: 14px;
+  background: var(--accent); color: var(--accent-ink);
+  border: none; border-radius: 999px; padding: 9px 20px;
+  font-weight: 600; font-size: 14px; box-shadow: var(--shadow-sm);
 }
+.primary:hover { filter: brightness(1.06); }
 
-/* --------------------------------------------------------------------------
-   Toast
-   -------------------------------------------------------------------------- */
+.danger { background: none; border: 1px solid #e6c4c0; border-radius: 999px; padding: 4px 11px; font-size: 12px; color: #b4544a; }
+.danger:hover { background: #fdf1f0; }
+
+/* -- Her face -------------------------------------------------------------- */
+
+.face-body { display: grid; grid-template-columns: minmax(180px, 230px) 1fr; gap: 22px; padding: 16px 22px 20px; align-items: start; }
+@media (max-width: 640px) { .face-body { grid-template-columns: 1fr; } }
+
+.dropzone {
+  position: relative; display: grid; place-items: center;
+  aspect-ratio: 3 / 4;
+  border: 1px dashed var(--accent-edge); border-radius: var(--radius-sm);
+  background: var(--sunken); color: var(--ink-faint);
+  font-size: 13px; text-align: center; padding: 18px;
+  cursor: pointer; overflow: hidden;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.dropzone:hover, .dropzone[data-over='true'] { border-color: var(--accent); color: var(--ink-soft); }
+.dropzone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dropzone img[hidden] { display: none; }
+
+.gestures-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.spend { color: var(--ink-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.gestures-note { margin: 0 0 12px; color: var(--ink-faint); font-size: 12.5px; line-height: 1.55; }
+.gesture-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.gesture {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 13px; font-size: 13px; color: var(--ink-soft);
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+.gesture:hover:not(:disabled) { border-color: var(--accent-edge); color: var(--ink); }
+.gesture:disabled { cursor: default; opacity: 0.5; }
+.gesture[data-ready='true'] { background: var(--accent-wash); border-color: var(--accent-edge); color: var(--ink); opacity: 1; }
+.gesture .mark { font-size: 11px; color: var(--ink-faint); }
+.gesture[data-ready='true'] .mark { color: var(--accent); }
+.gesture[data-rendering='true'] .mark { animation: pulse 1.2s ease-in-out infinite; }
+
+/* -- Memory ---------------------------------------------------------------- */
+/* Every memory surface is inspectable and editable — the principle OpenClaw
+   states first and states plainly ("No hidden state"), and the one thing a
+   SQLite-backed memory does not get for free. If she is going to remember
+   things about someone, that person has to be able to read the list and cross
+   something out. */
+
+.memory-body { padding: 4px 22px 20px; }
+
+.memory-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; max-height: 44vh; overflow-y: auto; }
+
+.fact { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.fact-kind { flex: none; margin-top: 3px; padding: 2px 8px; border-radius: 999px; background: var(--accent-wash); color: var(--accent); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; }
+.fact-text { flex: 1; border: none; background: none; font: inherit; color: var(--ink); resize: none; outline: none; line-height: 1.5; padding: 0; overflow: hidden; }
+
+.memory-add { display: flex; gap: 8px; margin-top: 12px; }
+.memory-add input { flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; font: inherit; background: var(--sunken); outline: none; }
+.memory-add input:focus { background: var(--card); border-color: var(--accent-edge); }
+
+.memory-summary { margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--sunken); color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+
+/* -- Superseded ------------------------------------------------------------ */
+
+.takeover { position: fixed; inset: 0; display: grid; place-items: center; background: rgb(251 250 248 / 0.86); backdrop-filter: blur(5px); z-index: 20; }
+.takeover[hidden] { display: none; }
+.takeover-card { max-width: 30rem; margin: 24px; padding: 28px 30px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-lg); text-align: center; }
+.takeover-card h2 { margin: 0 0 10px; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.takeover-card p { margin: 0 0 20px; color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
+
+/* -- Toast ----------------------------------------------------------------- */
 
 .toast {
-  position: fixed;
-  left: 50%;
-  /* Clear of the controls: a message that covers the button it is telling you
-     about is worse than no message. */
-  bottom: 96px;
+  position: fixed; left: 50%; bottom: 26px;
   transform: translate(-50%, 14px);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 9px 16px;
-  font-size: 13px;
-  color: var(--text-dim);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  pointer-events: none;
+  background: var(--ink); color: var(--paper);
+  border-radius: 999px; padding: 10px 20px; font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none;
   transition: opacity 240ms ease, transform 240ms ease;
-  max-width: min(520px, 88vw);
+  max-width: min(520px, 88vw); z-index: 30;
 }
+.toast[data-show='true'] { opacity: 1; transform: translate(-50%, 0); }
 
-.toast[data-show='true'] {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
+/* -- Motion ---------------------------------------------------------------- */
 
-/* --------------------------------------------------------------------------
-   Motion
-   -------------------------------------------------------------------------- */
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pulse { 50% { opacity: 0.4; } }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* --------------------------------------------------------------------------
-   The portrait
-   --------------------------------------------------------------------------
-   Her photograph, with gesture clips cutting over it.
-
-   The still and the clip are stacked and exactly the same size, and the cut
-   between them is hard rather than a crossfade. That is only possible because
-   every clip is generated from this image and prompted to return to it: the
-   first and last frames are the still, so a fade would be blurring two
-   identical pictures together for no reason.
-
-   The clip is revealed on its `playing` event rather than when its `src` is
-   set — a video element shows a black frame while it buffers, and a black
-   flash on every gesture is worse than no gesture. */
-
-/*
- * Sized to fit both a width budget and a height budget, keeping the ratio.
- *
- * `aspect-ratio` alone is not enough, because the photograph's shape is the
- * user's choice and some of them are very tall. A 768x1376 portrait — a real
- * one, uploaded over Telegram — came out 412px high in a 572px stage and left
- * no room for anything under it. Solving for both caps keeps her the shape she
- * is and keeps the page the shape it is.
- */
-.portrait {
-  --portrait-ratio: 1;
-  --portrait-width: clamp(140px, 20vw, 220px);
-  --portrait-cap: 38vh;
-  position: relative;
-  width: min(var(--portrait-width), calc(var(--portrait-cap) * var(--portrait-ratio)));
-  height: min(var(--portrait-cap), calc(var(--portrait-width) / var(--portrait-ratio)));
-  border-radius: 18px;
-  overflow: hidden;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  box-shadow: 0 0 calc(20px + var(--level, 0) * 44px)
-    hsl(var(--mood-hue) 70% 55% / calc(0.12 + var(--level, 0) * 0.3));
-  transition: box-shadow 160ms ease-out;
-}
-
-.portrait[hidden] {
-  display: none;
-}
-
-.portrait img,
-.portrait video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.portrait video {
-  opacity: 0;
-}
-
-.portrait[data-moving='true'] video {
-  opacity: 1;
-}
-
-.app[data-state='asleep'] .portrait img,
-.app[data-state='asleep'] .portrait video {
-  filter: saturate(0.4) brightness(0.62);
-  transition: filter 600ms ease;
-}
-
-/* --------------------------------------------------------------------------
-   The face dialog
-   -------------------------------------------------------------------------- */
-
-.face-body {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) 1fr;
-  gap: 20px;
-  padding: 4px 20px 18px;
-  align-items: start;
-}
-
-@media (max-width: 640px) {
-  .face-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-.dropzone {
-  position: relative;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  border: 1px dashed #33354a;
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  color: var(--text-faint);
-  font-size: 13px;
-  text-align: center;
-  padding: 18px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 160ms ease, color 160ms ease;
-}
-
-.dropzone:hover,
-.dropzone[data-over='true'] {
-  border-color: var(--accent);
-  color: var(--text-dim);
-}
-
-.dropzone img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.dropzone img[hidden] {
-  display: none;
-}
-
-.gestures-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 560;
-}
-
-.spend {
-  color: var(--text-faint);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.gestures-note {
-  margin: 0 0 12px;
-  color: var(--text-faint);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.gesture-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.gesture {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 13px;
-  font-size: 13px;
-  color: var(--text-dim);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
-}
-
-.gesture:hover:not(:disabled) {
-  border-color: #3a3c52;
-  color: var(--text);
-}
-
-.gesture:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.gesture[data-ready='true'] {
-  background: var(--accent-soft);
-  border-color: hsl(var(--mood-hue) 60% 62% / 0.42);
-  color: var(--text);
-  opacity: 1;
-}
-
-.gesture .mark {
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-.gesture[data-ready='true'] .mark {
-  color: var(--accent);
-}
-
-.gesture[data-rendering='true'] .mark {
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-/* --------------------------------------------------------------------------
-   Superseded
-   --------------------------------------------------------------------------
-   One conversation, and a tab that has lost it says so.
-
-   The alternative — which is what this replaces — is both tabs reconnecting
-   over each other forever, each one evicting the other about twice a second,
-   with the state label strobing between asleep and listening. Silence is not a
-   better failure than a sentence. */
-
-.takeover {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(8, 8, 13, 0.82);
-  backdrop-filter: blur(4px);
-  z-index: 20;
-}
-
-.takeover[hidden] {
-  display: none;
-}
-
-.takeover-card {
-  max-width: 30rem;
-  margin: 24px;
-  padding: 26px 28px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-  text-align: center;
-}
-
-.takeover-card h2 {
-  margin: 0 0 10px;
-  font-size: 18px;
-  font-weight: 560;
-  letter-spacing: -0.01em;
-}
-
-.takeover-card p {
-  margin: 0 0 20px;
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.6;
 }

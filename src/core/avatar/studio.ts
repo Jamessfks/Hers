@@ -30,7 +30,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -221,6 +221,8 @@ export class AvatarStudio {
       }
     }
 
+    await this.#sweep();
+
     if (this.#manifest.baselineUsd === null && this.#client) {
       try {
         this.#manifest.baselineUsd = await this.#client.spentUsd();
@@ -313,9 +315,8 @@ export class AvatarStudio {
     await rename(temporary, target);
 
     // A new photograph invalidates every clip: they all start from the old one.
-    for (const clip of Object.values(this.#manifest.clips)) {
-      await rm(path.join(this.#dir, 'clips', clip.file), { force: true });
-    }
+    this.#manifest.clips = {};
+    this.#manifest.pending = [];
     if (this.#manifest.source && this.#manifest.source.file !== file) {
       await rm(path.join(this.#dir, this.#manifest.source.file), { force: true });
     }
@@ -328,10 +329,59 @@ export class AvatarStudio {
       id,
       addedAt: this.#now(),
     };
-    this.#manifest.clips = {};
-    this.#manifest.pending = [];
     await this.#save();
+    await this.#sweep();
+    await this.#dropOtherSources(file);
     return this.state();
+  }
+
+  /**
+   * Deletes clip files that no longer belong to the current photograph.
+   *
+   * The manifest is the record, but the manifest is not the disk. `load` used
+   * to drop a stale entry and leave its file behind — which made it
+   * unreachable, since `setSource` only ever deleted what the manifest still
+   * listed. Two clips of a face that had been replaced hours earlier were
+   * still sitting in `clips/`, permanently, and nothing could ever remove them.
+   *
+   * Sweeping the directory rather than the record is the only version of this
+   * that converges: whatever is in there, if it is not a clip of the current
+   * photograph, it goes.
+   */
+  async #sweep(): Promise<void> {
+    const keep = new Set(Object.values(this.#manifest.clips).map((clip) => clip.file));
+    try {
+      const entries = await readdir(path.join(this.#dir, 'clips'), { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || entry.name === 'README.md') continue;
+        if (keep.has(entry.name)) continue;
+        await rm(path.join(this.#dir, 'clips', entry.name), { force: true });
+      }
+    } catch {
+      // No clips directory is no stale clips.
+    }
+  }
+
+  /**
+   * Removes any earlier photograph left beside the current one.
+   *
+   * A `.jpg` upload followed by a `.png` one writes a second file rather than
+   * replacing the first, and the loser has no owner — it is not the source and
+   * never will be, but it is still a picture of somebody sitting in the
+   * profile folder.
+   */
+  async #dropOtherSources(keep: string): Promise<void> {
+    try {
+      const entries = await readdir(this.#dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (!/^source\.(jpe?g|png|webp)$/i.test(entry.name)) continue;
+        if (entry.name === keep) continue;
+        await rm(path.join(this.#dir, entry.name), { force: true });
+      }
+    } catch {
+      // Nothing to tidy.
+    }
   }
 
   /**

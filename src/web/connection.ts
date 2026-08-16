@@ -40,6 +40,8 @@ export class Connection {
   #closed = false;
   #everConnected = false;
   #timer: number | null = null;
+  /** Control messages sent while there was no socket. */
+  #pending: ClientMessage[] = [];
 
   constructor(handlers: ConnectionHandlers) {
     this.#handlers = handlers;
@@ -64,9 +66,26 @@ export class Connection {
     this.#socket = null;
   }
 
+  /**
+   * Control messages queue; media does not.
+   *
+   * The two have opposite failure modes. A second of microphone audio that
+   * arrives after a reconnect is worse than useless — it answers a question
+   * from a minute ago — so realtime frames are dropped on the floor. But a
+   * control message is a thing a person just did, and dropping it silently
+   * means the button they pressed did nothing and said nothing about it.
+   * Opening the memory panel a moment before a reconnect finished left it
+   * empty forever.
+   */
   send(message: ClientMessage): void {
-    if (!this.open) return;
-    this.#socket?.send(JSON.stringify(message));
+    if (this.open) {
+      this.#socket?.send(JSON.stringify(message));
+      return;
+    }
+    if (this.#closed) return;
+    // Bounded: a backlog long enough to matter means the socket is not coming
+    // back, and replaying a hundred stale clicks at that point helps nobody.
+    if (this.#pending.length < 16) this.#pending.push(message);
   }
 
   sendMedia(kind: MediaKind, payload: ArrayBuffer): void {
@@ -87,6 +106,9 @@ export class Connection {
       this.#everConnected = true;
       this.#attempt = 0;
       this.send({ t: 'hello' });
+      const queued = this.#pending;
+      this.#pending = [];
+      for (const message of queued) this.send(message);
       this.#handlers.onOpen(reconnected);
     });
 

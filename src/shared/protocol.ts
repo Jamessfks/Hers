@@ -97,7 +97,15 @@ export type ClientMessage =
   /** Render one gesture clip from the avatar photograph. Costs money. */
   | { t: 'avatar.render'; gesture: string; seconds?: number }
   /** Ask for the current avatar state. */
-  | { t: 'avatar.load' };
+  | { t: 'avatar.load' }
+  /** Ask for everything she remembers. */
+  | { t: 'memory.load' }
+  /** Change the wording of one thing she remembers. */
+  | { t: 'memory.edit'; id: number; text: string }
+  /** Make her forget one thing. */
+  | { t: 'memory.forget'; id: number }
+  /** Tell her something to keep. */
+  | { t: 'memory.add'; text: string };
 
 // ---------------------------------------------------------------------------
 // Control messages: server -> browser
@@ -181,7 +189,21 @@ export type ServerMessage =
    * Only ever sent for a gesture the UI has been told is ready — a request to
    * play a clip that does not exist would show a broken video element.
    */
-  | { t: 'move'; gesture: string };
+  | { t: 'move'; gesture: string }
+  | { t: 'memory'; facts: RememberedFact[]; summary: string };
+
+/**
+ * One thing she remembers, as the editor needs it.
+ *
+ * Sent in full rather than paged: a person accumulates a few hundred of these
+ * over years, and a list you cannot see all of is a list you cannot audit.
+ */
+export interface RememberedFact {
+  id: number;
+  kind: string;
+  text: string;
+  confidence: number;
+}
 
 /** The avatar, as the browser needs to draw it. */
 export interface AvatarView {

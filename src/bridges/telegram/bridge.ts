@@ -49,6 +49,7 @@ import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from
  * descriptions attached.
  */
 const COMMANDS: BotCommand[] = [
+  { command: 'me', description: 'Her actual photo — the one you gave her' },
   { command: 'face', description: 'Send a photo to become her face' },
   { command: 'gestures', description: 'Which movements she has, and what they cost' },
   { command: 'render', description: 'Render a movement — /render nod' },
@@ -320,6 +321,7 @@ export class TelegramBridge {
             '',
             'Just talk to me — text, photos, voice notes, video notes. All of it reaches me.',
             '',
+            '/me       my actual photo, the one you gave me',
             '/face     send a photo to become my face',
             '/gestures which movements I have',
             '/render   render one — /render nod',
@@ -430,6 +432,26 @@ export class TelegramBridge {
         await this.#sleep();
         await this.#api.sendMessage(chatId, 'Alright. Talk later.');
         return;
+
+      /*
+       * The photograph itself, never a generation.
+       *
+       * `/photo` may generate — that is what it is for. This one is the
+       * opposite promise: it is exactly the picture you uploaded, every time,
+       * with nothing in between. Asking "can I see you?" and getting a redraw
+       * of someone similar is the complaint this command exists to answer.
+       */
+      case '/me':
+      case '/selfie': {
+        const face = this.#brain.gallery.face();
+        if (!face) {
+          await this.#api.sendMessage(chatId, "You haven't given me a face yet — /face.");
+          return;
+        }
+        await this.#api.sendChatAction(chatId, 'upload_photo');
+        await this.#sendItem(chatId, face.absolutePath, face.name, face.kind, '');
+        return;
+      }
 
       case '/photo': {
         await this.#api.sendChatAction(chatId, 'upload_photo');

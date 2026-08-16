@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -83,6 +83,19 @@ function png(width: number, height: number): Buffer {
   header[24] = 8;
   header[25] = 6;
   return header;
+}
+
+/** A JPEG header with a real SOF0 frame, which is what `sniffImage` reads. */
+function jpeg(width: number, height: number): Buffer {
+  const bytes = Buffer.alloc(20);
+  bytes.writeUInt16BE(0xffd8, 0);
+  bytes.writeUInt16BE(0xffc0, 2);
+  bytes.writeUInt16BE(11, 4);
+  bytes[6] = 8;
+  bytes.writeUInt16BE(height, 7);
+  bytes.writeUInt16BE(width, 9);
+  bytes[11] = 3;
+  return bytes;
 }
 
 async function studio(hedra: ReturnType<typeof fakeHedra> | null = null, budgetUsd = 1) {
@@ -339,6 +352,44 @@ test('the photograph cannot be swapped while something is rendering', async () =
   await s.render('idle');
   assert.ok(refusal instanceof AvatarError, 'the swap should have been refused');
   assert.match((refusal as AvatarError).message, /middle of a render/);
+});
+
+test('a clip of a replaced face is deleted from disk, not merely forgotten', async () => {
+  /*
+   * The real one, off a running install: `load` dropped stale clips from the
+   * manifest and left the files behind, and `setSource` only ever deleted what
+   * the manifest still listed — so once dropped, a clip was unreachable and
+   * permanent. Two clips of a face replaced hours earlier were still sitting
+   * in clips/ with nothing able to remove them.
+   */
+  const hedra = fakeHedra();
+  const { dir, studio: s } = await studio(hedra);
+  await s.setSource(png(300, 300), 'image/png');
+  await s.render('idle');
+
+  const clips = path.join(dir, 'clips');
+  assert.equal((await readdir(clips)).length, 1);
+
+  // Forget it the way `load` used to: manifest only, file left behind.
+  const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8')) as {
+    clips: Record<string, unknown>;
+  };
+  manifest.clips = {};
+  await writeFile(path.join(dir, 'manifest.json'), JSON.stringify(manifest), 'utf8');
+  assert.equal((await readdir(clips)).length, 1, 'the file should still be there to find');
+
+  const revived = new AvatarStudio({ dir, client: hedra.client, budgetUsd: 1 });
+  await revived.load();
+  assert.deepEqual(await readdir(clips), [], 'the orphaned clip survived a reload');
+});
+
+test('only one photograph is kept when the format changes', async () => {
+  const { dir, studio: s } = await studio();
+  await s.setSource(jpeg(400, 400), 'image/jpeg');
+  await s.setSource(png(400, 500), 'image/png');
+
+  const sources = (await readdir(dir)).filter((name) => name.startsWith('source.'));
+  assert.deepEqual(sources, ['source.png'], `left ${sources.join(', ')} behind`);
 });
 
 test('replacing the photograph invalidates every clip rendered from the old one', async () => {

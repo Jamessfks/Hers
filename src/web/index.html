@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light" />
     <title>Anna</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='%23b48cff'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='%237b6bff'/%3E%3C/svg%3E" />
   </head>
   <body>
     <div class="app" id="app" data-state="asleep">
@@ -18,6 +18,7 @@
         <div class="bar-actions">
           <span class="state" id="state">asleep</span>
           <button class="ghost" id="face-open" type="button">Face</button>
+          <button class="ghost" id="memory-open" type="button">Memory</button>
           <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
         </div>
       </header>
@@ -34,29 +35,28 @@
             <div class="orb-core"></div>
             <div class="orb-ring"></div>
           </div>
-          <button class="wake" id="wake" type="button">Wake her</button>
+          <div class="presence-actions">
+            <button class="wake" id="wake" type="button">Wake her</button>
+            <button class="give-face" id="give-face" type="button" hidden>Give her a face</button>
+          </div>
           <p class="hint" id="hint">Turn on a sense and she can hear you.</p>
-
-          <button class="give-face" id="give-face" type="button" hidden>
-            Give her a face
-          </button>
         </div>
 
-        <section class="transcript" id="transcript" aria-live="polite" aria-label="Conversation">
-          <p class="empty" id="empty">Nothing yet.</p>
-        </section>
-      </main>
+        <section class="conversation">
+          <div class="transcript" id="transcript" aria-live="polite" aria-label="Conversation">
+            <p class="empty" id="empty">Nothing yet.</p>
+          </div>
 
-      <div class="previews" id="previews" hidden>
-        <figure class="preview" id="preview-camera" hidden>
-          <figcaption>You</figcaption>
-        </figure>
-        <figure class="preview" id="preview-screen" hidden>
-          <figcaption>Your screen</figcaption>
-        </figure>
-      </div>
+          <div class="previews" id="previews" hidden>
+            <figure class="preview" id="preview-camera" hidden>
+              <figcaption>You</figcaption>
+            </figure>
+            <figure class="preview" id="preview-screen" hidden>
+              <figcaption>Your screen</figcaption>
+            </figure>
+          </div>
 
-      <footer class="controls">
+          <footer class="controls">
         <div class="senses" role="group" aria-label="Senses">
           <button class="sense" id="sense-hearing" type="button" aria-pressed="false" aria-label="Hearing — let her hear you">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>
@@ -80,11 +80,13 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <button class="send" type="submit" aria-label="Send">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
-          </button>
-        </form>
-      </footer>
+            <button class="send" type="submit" aria-label="Send">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+            </button>
+          </form>
+          </footer>
+        </section>
+      </main>
     </div>
 
     <dialog class="settings" id="settings">
@@ -132,6 +134,26 @@
           </p>
           <div class="gesture-list" id="gesture-list"></div>
         </div>
+      </div>
+    </dialog>
+
+    <dialog class="settings" id="memory">
+      <form method="dialog" class="settings-head">
+        <h2>What she remembers</h2>
+        <button class="ghost" value="close" aria-label="Close">Close</button>
+      </form>
+      <p class="settings-note">
+        Everything she has kept about you. Edit a line to change it, or cross it out.
+        Changes apply the next time she wakes.
+      </p>
+
+      <div class="memory-body">
+        <div class="memory-add">
+          <input id="memory-new" type="text" placeholder="Something she should know…" autocomplete="off" />
+          <button class="primary" id="memory-add" type="button">Add</button>
+        </div>
+        <div class="memory-list" id="memory-list"></div>
+        <p class="memory-summary" id="memory-summary" hidden></p>
       </div>
     </dialog>
 

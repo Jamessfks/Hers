@@ -229,6 +229,29 @@ test('replacing her face says what it cost', async () => {
   assert.equal(f.brain.avatar.state().width, 500);
 });
 
+test('/me sends the photograph itself, not a generation', async () => {
+  const f = await fixture([100]);
+  f.api.downloads['pic'] = pngBytes(400, 400);
+  f.api.queue([photoMessage(100, [size(400, 400, 'pic')], { caption: '/face', updateId: 1 })]);
+  f.api.queue([textMessage(100, '/me', 2)]);
+  await pump(f.bridge, 1200);
+
+  assert.equal(f.api.photos.length, 1, 'it did not send a picture');
+  assert.match(
+    f.api.photos[0]?.name ?? '',
+    /^source\./,
+    `sent ${f.api.photos[0]?.name} instead of the source`,
+  );
+});
+
+test('/me says so when there is no face yet', async () => {
+  const f = await fixture([100]);
+  f.api.queue([textMessage(100, '/me', 1)]);
+  await pump(f.bridge);
+  assert.equal(f.api.photos.length, 0);
+  assert.match(f.api.sent[0]?.text ?? '', /given me a face/);
+});
+
 test('/gestures asks for a face before offering to render one', async () => {
   const f = await fixture([100]);
   f.api.queue([textMessage(100, '/gestures', 1)]);

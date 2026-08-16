@@ -44,6 +44,10 @@ const ui = new Ui({
   onSaveProfile: (files) => connection.send({ t: 'profile.save', files }),
   onUploadFace: (file) => void uploadFace(file),
   onClaim: () => connection.connect(),
+  onLoadMemory: () => connection.send({ t: 'memory.load' }),
+  onEditMemory: (id, text) => connection.send({ t: 'memory.edit', id, text }),
+  onForgetMemory: (id) => connection.send({ t: 'memory.forget', id }),
+  onAddMemory: (text) => connection.send({ t: 'memory.add', text }),
   onRenderGesture: (gesture) => {
     connection.send({ t: 'avatar.render', gesture });
     ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);

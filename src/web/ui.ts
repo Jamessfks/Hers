@@ -8,7 +8,13 @@
  * elements is larger than thirty elements.
  */
 
-import type { AvatarView, MoodReadout, SenseName, ServerMessage } from '../shared/protocol.ts';
+import type {
+  AvatarView,
+  MoodReadout,
+  RememberedFact,
+  SenseName,
+  ServerMessage,
+} from '../shared/protocol.ts';
 import { PROFILE_ORDER } from './profile-order.ts';
 import { tidyCaption } from './caption.ts';
 
@@ -28,6 +34,10 @@ export interface UiHandlers {
   onRenderGesture(gesture: string): void;
   /** Take the conversation back from whichever tab has it. */
   onClaim(): void;
+  onLoadMemory(): void;
+  onEditMemory(id: number, text: string): void;
+  onForgetMemory(id: number): void;
+  onAddMemory(text: string): void;
 }
 
 export class Ui {
@@ -61,6 +71,10 @@ export class Ui {
   readonly #spend = need('spend');
   readonly #giveFace = need<HTMLButtonElement>('give-face');
   readonly #takeover = need('takeover');
+  readonly #memory = need<HTMLDialogElement>('memory');
+  readonly #memoryList = need('memory-list');
+  readonly #memorySummary = need('memory-summary');
+  readonly #memoryNew = need<HTMLInputElement>('memory-new');
 
   readonly #senseButtons = new Map<SenseName, HTMLButtonElement>();
   /** The in-progress line per speaker, replaced until the turn closes. */
@@ -113,6 +127,22 @@ export class Ui {
 
     need('face-open').addEventListener('click', () => this.#face.showModal());
     this.#giveFace.addEventListener('click', () => this.#face.showModal());
+    need('memory-open').addEventListener('click', () => {
+      this.#handlers.onLoadMemory();
+      this.#memory.showModal();
+    });
+
+    const addMemory = () => {
+      const text = this.#memoryNew.value.trim();
+      if (!text) return;
+      this.#memoryNew.value = '';
+      this.#handlers.onAddMemory(text);
+    };
+    need('memory-add').addEventListener('click', addMemory);
+    this.#memoryNew.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') addMemory();
+    });
+
     need('takeover-claim').addEventListener('click', () => {
       this.#takeover.hidden = true;
       this.#handlers.onClaim();
@@ -207,6 +237,10 @@ export class Ui {
 
       case 'avatar':
         this.setAvatar(message.avatar);
+        return;
+
+      case 'memory':
+        this.setMemory(message.facts, message.summary);
         return;
 
       case 'move':
@@ -383,6 +417,63 @@ export class Ui {
     void this.#clip.play().catch(() => this.#settle());
   }
 
+  /**
+   * Everything she remembers, editable in place.
+   *
+   * A textarea per fact rather than a modal per edit: the whole point is that
+   * the list reads as a list you can cross things out of, and an edit that
+   * costs three clicks is an edit nobody makes.
+   */
+  setMemory(facts: RememberedFact[], summary: string): void {
+    this.#memoryList.replaceChildren();
+
+    if (facts.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'She has not kept anything yet.';
+      this.#memoryList.append(empty);
+    }
+
+    for (const fact of facts) {
+      const row = document.createElement('div');
+      row.className = 'fact';
+
+      const kind = document.createElement('span');
+      kind.className = 'fact-kind';
+      kind.textContent = fact.kind;
+
+      const text = document.createElement('textarea');
+      text.className = 'fact-text';
+      text.rows = 1;
+      text.value = fact.text;
+      const grow = () => {
+        text.style.height = 'auto';
+        text.style.height = `${text.scrollHeight}px`;
+      };
+      text.addEventListener('input', grow);
+      // Committed on blur rather than per keystroke: every save re-embeds the
+      // sentence, and re-embedding on every letter is a request per letter.
+      text.addEventListener('blur', () => {
+        if (text.value.trim() && text.value !== fact.text) {
+          this.#handlers.onEditMemory(fact.id, text.value);
+        }
+      });
+
+      const forget = document.createElement('button');
+      forget.className = 'danger';
+      forget.type = 'button';
+      forget.textContent = 'Forget';
+      forget.addEventListener('click', () => this.#handlers.onForgetMemory(fact.id));
+
+      row.append(kind, text, forget);
+      this.#memoryList.append(row);
+      grow();
+    }
+
+    this.#memorySummary.hidden = !summary;
+    this.#memorySummary.textContent = summary;
+  }
+
   /** Another tab has her, and this one has stopped trying. */
   setSuperseded(superseded: boolean): void {
     this.#takeover.hidden = !superseded;
@@ -448,6 +539,10 @@ export class Ui {
     const element = document.createElement('div');
     element.className = 'line';
     element.dataset.who = who;
+    // Consecutive bubbles from the same speaker drop the name and tuck up
+    // against the one above, so a three-part answer reads as one turn.
+    const previous = this.#transcript.lastElementChild as HTMLElement | null;
+    element.dataset.same = String(previous?.dataset?.who === who);
     element.innerHTML = '<span class="who"></span><p class="said"></p>';
     const label = element.querySelector('.who');
     if (label) label.textContent = who === 'anna' ? 'Anna' : 'You';

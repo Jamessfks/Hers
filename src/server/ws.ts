@@ -229,6 +229,31 @@ export class WebBridge {
         companion.interrupt();
         return;
 
+      case 'memory.load':
+        sendJson(socket, this.#memory());
+        return;
+
+      case 'memory.edit':
+        await this.#options.brain.memory.reword(Number(message.id), String(message.text ?? ''));
+        sendJson(socket, this.#memory());
+        return;
+
+      case 'memory.forget':
+        this.#options.brain.memory.forget(Number(message.id));
+        sendJson(socket, this.#memory());
+        return;
+
+      case 'memory.add': {
+        const text = String(message.text ?? '').trim();
+        if (!text) return;
+        // Typed by the owner, so it starts as certain as anything gets.
+        await this.#options.brain.memory.remember('identity', text.slice(0, 500), {
+          confidence: 0.95,
+        });
+        sendJson(socket, this.#memory());
+        return;
+      }
+
       case 'avatar.load':
         sendJson(socket, { t: 'avatar', avatar: this.#options.brain.avatar.state() });
         return;
@@ -269,6 +294,20 @@ export class WebBridge {
       default:
         return;
     }
+  }
+
+  #memory(): ServerMessage {
+    const memory = this.#options.brain.memory;
+    return {
+      t: 'memory',
+      facts: memory.allFacts().map((fact) => ({
+        id: fact.id,
+        kind: fact.kind,
+        text: fact.text,
+        confidence: fact.confidence,
+      })),
+      summary: memory.runningSummary() ?? '',
+    };
   }
 
   /** Tells whoever is connected that the photograph or the clips changed. */

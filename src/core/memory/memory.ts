@@ -200,6 +200,47 @@ export class Memory {
     return 'created';
   }
 
+  /**
+   * Everything she remembers, newest first.
+   *
+   * For the editor, not for the prompt — recall picks what is relevant, this
+   * shows what exists. OpenClaw states the principle first and states it
+   * plainly: "No hidden state. Every memory surface is inspectable and editable
+   * with a text editor." A SQLite store does not get that for free, so it has
+   * to be handed out deliberately.
+   */
+  allFacts() {
+    return this.#store.allFacts().sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** Rewrites one fact. Re-embedded, so recall follows the new wording. */
+  async reword(id: number, text: string): Promise<boolean> {
+    const clean = text.trim();
+    if (!clean) return false;
+    const existing = this.#store.allFacts().find((fact) => fact.id === id);
+    if (!existing) return false;
+
+    const [embedding] = await this.#embedQuietly([clean]);
+    this.#store.forgetFact(id);
+    this.#store.upsertFact({
+      kind: existing.kind,
+      text: clean,
+      // Edited by hand, so it is now as certain as anything gets.
+      confidence: Math.max(existing.confidence, 0.9),
+      createdAt: existing.createdAt,
+      lastSeenAt: this.#now(),
+      sourceTurnId: existing.sourceTurnId,
+      embedding: embedding ?? null,
+      embedderId: this.#embedder.id,
+    });
+    return true;
+  }
+
+  /** Makes her forget one thing, permanently. */
+  forget(id: number): void {
+    this.#store.forgetFact(id);
+  }
+
   /** True when enough has happened to justify a consolidation pass. */
   get needsConsolidation(): boolean {
     return this.#turnsSinceConsolidation >= CONSOLIDATE_EVERY_TURNS;
