@@ -448,13 +448,32 @@ export function recordSeam(
     throw new Error(`${slot} has no clip on disk, so there is no seam to record`);
   }
 
+  /*
+   * A clip that does not close keeps playing. It just stops claiming to loop.
+   *
+   * `completeClip` fails a clip whose seam is bad, and that is right *there*:
+   * it is judging a render that has only just been paid for, and a bad one
+   * should go back in the queue rather than into the library.
+   *
+   * Here the clip is already in the library, possibly for weeks, and possibly
+   * the only one she has. Demoting it to `failed` removes it from `ready`, so
+   * `Hologram` stops playing it — which is how measuring three working clips
+   * for the first time turned a working avatar back into a still photograph.
+   * That is a worse outcome than a visible seam, and it is the outcome the
+   * `verified` flag exists to avoid: the comment on it says an unmeasured clip
+   * "plays — refusing to would make the feature unusable — but nothing claims
+   * it is seamless." A measured-and-imperfect clip is in exactly that position.
+   *
+   * So the verdict is recorded, the reason is kept for the setup screen, and
+   * she keeps her body.
+   */
   if (!seam.closesCleanly) {
     return withEntry(
       library,
       slot,
       {
-        status: 'failed',
-        error: `Clip does not return to the source pose — ${seam.summary}`,
+        verified: false,
+        error: `Does not return to the source pose — ${seam.summary}`,
         job: null,
       },
       now,

@@ -50,23 +50,31 @@ test('a measured cut point replaces the nominal duration', () => {
   assert.equal(library.clips['wave'].durationMs, 3200);
 });
 
-test('a clip that does not close is demoted, and keeps its file', () => {
+test('a clip that does not close keeps playing, and stops claiming to loop', () => {
   const library = recordSeam(withClip(), 'wave', {
     closesCleanly: false,
     summary: 'mean delta 0.11',
   });
   const entry = library.clips['wave'];
-  assert.equal(entry.status, 'failed');
-  // The bytes are paid for. Deleting the file would turn a cosmetic defect into
-  // a second charge to get it back.
+  // Still ready: removing it would take her body away over a visible seam, and
+  // this may be the only clip she has. See the note in recordSeam.
+  assert.equal(entry.status, 'ready');
+  assert.equal(entry.verified, false);
   assert.equal(entry.file, 'wave.mp4');
-  assert.match(entry.error ?? '', /does not return to the source pose/);
+  assert.match(entry.error ?? '', /Does not return to the source pose/);
 });
 
-test('the same verdict reaches the same conclusion whichever door it comes in', () => {
-  // `completeClip` takes a verdict when one is available at write time;
-  // `recordSeam` applies one that arrives later. They must not disagree, or a
-  // clip's fate would depend on which process happened to measure it first.
+test('the same verdict is treated differently at write time and afterwards', () => {
+  /*
+   * The one place these two deliberately disagree, and it is worth pinning.
+   *
+   * `completeClip` is judging a render that has just been paid for: a bad one
+   * should go back in the queue rather than into the library, so it fails.
+   * `recordSeam` is judging a clip that is already in the library and may be
+   * the only one she has — failing it there removes it from `ready` and takes
+   * her body away over a visible seam. It stays playable and stops claiming to
+   * loop, which is exactly what the `verified` flag is for.
+   */
   const verdict = { closesCleanly: false, summary: 'mean delta 0.11' };
   const atWrite = completeClip(
     startGenerating(
@@ -78,8 +86,11 @@ test('the same verdict reaches the same conclusion whichever door it comes in', 
   );
   const afterwards = recordSeam(withClip(), 'wave', verdict);
 
-  assert.equal(atWrite.clips['wave'].status, afterwards.clips['wave'].status);
-  assert.equal(atWrite.clips['wave'].error, afterwards.clips['wave'].error);
+  assert.equal(atWrite.clips['wave'].status, 'failed', 'a fresh bad render goes back in the queue');
+  assert.equal(afterwards.clips['wave'].status, 'ready', 'an existing clip keeps playing');
+  // Both record why, so the setup screen can offer to re-render either one.
+  assert.match(atWrite.clips['wave'].error ?? '', /source pose/);
+  assert.match(afterwards.clips['wave'].error ?? '', /source pose/);
 });
 
 test('recording a seam for a clip that was never written is refused', () => {
