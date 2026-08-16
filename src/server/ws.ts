@@ -137,7 +137,7 @@ export class WebBridge {
               t: 'show',
               url: `/gallery/${encodeURIComponent(item.name)}`,
               kind: item.kind,
-              caption: item.caption,
+              caption: item.label,
             }),
           move: (gesture) => this.#send({ t: 'move', gesture }),
           trouble: (message) => this.#send({ t: 'trouble', message }),

@@ -16,7 +16,6 @@ import type {
   ServerMessage,
 } from '../shared/protocol.ts';
 import { PROFILE_ORDER } from './profile-order.ts';
-import { tidyCaption } from './caption.ts';
 
 function need<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -327,10 +326,13 @@ export class Ui {
    * A picture she sent.
    *
    * The caption goes underneath, small and muted, rather than into the line
-   * where her words go. It is derived from a file name — for anything she
-   * generated, a slug of what she asked for — so rendering it as dialogue put
-   * "evening warm indoor light buoyant looking at the" on screen as though she
-   * had said it out loud.
+   * where her words go — it is a caption, not something she said out loud.
+   *
+   * Whatever arrives here is safe to show: the gallery only sends a caption a
+   * person actually wrote, and sends nothing for a picture she generated. The
+   * filtering used to happen here instead, which was both a second mechanism
+   * for one rule and quietly wrong — it dropped lower-case captions, and
+   * "laughing in the kitchen" is a perfectly good thing for a human to type.
    */
   media(url: string, kind: 'image' | 'clip', caption?: string): void {
     this.#empty.hidden = true;
@@ -352,7 +354,7 @@ export class Ui {
       element.append(image);
     }
 
-    const label = tidyCaption(caption);
+    const label = (caption ?? '').trim();
     if (label) {
       const figcaption = document.createElement('p');
       figcaption.className = 'said-caption';

@@ -68,7 +68,30 @@ test('images and clips are listed, and everything else is ignored', async () => 
 test('a file name is a caption when there is nothing better', async () => {
   const g = await gallery(['at-the-window_rainy.jpg']);
   const [item] = await g.gallery.list();
-  assert.equal(item?.caption, 'at the window rainy');
+  assert.equal(item?.caption, 'at the window rainy', 'the name is still what she matches on');
+});
+
+test('a name-derived caption is never shown to anyone', async () => {
+  /*
+   * The real one, off a real Telegram photo: a generated file is named after a
+   * 48-character slug of its prompt, so the derived caption arrived chopped —
+   * "late evening soft light buoyant looking at the c". Fine for matching,
+   * useless as a label, which is why they are separate fields.
+   */
+  const g = await gallery(['late-evening-soft-light-buoyant-looking-at-the-c-1786.jpg']);
+  const [item] = await g.gallery.list();
+  assert.ok(item?.caption, 'matching still needs the words');
+  assert.equal(item?.label, '', `it would have shown "${item?.label}"`);
+});
+
+test('a caption somebody wrote is shown', async () => {
+  const g = await gallery(['x1.jpg']);
+  await writeFile(
+    path.join(g.dir, 'captions.json'),
+    JSON.stringify({ 'x1.jpg': 'Standing at the window watching it rain.' }),
+  );
+  const [item] = await g.gallery.list();
+  assert.equal(item?.label, 'Standing at the window watching it rain.');
 });
 
 test('captions.json wins over the file name', async () => {

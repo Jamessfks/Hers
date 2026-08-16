@@ -408,6 +408,7 @@ test('the first thing said opens with a freshly generated picture', async () => 
       absolutePath: '/tmp/greeting.jpg',
       kind: 'image' as const,
       caption: 'greeting',
+      label: '',
       modifiedAt: Date.now(),
     };
   };

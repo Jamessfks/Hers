@@ -34,8 +34,22 @@ export interface GalleryItem {
   name: string;
   absolutePath: string;
   kind: 'image' | 'clip';
-  /** From `captions.json` if present, otherwise derived from the file name. */
+  /**
+   * What she matches a request against. From `captions.json` when there is
+   * one, otherwise derived from the file name.
+   */
   caption: string;
+  /**
+   * What a person should actually be shown — often nothing.
+   *
+   * A caption is only worth displaying when a human wrote it. A generated
+   * file's name is a slug of the prompt, truncated to 48 characters, so
+   * deriving a caption from it produces "late evening soft light buoyant
+   * looking at the c" — which went out attached to a real Telegram photo. It
+   * is fine for *matching*, which is why `caption` keeps it, and useless as a
+   * label, which is why this is separate.
+   */
+  label: string;
   /** Epoch millis, for "the newest one" and for eviction. */
   modifiedAt: number;
 }
@@ -135,6 +149,8 @@ export class Gallery {
           absolutePath,
           kind,
           caption: captions[entry.name] ?? captionFromName(entry.name),
+          // Only a caption somebody wrote is worth showing.
+          label: captions[entry.name] ?? '',
           modifiedAt,
         });
       }
@@ -183,6 +199,7 @@ export class Gallery {
       absolutePath: face.absolutePath,
       kind: 'image',
       caption: 'me',
+      label: '',
       modifiedAt: face.addedAt,
     };
   }

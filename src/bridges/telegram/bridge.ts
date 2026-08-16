@@ -473,7 +473,7 @@ export class TelegramBridge {
           await this.#api.sendMessage(chatId, "Nothing came out. Try asking for something else.");
           return;
         }
-        await this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.caption);
+        await this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label);
         return;
       }
 
@@ -540,7 +540,7 @@ export class TelegramBridge {
         mood: () => undefined,
         interrupted: () => undefined,
         show: (item) =>
-          void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.caption),
+          void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label),
         // Gesture clips are for the web interface. Sending a two-second silent
         // video after every other message would be noise, not presence.
         move: () => undefined,
@@ -621,8 +621,11 @@ export class TelegramBridge {
     try {
       const data = await readFile(absolutePath);
       const file = { data, name, mimeType: mimeFor(path.extname(name)) };
-      if (kind === 'clip') await this.#api.sendVideo(chatId, file, caption);
-      else await this.#api.sendPhoto(chatId, file, caption);
+      // An empty caption is no caption: a picture she generated has nothing a
+      // person wrote to put under it, and the file name is not a substitute.
+      const label = caption.trim() || undefined;
+      if (kind === 'clip') await this.#api.sendVideo(chatId, file, label);
+      else await this.#api.sendPhoto(chatId, file, label);
     } catch (error) {
       console.warn(`telegram: could not send ${name}: ${String(error)}`);
     }
