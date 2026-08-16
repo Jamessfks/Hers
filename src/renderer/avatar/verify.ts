@@ -61,6 +61,64 @@ export interface VerifyDeps {
 }
 
 /**
+ * The frame every clip of a given size is expected to open on, once one has
+ * been seen and sanity-checked.
+ *
+ * Keyed by render size because that is the only thing two frames can be
+ * compared at: `measureSeam` refuses a size mismatch, and resampling one side
+ * to fix it is the error this whole comparison was rewritten to avoid. In
+ * practice one vendor at one setting produces one size, so this holds one entry
+ * for the generated clips and a second for anything hand-dropped.
+ */
+export class SeamReference {
+  readonly #bySize = new Map<string, Frame>();
+
+  /**
+   * How far a candidate reference may sit from the photograph and still be
+   * believed.
+   *
+   * The floor is known: a same-size frame of the same moment measures 0.0025,
+   * and a vendor render of the same photograph measures 0.0102 once the 0.6%
+   * resample is included. A frame that failed to decode — black, or half
+   * painted — measures around 0.3 against a lit photograph. 0.1 sits an order
+   * of magnitude above the floor and well below the failure, and only
+   * `meanDelta` is used because it is the one number the resample does not
+   * dominate.
+   *
+   * This exists because the reference is no longer a *candidate*. When each
+   * clip was measured against the photograph, a first frame that decoded badly
+   * made that clip fail and be measured again next launch, which is
+   * self-healing. As a reference it would instead make the whole library's
+   * verdicts wrong — and worse, `bestCutFrame` would hunt for whichever frame
+   * best matched a black one and could record a `closesCleanly` with a
+   * nonsense cut point, permanently.
+   */
+  static readonly SANITY_MEAN = 0.1;
+
+  /**
+   * The reference for this size, adopting `candidate` if there is not one yet.
+   *
+   * Returns null when there is no reference and this frame cannot be trusted to
+   * become one — the caller must then leave the clip unverified rather than
+   * guess.
+   */
+  adopt(candidate: Frame, source: Frame | null): Frame | null {
+    const key = `${candidate.width}x${candidate.height}`;
+    const held = this.#bySize.get(key);
+    if (held) return held;
+
+    // No photograph to check against yet: the still has not decoded. Refusing
+    // is the whole point — a reference adopted blind is a wrong answer written
+    // to disk, where refusing costs one deferred pass.
+    if (!source) return null;
+    if (measureSeam(source, candidate).meanDelta > SeamReference.SANITY_MEAN) return null;
+
+    this.#bySize.set(key, candidate);
+    return candidate;
+  }
+}
+
+/**
  * Measures one clip and reports the verdict.
  *
  * Returns the verdict, or null when the clip could not be measured at all —
@@ -68,7 +126,11 @@ export interface VerifyDeps {
  * cannot be decoded keeps its unverified status and will be tried again; a clip
  * that decodes and drifts is a finding, and is recorded as one.
  */
-export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVerdict | null> {
+export async function verifyClip(
+  slot: string,
+  deps: VerifyDeps,
+  reference = new SeamReference(),
+): Promise<SeamVerdict | null> {
   const bytes = await deps.loadClip(slot);
   if (!bytes) return null;
 
@@ -77,8 +139,8 @@ export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVe
     const frames = await extractClipFrames(url);
 
     /*
-     * The clip is measured against its own first frame, not against the
-     * photograph, and that correction came out of the numbers.
+     * The comparison is between clips, not against the photograph, and that
+     * correction came out of the numbers.
      *
      * Measuring against the photograph looks like the more fundamental check —
      * every clip is supposed to return to *it* — but it cannot be done without
@@ -86,29 +148,44 @@ export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVe
      * Here that is 718x1284 stretched to 720x1280: a 0.6% shear, invisible to
      * the eye and to `meanDelta`, and catastrophic for `worstBlockDelta`, which
      * is designed to be sensitive to exactly this kind of small contiguous
-     * displacement. It scored 0.17 against a 0.09 threshold on the clip's own
+     * displacement. It scored 0.17 against a 0.09 threshold on a clip's own
      * opening frame — a frame that had not drifted at all.
      *
      * Two clips' first frames measured against *each other* settle it: 0.0027
      * mean, 0.0093 worst block, no pixel changed by a just-noticeable amount.
      * Every clip really does begin on the same frame; it was the comparison
-     * that was wrong. So the question "will this cut be visible" is asked in
-     * the form the viewer actually experiences it — the end of one clip against
-     * the start of the next — and both sides come from the same encoder at the
-     * same size, with nothing resampled.
+     * that was wrong.
      *
-     * `sourceFrame` is still taken, and still reported, because a clip that
-     * begins somewhere other than the photograph is a different failure that
-     * this comparison cannot see. It is a diagnostic rather than a verdict.
+     * The reference is shared across clips rather than being each clip's own
+     * first frame, and that distinction is the whole invariant. `hologram.ts`
+     * cuts between *different* clips, so what has to hold is
+     * `clip_i.last ≈ clip_j.first` — and measuring each clip against itself
+     * only proves `clip_i.last ≈ clip_i.first`, which is every clip passing
+     * individually while every cut pops. One reference makes the relation
+     * transitive again, and because it is another clip's frame at the same
+     * size, nothing is resampled.
      */
     const source = await deps.sourceFrame(frames.first.width, frames.first.height);
-    if (source) {
-      const opening = measureSeam(source, frames.first);
-      deps.note?.('seam-opening', {
-        slot,
-        meanDelta: Number(opening.meanDelta.toFixed(4)),
-        worstBlockDelta: Number(opening.worstBlockDelta.toFixed(4)),
-      });
+    const opening = reference.adopt(frames.first, source);
+    if (!opening) {
+      // Either the photograph has not decoded yet, or this frame is too far
+      // from it to be believed. Both are "come back later", not a verdict.
+      deps.note?.('seam-reference-refused', { slot, hadSource: source !== null });
+      return null;
+    }
+
+    /*
+     * A clip that opens somewhere else is a different failure, and one this
+     * comparison would otherwise hide: its last frame could match the reference
+     * perfectly while its first frame does not, so cutting *into* it pops.
+     * Reported rather than failed, because the reference is itself only one
+     * clip's opinion and the first clip measured is always its own reference.
+     */
+    if (opening !== frames.first) {
+      const entry = measureSeam(opening, frames.first);
+      if (!closesCleanly(entry)) {
+        deps.note?.('seam-opens-elsewhere', { slot, summary: describeSeam(entry) });
+      }
     }
 
     /*
@@ -120,7 +197,7 @@ export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVe
      * strength of a fractionally better score, and the cut point decides how
      * long every gesture lasts.
      */
-    const atEnd = measureSeam(frames.first, frames.last);
+    const atEnd = measureSeam(opening, frames.last);
     if (closesCleanly(atEnd)) {
       return await record(slot, deps, {
         closesCleanly: true,
@@ -128,7 +205,7 @@ export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVe
       });
     }
 
-    const better = bestCutFrame(frames.first, frames.hold);
+    const better = bestCutFrame(opening, frames.hold);
     if (better && closesCleanly(better.measurement)) {
       // The clip is fine; it just runs on past the point where it was closed.
       // `index` is a frame number, not the ordinal of the sample — see
@@ -165,10 +242,15 @@ export async function verifyClip(slot: string, deps: VerifyDeps): Promise<SeamVe
  * and doing nineteen of those at once on the same thread that draws her would
  * stall the window she is being drawn in. There is no deadline here — an
  * unverified clip plays perfectly well — so the slow, polite version is free.
+ *
+ * The reference is shared across the whole pass and deliberately not cached
+ * beyond it: it is a decoded frame, several megabytes of it, and the next pass
+ * has a fresh library to take its opening from.
  */
 export async function verifyPending(slots: readonly string[], deps: VerifyDeps): Promise<void> {
+  const reference = new SeamReference();
   for (const slot of slots) {
-    await verifyClip(slot, deps);
+    await verifyClip(slot, deps, reference);
   }
 }
 
