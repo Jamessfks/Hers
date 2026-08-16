@@ -56,6 +56,20 @@ export class Hologram {
   #front = 0;
   #playing: SlotName | null = null;
   /**
+   * Whether the clip on screen loops.
+   *
+   * This used to be inferred by comparing `#playing` against `#idle`, and the
+   * inference was wrong in the one state that mattered. `#idle` is a *setting* —
+   * it changes whenever the library changes — while `#looping` is a fact about
+   * the element that is currently playing, and the two came apart the moment
+   * `setIdle(null)` was called with the idle clip still on screen: `#playing`
+   * then differed from `#idle`, so `play()` read a loop as "a gesture is in
+   * progress", queued behind it, and waited for an `ended` event that a looping
+   * video never fires. Every gesture for the rest of the session was silently
+   * swallowed — no error, no log, just a woman who stopped moving.
+   */
+  #looping = false;
+  /**
    * At most one. A queue would let a talkative turn bank six gestures and then
    * perform them in a row after she has stopped speaking, which reads as a
    * malfunction — the gesture is meant to land *with* the line.
@@ -63,6 +77,19 @@ export class Hologram {
   #next: SlotName | null = null;
   #idle: SlotName | null = null;
   #disposed = false;
+  /**
+   * Which `play()` call owns the swap.
+   *
+   * `play()` awaits a decode and then mutates `#front`, and two directives
+   * emitted in the same breath — `[lean_in][nod]`, which performance.ts parses
+   * without a gap — both pass the queue check before either has recorded itself
+   * as playing. Both then drove the *same* back element and both flipped
+   * `#front`, so it flipped twice and ended up pointing at the hidden video.
+   * From there every subsequent swap reassigned `src` on the element that was
+   * on screen, which is exactly the black-frame flash two elements exist to
+   * avoid. A later call supersedes an earlier one rather than racing it.
+   */
+  #generation = 0;
 
   constructor(options: HologramOptions) {
     this.#options = options;
@@ -152,8 +179,23 @@ export class Hologram {
    * living panel and a photograph.
    */
   async setIdle(slot: SlotName | null): Promise<void> {
+    const previous = this.#idle;
     this.#idle = slot;
-    if (slot && !this.#playing) await this.play(slot);
+
+    if (!slot) {
+      /*
+       * Losing the idle clip has to take it off screen, not just off the books.
+       *
+       * The library can stop offering `idle` — it is evicted, its file goes
+       * missing, a new photograph replaces it — while the old one is still
+       * looping. Leaving it running showed a clip the library no longer claims
+       * to have, and left `#playing` naming a slot `#idle` no longer did, which
+       * is the state that used to jam the gesture queue for good.
+       */
+      if (this.#looping && this.#playing === previous) await this.#returnToIdle();
+      return;
+    }
+    if (!this.#playing) await this.play(slot);
   }
 
   /**
@@ -167,13 +209,17 @@ export class Hologram {
   async play(slot: SlotName): Promise<void> {
     if (this.#disposed || this.#missing.has(slot)) return;
 
-    if (this.#playing && this.#playing !== this.#idle) {
+    // A gesture in progress gets to finish; the next one waits for its `ended`.
+    // A looping clip is asked about rather than inferred — see `#looping`.
+    if (this.#playing !== null && !this.#looping) {
       this.#next = slot;
       return;
     }
 
+    const generation = ++this.#generation;
+
     const url = await this.#urlFor(slot);
-    if (!url || this.#disposed) return;
+    if (!url || this.#disposed || generation !== this.#generation) return;
 
     const back = this.#videos[this.#front === 0 ? 1 : 0]!;
     back.loop = slot === this.#idle;
@@ -183,7 +229,7 @@ export class Hologram {
     if (back.src !== url) {
       back.src = url;
       await once(back, 'loadeddata');
-      if (this.#disposed) return;
+      if (this.#disposed || generation !== this.#generation) return;
     }
     back.currentTime = 0;
 
@@ -194,6 +240,7 @@ export class Hologram {
       // way the still is already behind it and correct.
       return;
     }
+    if (this.#disposed || generation !== this.#generation) return;
 
     const front = this.#videos[this.#front]!;
     back.hidden = false;
@@ -206,6 +253,11 @@ export class Hologram {
     }
     this.#front = this.#front === 0 ? 1 : 0;
     this.#playing = slot;
+    this.#looping = back.loop;
+    // Here rather than at the top of the method, because everything above this
+    // line is a way for a `play()` to end without anything reaching the screen.
+    // Main treats this as the record of what she actually used.
+    this.#options.report?.('clip-played', { slot, looping: back.loop });
   }
 
   /**
@@ -216,7 +268,7 @@ export class Hologram {
    */
   silence(): void {
     this.#next = null;
-    if (this.#playing && this.#playing !== this.#idle) void this.#returnToIdle();
+    if (this.#playing !== null && !this.#looping) void this.#returnToIdle();
   }
 
   dispose(): void {
@@ -241,17 +293,41 @@ export class Hologram {
 
   async #playAfter(slot: SlotName): Promise<void> {
     this.#playing = null;
+    this.#looping = false;
     await this.play(slot);
+    /*
+     * A queued clip that turns out not to exist must not leave her frozen.
+     *
+     * `play()` is deliberately silent about a missing slot, which is right at
+     * the top of a turn — the still is already behind it. Here the still is
+     * *not* what is on screen: the previous gesture has ended and its last
+     * frame is sitting there. Without this she holds that frame until the next
+     * gesture happens to arrive, which for a clip the model rarely reaches for
+     * can be the rest of the conversation.
+     */
+    if (this.#playing === null) await this.#returnToIdle();
   }
 
   async #returnToIdle(): Promise<void> {
     this.#playing = null;
+    this.#looping = false;
     if (this.#idle) {
       await this.play(this.#idle);
-      return;
+      // Only if it took. The idle slot can name a clip that has since been
+      // evicted, and falling through to the still is better than holding the
+      // last frame of the gesture that just ended.
+      if (this.#playing !== null) return;
     }
-    // No idle clip: hide the video and let the photograph show through. The
-    // last frame of the clip is the photograph, so this is not a visible cut.
+    /*
+     * Nothing left to play: hide the videos and let the photograph show.
+     *
+     * This used to say the cut was invisible because the last frame of a clip
+     * *is* the photograph. Measured against the three real clips, it is not —
+     * they leave the source pose in the first second and hold somewhere else
+     * (see docs/audits/hedra-generation.md). So this is a visible cut, and the
+     * honest thing is to say so here rather than to keep asserting an invariant
+     * the vendor does not deliver.
+     */
     for (const video of this.#videos) {
       video.hidden = true;
       video.pause();
@@ -290,10 +366,20 @@ export class Hologram {
 
 function once(target: EventTarget, event: string): Promise<void> {
   return new Promise((resolve) => {
-    const done = (): void => resolve();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Both sides are torn down whichever wins. Neither leak was serious on its
+    // own — a listener on an element about to be reused, a timer that fires
+    // into a resolved promise — but a clip load happens on every gesture, and
+    // the timer alone kept the process from settling for two seconds after the
+    // last one.
+    const done = (): void => {
+      clearTimeout(timer);
+      target.removeEventListener(event, done);
+      resolve();
+    };
     target.addEventListener(event, done, { once: true });
     // A clip that will not decode must not hang the body forever. Two seconds
     // is far past a local file and far short of anything a user would wait for.
-    setTimeout(done, 2000);
+    timer = setTimeout(done, 2000);
   });
 }
