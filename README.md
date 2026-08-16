@@ -234,7 +234,32 @@ npm run dev        # rebuilds the site and restarts the server on save
 npm run check      # typecheck + the full test suite, no API key needed
 npm run doctor     # opens a real Gemini session and reports what works
 npm run audit      # every success criterion, against the real APIs
+npm run audit:bridges   # the phone-call and Telegram paths
 ```
+
+`audit:bridges` needs a LiveKit server and a Telegram chat. For LiveKit you do
+not need an account to test it — the open-source server runs locally with
+placeholder keys:
+
+```bash
+brew install livekit && livekit-server --dev
+```
+
+```
+LIVEKIT_URL=ws://127.0.0.1:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
+```
+
+That is enough to prove the whole call path: the audit invites Anna into a room,
+joins as a caller publishing real synthesised speech and real video, and asserts
+she heard the words and answered out loud into the call. A *real phone* still
+needs LiveKit Cloud, because a phone cannot reach your laptop — which is the
+entire reason LiveKit is in this project.
+
+Telegram cannot be tested without you: a bot is forbidden from opening a
+conversation, so until a human sends it one message there is no chat to answer
+and no id to allowlist. The audit says so rather than passing.
 
 `npm run audit` is the one that matters when something feels wrong. It speaks to
 her with real synthesised speech, shows her real images, waits for her to open a
