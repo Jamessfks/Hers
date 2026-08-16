@@ -190,6 +190,42 @@ second of driving audio.
 So: **the generation path works against the live service.** Submit, poll,
 progress reporting, download and persistence are all real.
 
+## The seam check, once it was wired: the clips drift
+
+Measured against the three real clips in the library, with no API call.
+`meanDelta` is 0..1 over RGB; `SEAM_THRESHOLD` is **0.02**.
+
+| clip | first ↔ last | source ↔ first | source ↔ last |
+|---|---|---|---|
+| idle | 0.128 | **0.0025** | 0.128 |
+| nod | 0.062 | **0.0102** | 0.064 |
+| tilt_head | 0.063 | **0.0102** | 0.065 |
+
+The middle column is the one that settles the question that was open. It
+compares the source photograph, scaled to the clip's frame, against the clip's
+own first frame — and it is 0.0025 to 0.0102, comfortably inside the threshold.
+So the comparison is sound: the scaling is not distorting anything, and the
+verdicts are not an artefact of measuring the wrong thing. (The aspect ratios
+are 0.5592 for the source and 0.5625 for a Hedra render, a 0.6% difference,
+which is why the scaling costs so little.)
+
+Which means the first column is a real finding. **None of the three clips
+returns to where it started**, by 3x to 6x the threshold. For `idle` that is
+expected and not a defect: it is a phone video supplied by the user, not
+something generated from the source frame, so it was never going to close. For
+`nod` and `tilt_head` it is a genuine property of what Hedra returned — they
+begin on the source pose and end somewhere else.
+
+That matters because `hologram.ts` cuts between clips with no cross-fade,
+on the stated grounds that both ends are the same frame. They are not. The
+visible consequence is a pop at every gesture entry and exit, and on the idle
+loop it repeats every few seconds.
+
+Not yet established: whether `bestCutFrame` can rescue them. It searches the
+hold from 55% of the clip onward and found nothing that closed, but a clip that
+drifts monotonically would need a cut point *earlier* than that window starts.
+Worth trying before concluding the clips are unusable, and it costs nothing.
+
 ## Not verified, and why
 
 Stated rather than glossed:
