@@ -96,3 +96,45 @@ test('the video provider group exists and follows the shared key-group contract'
     assert.ok(group[1]!.includes(attribute), `the video group is missing ${attribute}`);
   }
 });
+
+/**
+ * Anything the code hides with the `hidden` attribute must actually be hidden.
+ *
+ * `hidden` is not magic. The browser implements it as `[hidden] { display: none }`
+ * in its own stylesheet, at specificity (0,1,0), and *any* author rule that sets
+ * `display` on the same element outranks it. So `element.hidden = true` becomes
+ * an attribute that changes nothing, with no error, no type failure and no
+ * visible clue at the call site.
+ *
+ * This shipped. `#backdrop > .clip { display: block }` meant `hologram.ts` could
+ * not hide either of its two video elements, so both were always painted and the
+ * later one in document order won — and because clips alternate elements, every
+ * *other* gesture was invisible, replaced by whichever clip was frozen on the
+ * element that could be seen. Five seconds of a still photograph, on half the
+ * gestures, for as long as the app has existed. #trouble had already been caught
+ * by the same trap and fixed locally, which is why the rule is now a check
+ * rather than a comment.
+ */
+test('every element hidden from code has a stylesheet rule that hides it', () => {
+  const styles = readFileSync(join(here, 'styles.css'), 'utf8');
+  const hologram = readFileSync(join(here, 'avatar/hologram.ts'), 'utf8');
+
+  // The selectors the renderer toggles `hidden` on, named the way CSS names
+  // them. `#trouble` is toggled from main.ts, the other two from hologram.ts.
+  const toggled = ['#trouble', '#still', '.clip'];
+  for (const selector of toggled) {
+    // Only a problem when something sets `display` on it in the first place.
+    const setsDisplay = new RegExp(
+      `${selector.replace('.', '\\.')}[^{}]*\\{[^}]*\\bdisplay\\s*:`,
+      's',
+    ).test(styles);
+    if (!setsDisplay) continue;
+    assert.ok(
+      styles.includes(`${selector}[hidden]`),
+      `styles.css sets display on ${selector} but has no ${selector}[hidden] rule, ` +
+        `so setting .hidden on it does nothing`,
+    );
+  }
+
+  assert.match(hologram, /\.hidden = true/, 'hologram.ts still hides with the attribute');
+});

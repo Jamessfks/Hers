@@ -173,6 +173,37 @@ body {
   display: block;
 }
 
+/*
+ * The `display: block` above silently broke half of every gesture, and this is
+ * the rule that puts it back.
+ *
+ * `hidden` is not a magic attribute: the browser implements it as
+ * `[hidden] { display: none }` in its own stylesheet, at specificity (0,1,0).
+ * `#backdrop > .clip` is (1,1,0) and wins, so `video.hidden = true` set an
+ * attribute that changed nothing. Both clip elements were therefore always
+ * painted, stacked in the same place, and the later one in document order won —
+ * which meant `videos[1]` was the only one anybody ever saw.
+ *
+ * The symptom was not "one gesture looks wrong". hologram.ts alternates
+ * elements on every clip, so every *other* clip landed on `videos[0]` and was
+ * invisible — and because the swap correctly pauses the outgoing element, what
+ * the viewer got instead was `videos[1]` frozen on its last frame for the whole
+ * length of the gesture. Measured in a real session: five seconds of a
+ * photograph, twice, in a twenty-second exchange. #trouble already carries its
+ * own `[hidden]` rule a few hundred lines below, so this trap has been sprung
+ * here once before.
+ *
+ * `visibility` rather than `display`, deliberately. The point of two elements is
+ * that the next clip is loaded and seeked *behind* the current one, so the swap
+ * is a toggle between two decoded frames; `display: none` takes the element out
+ * of rendering entirely and gives the compositor a first paint to do at the
+ * exact moment the swap is supposed to be free.
+ */
+#backdrop > #still[hidden],
+#backdrop > .clip[hidden] {
+  visibility: hidden;
+}
+
 #still {
   animation: breathe 11s ease-in-out infinite;
   transform-origin: 50% 85%;
