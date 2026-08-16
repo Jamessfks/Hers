@@ -21,6 +21,18 @@ export const DISTILLER_MODEL = 'gemini-3.5-flash';
 /** Nano Banana 2. Fast, cheap, and good at holding a face across generations. */
 export const IMAGE_MODEL = 'gemini-3.1-flash-image';
 
+/**
+ * Deadlines for the background calls.
+ *
+ * All three of these run off the critical path, which is exactly why they need
+ * deadlines: nothing above them is watching, so a request that hangs simply
+ * never finishes and the work it was doing silently stops happening. Image
+ * generation gets far longer than the others because it genuinely takes it.
+ */
+const DISTIL_TIMEOUT_MS = 30_000;
+const TRANSCRIBE_TIMEOUT_MS = 60_000;
+const IMAGE_TIMEOUT_MS = 120_000;
+
 export function createGeminiDistiller(apiKey: string, model = DISTILLER_MODEL): Distiller {
   const ai = new GoogleGenAI({ apiKey });
   return {
@@ -32,6 +44,7 @@ export function createGeminiDistiller(apiKey: string, model = DISTILLER_MODEL): 
           systemInstruction: system,
           temperature: 0.2,
           maxOutputTokens: 900,
+          abortSignal: AbortSignal.timeout(DISTIL_TIMEOUT_MS),
         },
       });
       return response.text ?? '';
@@ -80,7 +93,11 @@ export async function transcribeMedia(
           ],
         },
       ],
-      config: { temperature: 0, maxOutputTokens: 400 },
+      config: {
+        temperature: 0,
+        maxOutputTokens: 400,
+        abortSignal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+      },
     });
     return (response.text ?? '').trim();
   } catch {
@@ -149,7 +166,10 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
     const response = await ai.models.generateContent({
       model: request.model ?? IMAGE_MODEL,
       contents: [{ role: 'user', parts: parts as never }],
-      config: { responseModalities: [Modality.IMAGE] },
+      config: {
+        responseModalities: [Modality.IMAGE],
+        abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+      },
     });
 
     for (const candidate of response.candidates ?? []) {

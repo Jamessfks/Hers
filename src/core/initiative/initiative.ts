@@ -117,6 +117,9 @@ export class Initiative {
     if (!this.#running) return;
     const timer = this.#options.setTimer ?? setTimeout;
     this.#timer = timer(() => this.#fire(), this.#delay());
+    // "Maybe say something in two minutes" is not a reason for a process to
+    // stay alive. The server has its own reasons; this must not add one.
+    this.#timer?.unref?.();
   }
 
   /**
@@ -138,6 +141,7 @@ export class Initiative {
     if (this.#options.isBusy()) {
       const timer = this.#options.setTimer ?? setTimeout;
       this.#timer = timer(() => this.#fire(), BUSY_RETRY_MS);
+      this.#timer?.unref?.();
       return;
     }
 

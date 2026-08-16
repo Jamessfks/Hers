@@ -222,8 +222,14 @@ export class Mood {
     for (const axis of AXES) {
       const base = this.#state.baseline[axis];
       const away = this.#state.current[axis] - base;
-      this.#state.current[axis] = clamp(base + away * keep, -1, 1);
-      this.#state.baseline[axis] = clamp(base + away * drift, -1, 1);
+      // The baseline moves first, and the current mood then decays toward
+      // *that* rather than toward where the baseline used to be. Otherwise a
+      // long gap leaves the two permanently a hair apart — she settles at a
+      // value her own baseline has already left, and every subsequent decay
+      // starts from a small lie.
+      const settled = clamp(base + away * drift, -1, 1);
+      this.#state.baseline[axis] = settled;
+      this.#state.current[axis] = clamp(settled + (away - away * drift) * keep, -1, 1);
     }
     this.#state.baseline = constrainDrift(this.#state.baseline, this.#anchor);
     if (elapsed > 1000) this.#dirty = true;

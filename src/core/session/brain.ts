@@ -44,22 +44,26 @@ export class Brain {
     this.gallery = parts.gallery;
   }
 
-  static async open(config: Config): Promise<Brain> {
+  /**
+   * `offline` keeps every network-backed part of memory out of the picture.
+   *
+   * Only tests pass it, and they need it: `Brain.open` is where the embedder
+   * and the consolidation model are chosen, so without a seam here a test with
+   * a fake API key makes real requests to Google and waits on them.
+   */
+  static async open(config: Config, options: { offline?: boolean } = {}): Promise<Brain> {
     await mkdir(config.dataDir, { recursive: true });
     const profile = await ensureProfile(config.profileDir);
 
+    const remote = Boolean(config.geminiApiKey) && !options.offline;
     const store = new MemoryStore({ path: path.join(config.dataDir, 'memory.db') });
     const memory = new Memory({
       store,
       // Without a key there is no network and no live session either, so the
       // lexical embedder is what keeps every offline path — tests, the doctor
       // command, a first run before setup — working rather than half-working.
-      embedder: config.geminiApiKey
-        ? createGoogleEmbedder(config.geminiApiKey)
-        : createLexicalEmbedder(),
-      ...(config.geminiApiKey
-        ? { distiller: createGeminiDistiller(config.geminiApiKey) }
-        : {}),
+      embedder: remote ? createGoogleEmbedder(config.geminiApiKey) : createLexicalEmbedder(),
+      ...(remote ? { distiller: createGeminiDistiller(config.geminiApiKey) } : {}),
     });
 
     const mood = new Mood({

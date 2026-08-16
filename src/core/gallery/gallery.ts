@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { createLexicalEmbedder, similarity } from '../memory/embedder.ts';
+import { createLexicalEmbedder, lexicalTokens, similarity } from '../memory/embedder.ts';
 import { generatePortrait } from '../gemini/text.ts';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
@@ -139,18 +139,19 @@ export class Gallery {
 
   async #bestMatch(description: string, items: GalleryItem[]): Promise<GalleryItem | null> {
     if (items.length === 0) return null;
-    const [query, ...vectors] = await this.#embedder.embed([
-      description,
-      ...items.map((item) => `${item.caption} ${item.name.replace(/[-_.]/g, ' ')}`),
-    ]);
+    const descriptions = items.map(
+      (item) => `${item.caption} ${item.name.replace(/[-_.]/g, ' ')}`,
+    );
+    const [query, ...vectors] = await this.#embedder.embed([description, ...descriptions]);
     if (!query) return null;
 
     let winner: GalleryItem | null = null;
     let bestScore = MATCH_FLOOR;
     for (const [index, vector] of vectors.entries()) {
       const item = items[index];
-      if (!vector || !item) continue;
-      const score = similarity(query, vector);
+      const candidate = descriptions[index];
+      if (!vector || !item || candidate === undefined) continue;
+      const score = Math.max(similarity(query, vector), stemOverlap(description, candidate));
       if (score > bestScore) {
         bestScore = score;
         winner = item;
@@ -231,6 +232,39 @@ export class Gallery {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Below this many characters a shared prefix is a coincidence, not a match. */
+const PREFIX_FLOOR = 4;
+
+/**
+ * The fraction of the description's words that the file name nearly has.
+ *
+ * The embedder alone is not enough here, and the case that showed it is
+ * ordinary: "watching the rain" against `at-the-window-rainy.jpg`. The stemmer
+ * turns neither "rain" nor "rainy" into the other, so the hashed features do
+ * not collide at all and a picture that obviously fits scores zero.
+ *
+ * A prefix match closes that without pretending to be semantic. It is
+ * deliberately only combined by `Math.max` rather than blended — this is a
+ * second opinion for the case the vectors miss, not a weighting of them.
+ */
+function stemOverlap(description: string, candidate: string): number {
+  const wanted = lexicalTokens(description);
+  if (wanted.length === 0) return 0;
+  const have = lexicalTokens(candidate);
+
+  let hits = 0;
+  for (const token of wanted) {
+    const matched = have.some(
+      (other) =>
+        other === token ||
+        (Math.min(other.length, token.length) >= PREFIX_FLOOR &&
+          (other.startsWith(token) || token.startsWith(other))),
+    );
+    if (matched) hits += 1;
+  }
+  return hits / wanted.length;
+}
 
 /** `at-the-window-rainy.jpg` -> `at the window rainy`. */
 function captionFromName(name: string): string {
