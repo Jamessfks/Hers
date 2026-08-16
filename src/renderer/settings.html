@@ -154,6 +154,16 @@
           <p class="price-note" id="library-price" aria-live="polite"></p>
 
           <div class="key-row">
+            <label for="generation-tier">How much she may render</label>
+            <select id="generation-tier">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <p class="price-note" id="tier-note" aria-live="polite"></p>
+
+          <div class="key-row">
             <button type="button" id="build-clip">Render the next clip</button>
             <span id="library-status" class="muted" aria-live="polite">No photo yet</span>
           </div>

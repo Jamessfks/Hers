@@ -74,6 +74,19 @@ export interface CompanionOptions {
   model: string;
   voiceId: string;
   userName?: string;
+  /**
+   * Which gestures currently have a rendered clip on disk.
+   *
+   * A function rather than a value because a library build finishes while the
+   * app is running — a list captured when the Companion was constructed would
+   * be wrong by the second clip, and wrong in the direction that matters: she
+   * would keep avoiding a gesture she had just been given.
+   *
+   * Undefined means the caller has nothing to say about availability, and the
+   * prompt then says nothing either. That is the right default for anything
+   * constructing a Companion without a clip library, including most tests.
+   */
+  readyGestures?: () => readonly string[];
   now?: () => number;
 }
 
@@ -162,6 +175,8 @@ export class Companion {
         situation: situation.describe(this.#now()),
         turnsSoFar: memory.turnCount(),
         ...(input.openerReason && { openerReason: input.openerReason }),
+        // Read per turn, not per Companion: clips finish while she is running.
+        ...(this.#options.readyGestures && { readyGestures: this.#options.readyGestures() }),
       });
       const system = blocks.live ? `${blocks.stable}\n\n---\n\n${blocks.live}` : blocks.stable;
 

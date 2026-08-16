@@ -17,8 +17,10 @@
  */
 
 import { MODEL_CATALOG, resolveModel, type ModelOption } from '../core/llm/models.ts';
+import { DEFAULT_TIER, TIERS } from '../core/avatar/generation-policy.ts';
 import type {
   AnnaConfig,
+  GenerationTier,
   LibraryView,
   LlmProviderId,
   MemoryFactView,
@@ -641,6 +643,32 @@ function wireBody(): void {
     folderName.textContent = picked.folder;
   });
 
+  /*
+   * The spend tier.
+   *
+   * Next to the render button rather than in a preferences pane somewhere,
+   * because it is the answer to the question the button raises: this is the one
+   * control in the app that decides how much of the user's money it may spend
+   * without being asked again. Each tier states what it does in its own words —
+   * TIERS is the single source for those, so a number changed there cannot
+   * drift away from what the settings screen claims.
+   */
+  const tierSelect = document.querySelector<HTMLSelectElement>('#generation-tier')!;
+  const tierNote = document.querySelector<HTMLParagraphElement>('#tier-note')!;
+
+  function showTier(): void {
+    const tier = config.avatar.generationTier ?? DEFAULT_TIER;
+    tierSelect.value = tier;
+    tierNote.textContent = TIERS[tier].summary;
+  }
+
+  tierSelect.addEventListener('change', async () => {
+    config = await api.setConfig({
+      avatar: { generationTier: tierSelect.value as GenerationTier },
+    });
+    showTier();
+  });
+
   build.addEventListener('click', async () => {
     build.disabled = true;
     status.textContent = 'Starting…';
@@ -657,6 +685,7 @@ function wireBody(): void {
 
   api.onLibrary(showLibrary);
   showPrice();
+  showTier();
   void showPortrait();
   void api.libraryStatus().then(showLibrary);
 }

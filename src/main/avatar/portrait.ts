@@ -40,13 +40,18 @@ import { sniffImage, type ImageInfo } from '../../core/avatar/image-info.ts';
 import { ClipLibraryStore, hashSourceImage } from '../../core/avatar/library-store.ts';
 import { buildClipPrompt } from '../../core/avatar/prompts.ts';
 import {
+  DEFAULT_TIER,
+  mayGenerate,
+  type GenerationState,
+} from '../../core/avatar/generation-policy.ts';
+import {
   awaitClip,
   createVideoClipProvider,
   generateClip,
   VideoClipError,
   type VideoClipProvider,
 } from '../../core/avatar/video-provider.ts';
-import type { LibraryView, VideoProviderId } from '../../shared/protocol.ts';
+import type { GenerationTier, LibraryView, VideoProviderId } from '../../shared/protocol.ts';
 
 /**
  * The largest photograph worth accepting.
@@ -91,6 +96,12 @@ export interface PortraitStoreOptions {
   providerId: () => VideoProviderId;
   apiKey: () => string | undefined;
   dropDir: () => string | undefined;
+  /**
+   * How freely this is allowed to spend. Resolved at call time for the same
+   * reason as the others: it is a setting, and settings change while the app is
+   * running. Absent means the default tier.
+   */
+  tier?: () => GenerationTier;
 }
 
 export class PortraitLibrary extends EventEmitter {
@@ -100,6 +111,15 @@ export class PortraitLibrary extends EventEmitter {
   #building: ClipSlotName | null = null;
   /** Set while a build is running, so a second request does not double-spend. */
   #busy = false;
+  /**
+   * Spending done since this run of the app started.
+   *
+   * Deliberately not persisted: the session ceiling is a limit on one sitting,
+   * and a user who restarts the app has made a fresh decision to let it render.
+   * The other three ceilings are all measured against the manifest, which does
+   * survive, so nothing durable depends on this.
+   */
+  #session: GenerationState = { generatedThisSession: 0, lastGeneratedAt: null };
 
   constructor(options: PortraitStoreOptions) {
     super();
@@ -243,8 +263,37 @@ export class PortraitLibrary extends EventEmitter {
         (a, b) => BUILD_ORDER.indexOf(a) - BUILD_ORDER.indexOf(b),
       );
 
+      const tier = this.#options.tier?.() ?? DEFAULT_TIER;
+      /*
+       * Why nothing happened, if nothing happens.
+       *
+       * A tier that refuses every candidate is the correct outcome and a silent
+       * one, which is the worst combination in a UI: "Render the next clip"
+       * would grey out, come back, and leave the library exactly as it was with
+       * no explanation. Collected here and reported below, but only when the
+       * whole build did nothing — a skip in the middle of a run that still
+       * rendered something is bookkeeping, not news.
+       */
+      const refusals: string[] = [];
+
       for (const slot of queue) {
         if (done >= max) break;
+
+        /*
+         * The tier is checked here, per slot, rather than once before the loop.
+         *
+         * Every ceiling it enforces moves as the loop runs — a clip that lands
+         * increases the spend and the session count — so a verdict taken once
+         * at the top would be answering a question about a library that no
+         * longer exists by the third iteration. `continue` rather than `break`
+         * because the refusals are not all terminal: an ineligible slot at this
+         * tier says nothing about the next slot, which may well be eligible.
+         */
+        const verdict = mayGenerate(slot, this.#library!, tier, this.#session);
+        if (!verdict.allowed) {
+          refusals.push(verdict.reason);
+          continue;
+        }
         const built = buildClipPrompt(slot);
         const bytes = await this.portraitBytes();
         if (!bytes) throw new Error('The source photograph is missing from disk.');
@@ -280,6 +329,18 @@ export class PortraitLibrary extends EventEmitter {
                * path was real; this is the line that gives it something to find.
                */
               onSubmit: async (job) => {
+                /*
+                 * The session counters move at submit, not at completion.
+                 *
+                 * This is the moment the money is committed — these providers
+                 * bill on ingest — so a ceiling that only counted finished
+                 * clips would let a run of failures spend the whole budget and
+                 * report that nothing had been generated.
+                 */
+                this.#session = {
+                  generatedThisSession: this.#session.generatedThisSession + 1,
+                  lastGeneratedAt: Date.now(),
+                };
                 this.#library = attachJob(this.#library!, slot, {
                   providerId: job.providerId,
                   id: job.id,
@@ -292,6 +353,11 @@ export class PortraitLibrary extends EventEmitter {
         );
         done += 1;
       }
+
+      // The first refusal, not all of them: they are mostly the same sentence
+      // about the same ceiling, and a list of eighteen is not more informative
+      // than one.
+      if (done === 0 && refusals[0]) this.emit('trouble', refusals[0]);
 
       return this.view();
     } finally {
@@ -393,6 +459,24 @@ export class PortraitLibrary extends EventEmitter {
       ...(key !== undefined && { apiKey: key }),
       ...(dropDir !== undefined && { dropDir }),
     });
+  }
+
+  /**
+   * The gestures that would actually move something if she reached for them.
+   *
+   * `idle` is excluded because it is not a gesture — nothing writes `[idle]`,
+   * it is the loop everything else returns to — and naming it in the persona
+   * prompt would invite a directive the parser does not accept.
+   *
+   * Returned fresh on every call rather than cached, because the whole point is
+   * that it changes: a clip finishing mid-conversation should be usable in the
+   * next turn, not the next launch.
+   */
+  readyGestures(): string[] {
+    if (!this.#library) return [];
+    return Object.entries(this.#library.clips)
+      .filter(([slot, entry]) => slot !== IDLE_SLOT && entry.status === 'ready')
+      .map(([slot]) => slot);
   }
 
   view(): LibraryView {

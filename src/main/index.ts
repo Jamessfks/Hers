@@ -141,6 +141,9 @@ async function main(): Promise<void> {
       situation,
       model: settings.llm.model,
       voiceId: settings.tts.voiceId,
+      // Live, not captured: a clip that finishes mid-conversation should be
+      // usable on the next turn. See PersonaContext.readyGestures.
+      readyGestures: () => portraits.readyGestures(),
       sinks: {
         perform: (event) => {
           diag.noteEvent(event.kind);
@@ -490,6 +493,7 @@ async function main(): Promise<void> {
     apiKey: () =>
       secrets.get(`video.${config.get().avatar.videoProvider}` as SecretName) ?? undefined,
     dropDir: () => config.get().avatar.clipFolder || undefined,
+    tier: () => config.get().avatar.generationTier,
   });
 
   portraits.on('changed', (view: LibraryView) => send(IPC.libraryChanged, view));
