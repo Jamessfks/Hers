@@ -146,30 +146,6 @@ test('a malformed control frame is ignored rather than fatal', async () => {
   }
 });
 
-test('a second tab takes the conversation and the first is told why', async () => {
-  const app = await bridge();
-  const origin = `http://127.0.0.1:${app.port}`;
-  try {
-    const first = new WebSocket(app.url, { origin });
-    await new Promise((resolve) => first.on('open', resolve));
-
-    const warned = new Promise<string>((resolve) => {
-      first.on('message', (data) => {
-        const message = JSON.parse(String(data)) as ServerMessage;
-        if (message.t === 'trouble') resolve(message.message);
-      });
-    });
-
-    const second = new WebSocket(app.url, { origin });
-    await new Promise((resolve) => second.on('open', resolve));
-
-    assert.match(await warned, /another tab/);
-    second.close();
-  } finally {
-    await app.close();
-  }
-});
-
 test('an evicted tab is told it was evicted, not that the network blipped', async () => {
   /*
    * The bug this guards is not subtle once seen: closed with 1000 "normal

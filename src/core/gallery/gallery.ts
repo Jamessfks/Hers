@@ -47,24 +47,54 @@ export interface PickOptions {
   appearance?: string;
   apiKey?: string;
   /**
-   * The picture the new one should look like.
+   * Generate from this picture instead of from her avatar photograph.
    *
-   * Overrides "the newest thing in the gallery", which is the right default
-   * for a follow-up but the wrong one for a greeting: the avatar photograph is
-   * the face the user actually chose, and every generated picture should be of
-   * *her* rather than of whatever was made last.
+   * Almost nothing should pass this. The default is the photograph the user
+   * uploaded, which is the only image that is reliably *her*; an override
+   * exists so a caller with a better reference in hand can say so, and so tests
+   * can generate without a face on disk.
    */
   reference?: { data: Buffer; mimeType: string };
+}
+
+/**
+ * Where her actual face lives, if it has been uploaded.
+ *
+ * Injected rather than imported so the gallery does not depend on the avatar
+ * studio, and synchronous because it is consulted on every request for a
+ * picture and returns metadata the studio already holds in memory.
+ */
+export type FaceProvider = () => {
+  name: string;
+  absolutePath: string;
+  mimeType: string;
+  addedAt: number;
+} | null;
+
+export interface GalleryOptions {
+  face?: FaceProvider;
+  /**
+   * Injected by tests, so asserting what the model is asked for costs nothing.
+   *
+   * Which reference reaches the image model is the whole of this file's
+   * correctness and cannot be checked from the outside — a wrong one produces a
+   * plausible picture of the wrong woman.
+   */
+  generator?: typeof generatePortrait;
 }
 
 export class Gallery {
   readonly #dir: string;
   readonly #embedder = createLexicalEmbedder(256);
+  readonly #face: FaceProvider | null;
+  readonly #generator: typeof generatePortrait;
   #cache: { at: number; items: GalleryItem[] } | null = null;
   #generating: Promise<GalleryItem | null> | null = null;
 
-  constructor(dir: string) {
+  constructor(dir: string, options: GalleryOptions = {}) {
     this.#dir = dir;
+    this.#face = options.face ?? null;
+    this.#generator = options.generator ?? generatePortrait;
   }
 
   get dir(): string {
@@ -127,8 +157,34 @@ export class Gallery {
    */
   async resolve(name: string): Promise<GalleryItem | null> {
     const wanted = path.basename(name);
+    // Her photograph is not in this folder but is servable by name, because
+    // `pick` can return it and the web fetches whatever `pick` returned from
+    // `/gallery/<name>`. Checked first, so a file in the gallery that happens to
+    // share its name cannot shadow her actual face.
+    const face = this.face();
+    if (face && face.name === wanted) return face;
+
     const items = await this.list();
     return items.find((item) => item.name === wanted) ?? null;
+  }
+
+  /**
+   * Her avatar photograph as something sendable, or null if there is none.
+   *
+   * Not part of {@link list}: the folder is a folder, and putting a file in the
+   * listing that is not in the directory would make every other thing here —
+   * caching, captions, eviction — lie about itself.
+   */
+  face(): GalleryItem | null {
+    const face = this.#face?.();
+    if (!face) return null;
+    return {
+      name: face.name,
+      absolutePath: face.absolutePath,
+      kind: 'image',
+      caption: 'me',
+      modifiedAt: face.addedAt,
+    };
   }
 
   /**
@@ -136,8 +192,29 @@ export class Gallery {
    *
    * Never throws. The worst outcome of a picture failing to arrive is that no
    * picture arrives, and that must not interrupt a sentence.
+   *
+   * ## "Can I see your picture?" is answered with her picture
+   *
+   * A request that names only *her* — "a picture of you", "what do you look
+   * like", "your face" — is answered with the photograph the user uploaded,
+   * before the folder is searched and before anything is generated. It is the
+   * same image the web shows as her face and the same one every clip is
+   * rendered from, so all three agree.
+   *
+   * The alternative, generating a new one, was what this used to do, and it is
+   * wrong for this case specifically: every generation is a re-draw, and a
+   * re-draw of a person is a similar person. That is an acceptable price for
+   * "you at the window watching the rain", which cannot be answered any other
+   * way, and no price at all worth paying for "show me you", which can.
+   *
+   * So: named a scene, generate from her face. Named only her, send her face.
    */
   async pick(description: string, options: PickOptions = {}): Promise<GalleryItem | null> {
+    if (wantsHerFace(description)) {
+      const face = this.face();
+      if (face) return face;
+    }
+
     const items = await this.list();
     const best = await this.#bestMatch(description, items);
     if (best) return best;
@@ -203,7 +280,7 @@ export class Gallery {
     this.#generating = (async () => {
       try {
         const reference = override ?? (await this.#reference());
-        const generated = await generatePortrait({
+        const generated = await this.#generator({
           apiKey,
           description,
           appearance,
@@ -225,8 +302,31 @@ export class Gallery {
     return this.#generating;
   }
 
-  /** The most recent picture of her, used to keep her face the same face. */
+  /**
+   * The picture a new one is generated from: her photograph, always.
+   *
+   * This used to be "the newest image in the gallery", and that is a feedback
+   * loop rather than a policy. Generated pictures are written into this same
+   * folder, so each generation referenced the previous generation: the second
+   * picture was of the first, the third was of the second, and after a handful
+   * of steps nothing in the folder was of the woman in the photograph any more.
+   * A fixed reference cannot drift, because there is nothing for it to drift
+   * from.
+   *
+   * The newest gallery image is kept only as the fallback for a profile that
+   * has no photograph at all, where some consistency beats none.
+   */
   async #reference(): Promise<{ data: Buffer; mimeType: string } | null> {
+    const face = this.#face?.();
+    if (face) {
+      try {
+        return { data: await readFile(face.absolutePath), mimeType: face.mimeType };
+      } catch {
+        // A photograph the manifest claims and the disk does not have falls
+        // through to the gallery rather than losing the picture entirely.
+      }
+    }
+
     const items = await this.list();
     const newest = items.find((item) => item.kind === 'image');
     if (!newest) return null;
@@ -258,6 +358,41 @@ export class Gallery {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Words that ask for her and nothing else.
+ *
+ * The test is subtractive on purpose, and that is what makes it safe: strike
+ * out every word that only means "a picture of you", and if anything at all is
+ * left then a scene was described and the answer is not a plain photograph.
+ * "you" and "you laughing in the kitchen" are then decided by the presence of
+ * "laughing" and "kitchen" rather than by a list of phrasings somebody has to
+ * keep guessing at.
+ */
+const ONLY_HER = new Set([
+  'a', 'an', 'the', 'of', 'in', 'it', 'is', 'this', 'that',
+  'i', 'me', 'my', 'we', 'us', 'can', 'could', 'please', 'do', 'does',
+  'you', 'your', 'yours', 'yourself', 'her', 'herself', 'she', 'anna',
+  'picture', 'pictures', 'pic', 'photo', 'photos', 'photograph', 'image',
+  'selfie', 'portrait', 'face', 'look', 'looks', 'like', 'see', 'show',
+  'send', 'sent', 'give', 'want', 'real', 'actual', 'actually', 'really',
+  'now', 'right', 'today', 'current', 'currently', 'again', 'what',
+  'who', 'how', 'and', 'to', 'for', 'at', 'be', 'am', 'are', 'here',
+]);
+
+/**
+ * True when the description names her and no scene.
+ *
+ * Deliberately not a model call. This runs inside a sentence, it decides
+ * between two files rather than between two meanings, and a classifier that is
+ * right 97% of the time would be wrong about "show me you" often enough to be
+ * the bug this replaced.
+ */
+export function wantsHerFace(description: string): boolean {
+  const words = description.toLowerCase().match(/[a-z']+/g);
+  if (!words || words.length === 0) return false;
+  return words.every((word) => ONLY_HER.has(word));
+}
 
 /** Below this many characters a shared prefix is a coincidence, not a match. */
 const PREFIX_FLOOR = 4;

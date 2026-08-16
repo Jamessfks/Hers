@@ -166,8 +166,10 @@ export class Companion {
    *
    * Generated fresh every conversation rather than picked from the gallery —
    * the point is that it is *new*, so reaching for something on disk would
-   * defeat it. Built from the avatar photograph when there is one, so it is her
-   * and not a stranger who matches the description.
+   * defeat it. It is built from the avatar photograph when there is one, which
+   * the gallery arranges for every generation rather than this one; a greeting
+   * is a picture of her in a place, so unlike "show me you" it has a scene and
+   * has to be made.
    *
    * Fired and never awaited. It takes several seconds, and a companion who says
    * nothing until her portrait finishes rendering is a companion who feels
@@ -182,13 +184,11 @@ export class Companion {
       try {
         const mood = this.#brain.mood.read();
         const snapshot = this.situation.snapshot();
-        const reference = await this.#brain.avatar.sourceImage();
         const item = await this.#brain.gallery.generate(
           `${describeSetting(snapshot.hour)}, ${mood.label}, looking at the camera`,
           {
             apiKey: this.#brain.config.geminiApiKey,
             appearance: this.#appearanceLine(),
-            ...(reference ? { reference } : {}),
           },
         );
         if (item && !this.#closed) this.#sink.show(item);

@@ -123,7 +123,10 @@ export const ANNA_TOOLS: FunctionDeclaration[] = [
       'someone you like — because it fits what you are talking about, not to decorate ' +
       'a sentence. Describe what you want and the closest thing you have is sent; if ' +
       'nothing fits and it is worth it, a new one is made. Keep talking either way; do ' +
-      'not announce it or wait for it.',
+      'not announce it or wait for it. When they just want to see you — "what do you ' +
+      'look like", "send me a picture of you" — say only "a picture of you" and nothing ' +
+      'about where you are or what you are doing; that sends your actual photograph ' +
+      'rather than a new one. Describe a scene only when the scene is the point.',
     parameters: {
       type: Type.OBJECT,
       properties: {

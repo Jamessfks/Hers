@@ -147,6 +147,22 @@ test('the bytes decide the format, not the content-type header', async () => {
   assert.equal(s.sourceMimeType(), 'image/png');
 });
 
+test('the photograph is offered as a file, so she can send it as well as render from it', async () => {
+  const { studio: s, dir } = await studio();
+  assert.equal(s.face(), null, 'nothing to send before anything is uploaded');
+
+  await s.setSource(png(512, 640), 'image/png');
+  const face = s.face();
+  assert.equal(face?.name, 'source.png');
+  assert.equal(face?.mimeType, 'image/png');
+  assert.equal(face?.absolutePath, path.join(dir, 'source.png'));
+  assert.equal(face?.absolutePath, s.sourcePath(), 'one photograph, not two ideas of where it is');
+
+  // Replacing it replaces what gets sent, rather than leaving the old one.
+  await s.setSource(png(400, 400), 'image/jpeg');
+  assert.equal(s.face()?.absolutePath, s.sourcePath());
+});
+
 // -- rendering --------------------------------------------------------------
 
 test('a render produces a playable clip and marks the gesture ready', async () => {

@@ -356,6 +356,26 @@ export class AvatarStudio {
     return source ? path.join(this.#dir, source.file) : null;
   }
 
+  /**
+   * The photograph as a file, for anything that needs to *send* her rather than
+   * generate her.
+   *
+   * Deliberately metadata only and synchronous: this is consulted on every
+   * request for a picture, and reading a multi-megabyte photograph off disk to
+   * decide whether it is the right answer is a cost paid for nothing. Callers
+   * that need the bytes read `absolutePath`, or use {@link sourceImage}.
+   */
+  face(): { name: string; absolutePath: string; mimeType: string; addedAt: number } | null {
+    const source = this.#manifest.source;
+    if (!source) return null;
+    return {
+      name: source.file,
+      absolutePath: path.join(this.#dir, source.file),
+      mimeType: source.mimeType,
+      addedAt: source.addedAt,
+    };
+  }
+
   sourceMimeType(): string {
     return this.#manifest.source?.mimeType ?? 'image/jpeg';
   }

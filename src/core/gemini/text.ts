@@ -8,6 +8,7 @@
 
 import { GoogleGenAI, Modality } from '@google/genai';
 
+import { sniffImage } from '../avatar/image-info.ts';
 import type { Distiller } from '../memory/types.ts';
 
 /**
@@ -109,14 +110,21 @@ export interface PortraitRequest {
   apiKey: string;
   /** What the picture should show, in Anna's own words. */
   description: string;
-  /** Her appearance, verbatim from the profile, so her face stays her face. */
+  /**
+   * Her appearance, verbatim from the profile.
+   *
+   * Only used when there is no {@link reference} — see `portraitPrompt` for
+   * why a photograph and a written description must not both be sent.
+   */
   appearance: string;
   /**
-   * A previous picture of her, if there is one.
+   * The photograph of her that the new picture must be of.
    *
    * This is the whole trick to consistency. Describing a face in words gets you
-   * a different person every time; handing the model the last picture and
-   * asking for the same person somewhere else gets you the same person.
+   * a different person every time; handing the model her photograph and asking
+   * for the same person somewhere else gets you the same person. It has to be a
+   * *fixed* image to work — referencing the last generated picture instead
+   * walks her face away from the original one generation at a time.
    */
   reference?: { data: Buffer; mimeType: string };
   model?: string;
@@ -147,20 +155,12 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
     });
   }
 
-  parts.push({
-    text: [
-      request.reference
-        ? 'Generate a new image of the same woman shown in the reference image, keeping her face, hair and build identical.'
-        : 'Generate an image of a woman matching this description exactly.',
-      '',
-      request.appearance,
-      '',
-      `The picture should show: ${request.description}.`,
-      '',
-      'Stylised illustration, not a photograph of a real person. Warm natural light,',
-      'shallow depth of field, candid framing. No text, no watermark, no logo.',
-    ].join('\n'),
-  });
+  parts.push({ text: portraitPrompt(request) });
+
+  // The output ratio is set rather than assumed. The documentation gives no
+  // rule that an edit inherits the input image's shape, and a portrait
+  // photograph returned as a square is a crop through her face.
+  const aspectRatio = request.reference ? aspectRatioOf(request.reference.data) : null;
 
   try {
     const response = await ai.models.generateContent({
@@ -168,6 +168,7 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
       contents: [{ role: 'user', parts: parts as never }],
       config: {
         responseModalities: [Modality.IMAGE],
+        ...(aspectRatio ? { imageConfig: { aspectRatio } } : {}),
         abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
       },
     });
@@ -185,3 +186,97 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
     return null;
   }
 }
+
+/**
+ * The prompt, built to the shape the image model's own documentation asks for.
+ *
+ * Two things it must do, and the previous version did neither:
+ *
+ *  1. **Ask for a photograph.** It used to end with "Stylised illustration, not
+ *     a photograph of a real person", which is precisely what came back — and
+ *     it also defeated the reference image, because a face cannot survive being
+ *     redrawn in another medium. The docs give a template for this case
+ *     ("A photorealistic [type of shot] of a [subject] in a [setting].
+ *     [Description of the light]. Shot from a [camera angle] with a [lens
+ *     type].") and this follows it: shot, subject, setting, light, lens.
+ *  2. **Say the face may not change.** The documented phrasing for holding a
+ *     likeness across an edit is an explicit instruction — "Ensure the woman's
+ *     face and features remain completely unchanged" — rather than a hope that
+ *     supplying a reference is enough.
+ *
+ * ## The written appearance is not sent when there is a photograph
+ *
+ * Measured, not assumed. The profile describes her hair as a chin-length black
+ * bob; the photograph that was uploaded is a woman with long fair hair. Sending
+ * both produced a photorealistic picture of the right face under the *written*
+ * hair — the model resolved the contradiction, and it had no way to know which
+ * side was authoritative.
+ *
+ * So when there is a photograph, the photograph is the whole answer to what she
+ * looks like. The words are what is left when there is no photograph at all,
+ * and then they are the only thing holding her together between generations.
+ */
+export function portraitPrompt(
+  request: Pick<PortraitRequest, 'description' | 'appearance' | 'reference'>,
+): string {
+  const lines: string[] = [];
+
+  if (request.reference) {
+    lines.push(
+      'A photorealistic candid photograph of the exact woman in the reference image.',
+      'This is the same real person, photographed again on a different day. Her face,',
+      'bone structure, hair, hair colour, hair length and build must remain',
+      'completely unchanged. Copy her appearance from the reference image and do',
+      'not restyle her.',
+    );
+  } else {
+    lines.push('A photorealistic candid photograph of a real woman.', '', request.appearance);
+  }
+
+  lines.push(
+    '',
+    `The photograph shows her: ${request.description}.`,
+    '',
+    'Soft natural available light. Shot at eye level on a 50mm lens at f/1.8, shallow',
+    'depth of field. Real skin texture and real pores, the imperfect framing of a',
+    'photograph somebody actually took.',
+    '',
+    'It must be a photograph. Not an illustration, drawing, painting, render, anime or',
+    'cartoon. No text, no watermark, no logo.',
+  );
+
+  return lines.join('\n');
+}
+
+/**
+ * The nearest ratio the model accepts to the reference photograph's own shape.
+ *
+ * The accepted values are a fixed enum, so "the same shape as the input" has to
+ * be resolved to one of them; the nearest by ratio is the one that crops least.
+ * Null when the bytes cannot be read, which leaves the model to its default
+ * rather than asserting a shape that might be wrong.
+ */
+function aspectRatioOf(image: Buffer): string | null {
+  const info = sniffImage(image);
+  if (!info || info.width <= 0 || info.height <= 0) return null;
+
+  const wanted = info.width / info.height;
+  let best: { name: string; distance: number } | null = null;
+  for (const [name, ratio] of ASPECT_RATIOS) {
+    const distance = Math.abs(ratio - wanted);
+    if (!best || distance < best.distance) best = { name, distance };
+  }
+  return best?.name ?? null;
+}
+
+/** Exactly what `imageConfig.aspectRatio` documents as supported, and nothing else. */
+const ASPECT_RATIOS: ReadonlyArray<readonly [string, number]> = [
+  ['1:1', 1],
+  ['2:3', 2 / 3],
+  ['3:2', 3 / 2],
+  ['3:4', 3 / 4],
+  ['4:3', 4 / 3],
+  ['9:16', 9 / 16],
+  ['16:9', 16 / 9],
+  ['21:9', 21 / 9],
+];

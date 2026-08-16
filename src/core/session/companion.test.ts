@@ -227,6 +227,67 @@ test('the show tool sends what is in the gallery and never invents one', async (
   await f.companion.sleep();
 });
 
+/** A real PNG header — enough for the studio, which reads the bytes not the name. */
+function png(width: number, height: number): Buffer {
+  const header = Buffer.alloc(33);
+  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
+  header.writeUInt32BE(13, 8);
+  header.write('IHDR', 12);
+  header.writeUInt32BE(width, 16);
+  header.writeUInt32BE(height, 20);
+  header[24] = 8;
+  header[25] = 6;
+  return header;
+}
+
+/**
+ * The bug this is here for, end to end: asked for her picture on Telegram she
+ * sent a generated drawing of somebody else, while the web showed the uploaded
+ * photograph as her face. Both go through this tool call, so both are fixed by
+ * it answering with the photograph.
+ */
+test('asked for her picture, the show tool sends the photograph that was uploaded', async () => {
+  const f = await fixture();
+  await f.brain.avatar.setSource(png(512, 640), 'image/png');
+  // A previous generation sitting in the gallery, which is what used to win.
+  await writeFile(
+    path.join(f.brain.gallery.dir, 'a-picture-of-you-right-now-1786883162943.jpg'),
+    Buffer.from([0xff, 0xd8, 0xff]),
+  );
+  await f.companion.wake();
+
+  f.socket().emit({
+    toolCall: {
+      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you right now' } }],
+    },
+  } as unknown as LiveServerMessage);
+  await settle();
+
+  assert.equal(f.shown.at(0)?.name, 'source.png', 'she has a face; she should send that face');
+  assert.equal(f.shown.at(0)?.absolutePath, f.brain.avatar.sourcePath());
+  await f.companion.sleep();
+});
+
+test('a scene she is asked for is not answered with the bare photograph', async () => {
+  const f = await fixture();
+  await f.brain.avatar.setSource(png(512, 640), 'image/png');
+  await writeFile(
+    path.join(f.brain.gallery.dir, 'at-the-window-rainy.jpg'),
+    Buffer.from([0xff, 0xd8, 0xff]),
+  );
+  await f.companion.wake();
+
+  f.socket().emit({
+    toolCall: {
+      functionCalls: [{ id: '1', name: 'show', args: { description: 'watching the rain' } }],
+    },
+  } as unknown as LiveServerMessage);
+  await settle();
+
+  assert.equal(f.shown.at(0)?.name, 'at-the-window-rainy.jpg');
+  await f.companion.sleep();
+});
+
 test('an unknown tool is answered rather than left hanging', async () => {
   const f = await fixture();
   await f.companion.wake();

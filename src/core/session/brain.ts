@@ -91,7 +91,13 @@ export class Brain {
       profile,
       memory,
       mood,
-      gallery: new Gallery(path.join(config.profileDir, 'gallery')),
+      // The gallery is told where her face is rather than each caller
+      // remembering to pass it. "A generated picture is of the woman in the
+      // photograph" is a property of the gallery, and a property that depends
+      // on every call site getting an argument right is not a property.
+      gallery: new Gallery(path.join(config.profileDir, 'gallery'), {
+        face: () => avatar.face(),
+      }),
       avatar,
     });
   }

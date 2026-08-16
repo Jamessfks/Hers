@@ -64,6 +64,12 @@ is:
 | Recent turns, as text | To distil facts, every twelfth turn |
 | A photo you send over Telegram | When you send it |
 | A voice or video note you send over Telegram | To transcribe it |
+| The photograph you chose as her face | Each time she generates a picture of herself |
+
+Pictures she generates of herself are derived from the photograph you supplied
+as her face: it is sent to the image model as a reference so the woman in the
+new picture is the same woman. Nothing is generated from your camera. Google
+watermarks every generated image with SynthID.
 
 Google's terms for the Gemini API apply to all of it. If you are on the free
 tier, note that Google's free tier terms allow human review and training on your
