@@ -24,7 +24,7 @@ import { WebBridge } from './ws.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
 
-export const VERSION = '1.0.0';
+export const VERSION = '2.0.0';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
