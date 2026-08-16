@@ -37,8 +37,28 @@ import { mimeFor } from '../../core/gallery/gallery.ts';
 import { Companion } from '../../core/session/companion.ts';
 import type { Brain } from '../../core/session/brain.ts';
 import type { CallBridge } from '../livekit/bridge.ts';
-import { TelegramApi } from './api.ts';
-import type { TelegramClient, TelegramMessage, TelegramUpdate } from './api.ts';
+import { AvatarError, GESTURE_NAMES, isGesture } from '../../core/avatar/studio.ts';
+import { TelegramApi, largestPhoto } from './api.ts';
+import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from './api.ts';
+
+/**
+ * The command menu, published to Telegram on startup.
+ *
+ * This is most of what "straightforward setup" means here: nobody has to be
+ * told the commands exist, because they are behind the `/` button with
+ * descriptions attached.
+ */
+const COMMANDS: BotCommand[] = [
+  { command: 'face', description: 'Send a photo to become her face' },
+  { command: 'gestures', description: 'Which movements she has, and what they cost' },
+  { command: 'render', description: 'Render a movement — /render nod' },
+  { command: 'call', description: 'Ring her, with your camera and voice' },
+  { command: 'photo', description: 'Ask her for a picture' },
+  { command: 'mood', description: 'How she is' },
+  { command: 'bye', description: 'End the conversation' },
+  { command: 'whoami', description: 'Your chat id' },
+  { command: 'help', description: 'What she can do' },
+];
 
 /** Sessions end after this much user silence, which also stops her opening. */
 const IDLE_SLEEP_MS = 10 * 60 * 1000;
@@ -80,6 +100,15 @@ export class TelegramBridge {
   #companion: Companion | null = null;
   #chatId: number | null = null;
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Chats that asked for `/face` and owe us a photo.
+   *
+   * Without this the bot has to guess what a bare photo means, and the two
+   * meanings are far apart: "look at this" and "this is now your face". A
+   * photo is only taken as a face when it was asked for, or when its caption
+   * says so.
+   */
+  readonly #awaitingFace = new Set<number>();
 
   constructor(options: TelegramBridgeOptions) {
     this.#brain = options.brain;
@@ -91,6 +120,8 @@ export class TelegramBridge {
   start(): void {
     if (this.#running) return;
     this.#running = true;
+    // Best effort: a failure here costs the menu, not the bot.
+    void this.#api.setMyCommands(COMMANDS).catch(() => undefined);
     this.#loop = this.#poll();
   }
 
@@ -135,9 +166,27 @@ export class TelegramBridge {
     const chatId = message.chat.id;
     if (!this.#permitted(chatId)) return;
 
+    /*
+     * A command can arrive as a photo's caption, and that is the natural way to
+     * send `/face` with the picture attached. The Bot API delivers it in
+     * `caption_entities` as a `bot_command`; most bot frameworks only look at
+     * `text` and miss it entirely, which is why this reads both.
+     */
     const text = (message.text ?? '').trim();
-    if (text.startsWith('/')) {
-      await this.#command(chatId, text);
+    const caption = (message.caption ?? '').trim();
+    const command = text.startsWith('/') ? text : caption.startsWith('/') ? caption : '';
+
+    if (command && !message.photo && !message.document) {
+      await this.#command(chatId, command);
+      return;
+    }
+
+    // A photo is her face when it was asked for, or when it says so.
+    const wantsFace =
+      command.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() === '/face' ||
+      this.#awaitingFace.has(chatId);
+    if (wantsFace && (message.photo || isImageDocument(message))) {
+      await this.#setFace(chatId, message);
       return;
     }
 
@@ -166,12 +215,60 @@ export class TelegramBridge {
     return this.#pinnedChatId === chatId;
   }
 
+  /**
+   * Adopts a photo as her face.
+   *
+   * Everything after the download is the studio's job — it validates the bytes
+   * rather than the claim, and it is the same path the web upload takes, so
+   * there is one set of rules about what a face may be rather than two.
+   */
+  async #setFace(chatId: number, message: TelegramMessage): Promise<void> {
+    this.#awaitingFace.delete(chatId);
+    await this.#api.sendChatAction(chatId, 'typing');
+
+    const document = isImageDocument(message) ? message.document : null;
+    const photo = message.photo ? largestPhoto(message.photo) : null;
+    const fileId = document?.file_id ?? photo?.file_id;
+    if (!fileId) {
+      await this.#api.sendMessage(chatId, "I couldn't find a picture in that.");
+      return;
+    }
+
+    const bytes = await this.#api.download(fileId);
+    if (!bytes) {
+      await this.#api.sendMessage(chatId, 'That file was too big for me to fetch.');
+      return;
+    }
+
+    const had = this.#brain.avatar.readyGestures();
+    try {
+      await this.#brain.avatar.setSource(bytes, document?.mime_type ?? 'image/jpeg');
+    } catch (error) {
+      await this.#api.sendMessage(
+        chatId,
+        error instanceof AvatarError ? error.message : 'That picture could not be used.',
+      );
+      return;
+    }
+
+    const lines = ["That's me now."];
+    if (had.length > 0) {
+      // Every clip started from the old photograph, so none of them are of this
+      // person any more. Saying so beats them noticing a stranger nodding.
+      lines.push(
+        `The ${had.length} movement${had.length === 1 ? '' : 's'} I had were of the old picture, so they're gone.`,
+      );
+    }
+    lines.push('', 'Use /render idle to bring this one to life. /gestures lists the rest.');
+    await this.#api.sendMessage(chatId, lines.join('\n'));
+  }
+
   async #deliver(chatId: number, message: TelegramMessage, text: string): Promise<void> {
     const companion = this.#companion;
     if (!companion) return;
 
     // A photo goes in as a picture, because she can actually see it.
-    const photo = message.photo?.at(-1);
+    const photo = message.photo ? largestPhoto(message.photo) : null;
     if (photo) {
       const bytes = await this.#api.download(photo.file_id);
       if (bytes) {
@@ -223,11 +320,14 @@ export class TelegramBridge {
             '',
             'Just talk to me — text, photos, voice notes, video notes. All of it reaches me.',
             '',
-            '/call   ring me, with your camera and your voice',
-            '/photo  ask me for a picture',
-            '/mood   how I am',
-            '/bye    end the conversation',
-            '/whoami your chat id',
+            '/face     send a photo to become my face',
+            '/gestures which movements I have',
+            '/render   render one — /render nod',
+            '/call     ring me, with your camera and your voice',
+            '/photo    ask me for a picture',
+            '/mood     how I am',
+            '/bye      end the conversation',
+            '/whoami   your chat id',
           ].join('\n'),
         );
         return;
@@ -235,6 +335,90 @@ export class TelegramBridge {
       case '/whoami':
         await this.#api.sendMessage(chatId, `This chat is ${chatId}.`);
         return;
+
+      case '/face': {
+        this.#awaitingFace.add(chatId);
+        const current = this.#brain.avatar.state();
+        await this.#api.sendMessage(
+          chatId,
+          [
+            current.hasSource
+              ? 'Send me a photo and it replaces my face.'
+              : 'Send me a photo and it becomes my face.',
+            '',
+            'JPEG, PNG or WebP. At least 256 pixels on the short side, at most 12 MB.',
+            'Send it as a file rather than a photo if you want the full resolution.',
+            current.ready.length > 0
+              ? `Heads up: my ${current.ready.length} rendered movement(s) start from the current picture, so a new one clears them.`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        );
+        return;
+      }
+
+      case '/gestures': {
+        const state = this.#brain.avatar.state();
+        if (!state.hasSource) {
+          await this.#api.sendMessage(chatId, 'Give me a face first — /face.');
+          return;
+        }
+        const lines = state.all.map((gesture) => {
+          const mark = state.ready.includes(gesture)
+            ? '●'
+            : state.rendering.includes(gesture)
+              ? '…'
+              : '○';
+          return `${mark} ${gesture.replace('_', ' ')}`;
+        });
+        await this.#api.sendMessage(
+          chatId,
+          [
+            '● rendered   ○ not yet   … rendering',
+            '',
+            ...lines,
+            '',
+            state.configured
+              ? `$${state.spentUsd.toFixed(2)} of $${state.budgetUsd.toFixed(2)} spent. /render idle`
+              : 'No Hedra key on the machine I run on, so nothing can be rendered.',
+          ].join('\n'),
+        );
+        return;
+      }
+
+      case '/render': {
+        const wanted = argument.toLowerCase().replace(/[\s-]+/g, '_');
+        if (!isGesture(wanted)) {
+          await this.#api.sendMessage(
+            chatId,
+            `Which one? ${GESTURE_NAMES.join(', ')}. For example: /render idle`,
+          );
+          return;
+        }
+        if (this.#brain.avatar.has(wanted)) {
+          await this.#api.sendMessage(chatId, `I already have ${wanted.replace('_', ' ')}.`);
+          return;
+        }
+        await this.#api.sendMessage(
+          chatId,
+          `Rendering ${wanted.replace('_', ' ')}. Takes a few minutes — I'll say when it lands.`,
+        );
+        // Not awaited: a render is minutes long and the bot has to stay
+        // responsive, including for the message that says it failed.
+        void this.#brain.avatar
+          .render(wanted)
+          .then(() =>
+            this.#api.sendMessage(chatId, `Done — I can ${wanted.replace('_', ' ')} now.`),
+          )
+          .catch((error: unknown) =>
+            this.#api.sendMessage(
+              chatId,
+              error instanceof AvatarError ? error.message : `That render failed: ${String(error)}`,
+            ),
+          );
+        return;
+      }
 
       case '/mood': {
         const mood = this.#brain.mood.read();
@@ -386,6 +570,11 @@ function mimeTypeOf(message: TelegramMessage): string {
   if (message.video) return message.video.mime_type ?? 'video/mp4';
   if (message.audio) return message.audio.mime_type ?? 'audio/mpeg';
   return 'application/octet-stream';
+}
+
+/** True for a picture sent as a file rather than compressed into a photo. */
+function isImageDocument(message: TelegramMessage): boolean {
+  return Boolean(message.document?.mime_type?.startsWith('image/'));
 }
 
 function appearanceLine(brain: Brain): string {

@@ -292,6 +292,33 @@ button {
   font-size: 13px;
 }
 
+/*
+ * The first thing to do, offered rather than hidden.
+ *
+ * Uploading a photograph is the step everything else about her appearance
+ * depends on, and it used to live behind a button in the header labelled
+ * "Face" — discoverable only by someone who already knew. It shows only while
+ * there is no photograph, and gets out of the way for good once there is.
+ */
+.give-face {
+  background: none;
+  border: 1px dashed #3a3c52;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.give-face:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.give-face[hidden] {
+  display: none;
+}
+
 /* --------------------------------------------------------------------------
    Transcript
    -------------------------------------------------------------------------- */

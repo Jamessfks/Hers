@@ -45,12 +45,46 @@ export interface TelegramUpdate {
   edited_message?: TelegramMessage;
 }
 
+/** A command as it appears in Telegram's own menu. */
+export interface BotCommand {
+  /** 1-32 characters, lowercase Latin letters, digits and underscores. */
+  command: string;
+  /** 1-256 characters. */
+  description: string;
+}
+
 export interface InlineKeyboard {
   inline_keyboard: Array<Array<{ text: string; url: string }>>;
 }
 
 /** Telegram will not serve a file larger than this through `getFile`. */
 export const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+/**
+ * The biggest rendition of a photo Telegram sent.
+ *
+ * By pixel count rather than by taking the last element. The Bot API documents
+ * the `photo` field only as "available sizes of the photo" and says nothing
+ * anywhere about their order — so `photo.at(-1)` is an assumption that happens
+ * to hold, not a rule. For a thumbnail that would be a cosmetic bug; for the
+ * picture that becomes her face and gets sent to a paid renderer, it is the
+ * difference between a portrait and a 90-pixel preview.
+ */
+export function largestPhoto(sizes: readonly TelegramPhotoSize[]): TelegramPhotoSize | null {
+  let best: TelegramPhotoSize | null = null;
+  for (const size of sizes) {
+    if (!best) {
+      best = size;
+      continue;
+    }
+    const area = (size.width || 0) * (size.height || 0);
+    const bestArea = (best.width || 0) * (best.height || 0);
+    if (area > bestArea || (area === bestArea && (size.file_size ?? 0) > (best.file_size ?? 0))) {
+      best = size;
+    }
+  }
+  return best;
+}
 
 /**
  * The part of the API the bridge uses.
@@ -62,6 +96,7 @@ export const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
  */
 export interface TelegramClient {
   getUpdates(offset: number, timeoutSeconds?: number): Promise<TelegramUpdate[]>;
+  setMyCommands(commands: BotCommand[]): Promise<void>;
   sendMessage(
     chatId: number,
     text: string,
@@ -117,6 +152,18 @@ export class TelegramApi implements TelegramClient {
 
   async sendChatAction(chatId: number, action: 'typing' | 'upload_photo'): Promise<void> {
     await this.#call('sendChatAction', { chat_id: chatId, action });
+  }
+
+  /**
+   * Publishes the command menu.
+   *
+   * This is most of what makes the bot feel set up rather than guessed at: the
+   * commands appear behind Telegram's own `/` button, with descriptions, so
+   * nobody has to be told they exist. At most 100, each 1-32 characters of
+   * lowercase Latin letters, digits and underscores.
+   */
+  async setMyCommands(commands: BotCommand[]): Promise<void> {
+    await this.#call('setMyCommands', { commands: commands.slice(0, 100) });
   }
 
   async sendPhoto(chatId: number, file: UploadFile, caption?: string): Promise<void> {

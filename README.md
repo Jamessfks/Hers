@@ -88,9 +88,24 @@ and it falls back rather than failing to start.
 
 ### Her face
 
-Click **Face**, drop in a photograph, and that is her. JPEG, PNG or WebP, at
-most 12 MB, between 256 and 4096 pixels on a side. The bytes are checked rather
-than the file name.
+She asks for one. On a fresh install the interface offers **Give her a face**
+before anything else, because everything about how she looks depends on it.
+
+Two ways in, and they are the same underneath:
+
+| Where    | How                                                          |
+| -------- | ------------------------------------------------------------ |
+| Web      | **Give her a face**, or **Face** in the header. Drop or pick a file. |
+| Telegram | Send a photo captioned `/face` — or send `/face`, then a photo. |
+
+JPEG, PNG or WebP, at most 12 MB, between 256 and 4096 pixels on a side. The
+bytes are checked rather than the file name, so a `.png` containing JPEG is
+fine and a `.jpg` containing nothing is not. On Telegram, send it **as a file**
+rather than as a photo if you want the full resolution — Telegram recompresses
+photos.
+
+Changing it later is the same gesture in either place. Every movement was
+generated from the old photograph, so a new face clears them and she says so.
 
 With a `HEDRA_API_KEY` set you can then render her movements — `idle`, `nod`,
 `tilt`, `smile`, `laugh`, `lean in`, `look away`. Each is rendered once from the
@@ -98,6 +113,9 @@ photograph, takes a few minutes, and costs money: **a 2-second clip measured at
 $0.05.** Nothing is ever rendered automatically; every one is a click, and every
 one is checked against `ANNA_HEDRA_BUDGET_USD` first. Start with `idle` — it is
 the one she rests in between the others.
+
+Render them from the Face dialog, or from Telegram with `/gestures` to see what
+exists and `/render idle` to make one.
 
 Once a movement exists, Anna can choose it herself as she talks. She is only
 ever offered the ones that have actually been rendered, so she cannot reach for
@@ -156,7 +174,8 @@ She replies in text there, and sends pictures and clips when they fit. Voice
 belongs on the call: `sendVoice` requires Ogg/Opus, and shipping an audio
 encoder to solve a problem `/call` already solves better was not worth it.
 
-Commands: `/call`, `/photo`, `/mood`, `/bye`, `/whoami`, `/help`.
+Commands appear in Telegram's own `/` menu, published on startup: `/face`,
+`/gestures`, `/render`, `/call`, `/photo`, `/mood`, `/bye`, `/whoami`, `/help`.
 
 ---
 

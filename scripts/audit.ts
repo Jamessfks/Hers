@@ -145,6 +145,20 @@ function bandsJpeg(): Buffer {
   return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
 }
 
+/** A second, differently shaped JPEG, so a replacement is visibly a replacement. */
+function portraitJpeg(): Buffer {
+  const width = 400;
+  const height = 560;
+  const data = Buffer.alloc(width * height * 4);
+  for (let i = 0; i < width * height; i += 1) {
+    data[i * 4] = 200;
+    data[i * 4 + 1] = 170;
+    data[i * 4 + 2] = 150;
+    data[i * 4 + 3] = 255;
+  }
+  return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
+}
+
 // ---------------------------------------------------------------------------
 // A companion wired to collectors
 // ---------------------------------------------------------------------------
@@ -578,6 +592,44 @@ async function main(): Promise<void> {
   }
 
   // -- Avatar --------------------------------------------------------------
+  await check(
+    'Avatar — an uploaded picture becomes the source that gestures render from',
+    'avatar',
+    async () => {
+      const root = await mkdtemp(path.join(tmpdir(), 'anna-face-'));
+      const brain = await Brain.open(
+        loadConfig({
+          ...process.env,
+          ANNA_PROFILE: path.join(root, 'profile'),
+          ANNA_DATA: path.join(root, 'data'),
+        } as NodeJS.ProcessEnv),
+        { offline: true },
+      );
+
+      // A real JPEG, through the same validation the web upload and Telegram
+      // both go through — there is one set of rules about what a face may be,
+      // not one per entry point.
+      const first = await brain.avatar.setSource(bandsJpeg(), 'image/jpeg');
+      const reference = await brain.avatar.sourceImage();
+
+      // Replace it, the way /face or the Face dialog would.
+      const second = await brain.avatar.setSource(portraitJpeg(), 'image/jpeg');
+
+      await brain.close();
+      await rm(root, { recursive: true, force: true });
+
+      return {
+        ok:
+          first.hasSource &&
+          second.hasSource &&
+          first.sourceUrl !== second.sourceUrl &&
+          reference !== null &&
+          second.all.length > 0 &&
+          second.ready.length === 0,
+        evidence: `uploaded ${first.width}x${first.height}, replaced with ${second.width}x${second.height}; ${second.all.length} gestures render from it, ${second.ready.length} stale clips carried over`,
+      };
+    },
+  );
   await check(
     'Avatar — she is offered exactly the movements that exist',
     'avatar',

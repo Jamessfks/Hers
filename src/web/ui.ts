@@ -56,6 +56,7 @@ export class Ui {
   readonly #dropzoneLabel = need('dropzone-label');
   readonly #gestureList = need('gesture-list');
   readonly #spend = need('spend');
+  readonly #giveFace = need<HTMLButtonElement>('give-face');
 
   readonly #senseButtons = new Map<SenseName, HTMLButtonElement>();
   /** The in-progress line per speaker, replaced until the turn closes. */
@@ -107,6 +108,7 @@ export class Ui {
     });
 
     need('face-open').addEventListener('click', () => this.#face.showModal());
+    this.#giveFace.addEventListener('click', () => this.#face.showModal());
 
     const picker = need<HTMLInputElement>('face-file');
     picker.addEventListener('change', () => {
@@ -322,6 +324,7 @@ export class Ui {
 
     this.#portrait.hidden = !hasSource;
     this.#orb.hidden = hasSource;
+    this.#giveFace.hidden = hasSource;
 
     if (hasSource && avatar.sourceUrl) {
       if (this.#still.getAttribute('src') !== avatar.sourceUrl) {
