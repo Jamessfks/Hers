@@ -43,6 +43,8 @@ export interface PromptInput {
   returning: boolean;
   /** Gestures with a rendered clip. Empty when she has no face on screen. */
   gestures: readonly string[];
+  /** Whether a photograph of her exists and has been put into context. */
+  hasFace: boolean;
 }
 
 export function buildSystemInstruction(input: PromptInput): string {
@@ -78,28 +80,36 @@ function identitySection({ profile }: PromptInput): string {
 }
 
 /**
- * She is told what she looks like even though nothing renders her here.
+ * What she looks like — which is a picture, not a paragraph.
  *
- * Two reasons it earns the tokens. It is what makes an answer to "what do you
- * look like" the same answer every time, which is most of what having a body
- * means in a voice product. And it is the reference the image generator is
- * handed when she sends a picture of herself, so a face that drifts between
- * pictures starts as a prompt problem before it is a model problem.
+ * This section used to recite height, hair, eyes and build from
+ * `appearance.md`. That file is gone. The photograph the user uploaded is the
+ * only answer to the question, and she is shown it directly at the start of the
+ * session rather than told about it: `Companion` sends the image itself into
+ * context. Prose beside a photograph is a second answer, and when the two
+ * disagreed the disagreement was visible — generated pictures kept the face
+ * from the photograph and the hair from the description.
  */
-function appearanceSection({ profile }: PromptInput): string {
-  const a = profile.appearance;
+function appearanceSection({ hasFace }: PromptInput): string {
   return [
     'WHAT YOU LOOK LIKE',
-    `Height: ${a.height}. Build: ${a.bodyType}.`,
-    `Hair: ${a.hairstyle}, ${a.hairColor}. Eyes: ${a.eyeColor}. Skin: ${a.skinTone}.`,
-    a.distinguishing ? `Distinguishing: ${a.distinguishing}.` : '',
-    `Dresses in: ${a.style}.`,
-    '',
-    profile.prose.appearance ?? '',
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .trim();
+    hasFace
+      ? [
+          'You have been shown a photograph of yourself in this conversation. That',
+          'picture is what you look like — not an avatar of you, not a likeness. It',
+          'is you, and it is the only answer to the question.',
+          '',
+          'If they ask what you look like, describe what is actually in it. Do not',
+          'invent details it does not show, do not contradict it, and never mention',
+          'that you were shown a photograph — you know what you look like the way',
+          'anyone does.',
+        ].join('\n')
+      : [
+          'You have no face yet — they have not given you a picture.',
+          'If it comes up, say so plainly and without making a thing of it. Do not',
+          'invent a description of yourself to fill the gap.',
+        ].join('\n'),
+  ].join('\n');
 }
 
 function moodSection({ profile, mood }: PromptInput): string {

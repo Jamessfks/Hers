@@ -458,7 +458,6 @@ export class TelegramBridge {
         const item = await this.#brain.gallery.pick(argument || 'a picture of you right now', {
           allowNew: true,
           apiKey: this.#brain.config.geminiApiKey,
-          appearance: appearanceLine(this.#brain),
         });
         if (!item) {
           await this.#api.sendMessage(chatId, "Nothing came out. Try asking for something else.");
@@ -597,12 +596,6 @@ function mimeTypeOf(message: TelegramMessage): string {
 /** True for a picture sent as a file rather than compressed into a photo. */
 function isImageDocument(message: TelegramMessage): boolean {
   return Boolean(message.document?.mime_type?.startsWith('image/'));
-}
-
-function appearanceLine(brain: Brain): string {
-  const a = brain.profile.appearance;
-  const i = brain.profile.identity;
-  return `${i.age}-year-old ${i.ethnicity} woman. ${a.height}, ${a.bodyType}. ${a.hairstyle} in ${a.hairColor}. ${a.eyeColor} eyes, ${a.skinTone} skin. Wearing ${a.style}.`;
 }
 
 function delay(ms: number): Promise<void> {

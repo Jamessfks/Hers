@@ -9,18 +9,6 @@
 
 import type { MoodVector } from '../../shared/protocol.ts';
 
-/** The attributes the app understands structurally, as opposed to as prose. */
-export interface Appearance {
-  height: string;
-  bodyType: string;
-  hairstyle: string;
-  hairColor: string;
-  eyeColor: string;
-  skinTone: string;
-  distinguishing: string;
-  style: string;
-}
-
 export interface Identity {
   name: string;
   age: string;
@@ -40,7 +28,6 @@ export interface VoiceSettings {
 
 export interface Profile {
   identity: Identity;
-  appearance: Appearance;
   voice: VoiceSettings;
   /** The long-run temperament the current mood is pulled back toward. */
   moodBaseline: MoodVector;
@@ -95,11 +82,19 @@ export const PREBUILT_VOICES = [
   'Sulafat',
 ] as const;
 
-/** The files the loader reads, in the order they reach the model. */
+/**
+ * The files the loader reads, in the order they reach the model.
+ *
+ * There is no `appearance` here, deliberately. What she looks like is the
+ * photograph the user uploaded — the same one the interface shows and gesture
+ * clips render from — and a written description beside it is a second answer to
+ * a question that already has one. When the two disagreed, they disagreed
+ * visibly: generated pictures kept the face from the photograph and the hair
+ * from the prose.
+ */
 export const PROFILE_FILES = [
   'personality',
   'identity',
-  'appearance',
   'voice',
   'mood',
   'relationship',

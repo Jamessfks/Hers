@@ -71,24 +71,21 @@ test('a fresh folder is written and reads back as the default Anna', async () =>
   assert.ok(files.includes('gallery'));
 
   assert.equal(profile.identity.name, 'Anna');
-  assert.equal(profile.appearance.eyeColor, 'dark brown');
-  assert.equal(profile.appearance.height, '5 ft 6 in (168 cm)');
   assert.equal(profile.voice.voice, 'Aoede');
   assert.equal(profile.moodBaseline.warmth, 0.55);
   assert.ok(profile.prose.personality?.includes('not an assistant'));
 });
 
 test('every attribute the product promises is a real field', async () => {
+  // Not appearance: that is the uploaded photograph, and there is deliberately
+  // no written description of her to contradict it.
   const dir = await scratch();
   const profile = await ensureProfile(dir);
   const required = [
     profile.identity.age,
     profile.identity.gender,
     profile.identity.ethnicity,
-    profile.appearance.height,
-    profile.appearance.hairstyle,
-    profile.appearance.eyeColor,
-    profile.appearance.bodyType,
+    profile.voice.voice,
     profile.prose.personality,
     profile.prose.mood,
   ];

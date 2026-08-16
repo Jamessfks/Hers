@@ -157,6 +157,7 @@ export class Companion {
 
     this.#live = live;
     await live.start();
+    await this.#showHerself();
     this.#initiative.start();
     this.#emitMood(true);
   }
@@ -188,8 +189,7 @@ export class Companion {
           `${describeSetting(snapshot.hour)}, ${mood.label}, looking at the camera`,
           {
             apiKey: this.#brain.config.geminiApiKey,
-            appearance: this.#appearanceLine(),
-          },
+            },
         );
         if (item && !this.#closed) this.#sink.show(item);
       } catch {
@@ -197,6 +197,28 @@ export class Companion {
         // conversation it was greeting.
       }
     })();
+  }
+
+  /**
+   * Shows her her own face, once, at the start of the conversation.
+   *
+   * This replaces the paragraph that used to describe her. A photograph cannot
+   * disagree with itself, and the written version did — when both were in the
+   * prompt, generated pictures took the face from the photograph and the hair
+   * from the prose.
+   *
+   * Sent as context rather than as a realtime frame: a frame describes this
+   * moment and is meant to age out, and what she looks like should still be
+   * true an hour in.
+   */
+  async #showHerself(): Promise<void> {
+    const face = await this.#brain.avatar.sourceImage();
+    if (!face || !this.#live) return;
+    this.#live.showImage(
+      face.data,
+      face.mimeType,
+      'This is you. Not a picture of you — you. It is what you look like.',
+    );
   }
 
   async sleep(): Promise<void> {
@@ -392,7 +414,6 @@ export class Companion {
         if (!description) return { ok: false, reason: 'no description' };
         const item = await this.#brain.gallery.pick(description, {
           allowNew: args.allowNew === true,
-          appearance: this.#appearanceLine(),
           apiKey: this.#brain.config.geminiApiKey,
         });
         if (!item) return { ok: false, reason: 'nothing in the gallery fits and none was made' };
@@ -446,21 +467,8 @@ export class Companion {
       // Only the desktop shows a face; a phone call and Telegram have nowhere
       // to put one, and offering her a movement nobody can see is noise.
       gestures: this.#channel === 'desktop' ? this.#brain.avatar.readyGestures() : [],
+      hasFace: this.#brain.avatar.face() !== null,
     });
-  }
-
-  #appearanceLine(): string {
-    const a = this.#brain.profile.appearance;
-    return [
-      `${this.#brain.profile.identity.age}-year-old ${this.#brain.profile.identity.ethnicity} woman`,
-      `${a.height}, ${a.bodyType}`,
-      `${a.hairstyle} in ${a.hairColor}`,
-      `${a.eyeColor} eyes, ${a.skinTone} skin`,
-      a.distinguishing,
-      `wearing ${a.style}`,
-    ]
-      .filter(Boolean)
-      .join('. ');
   }
 
   /**

@@ -101,7 +101,6 @@ export async function loadProfile(dir: string): Promise<Profile> {
   }
 
   const identity = files.get('identity')?.frontmatter ?? {};
-  const appearance = files.get('appearance')?.frontmatter ?? {};
   const voice = files.get('voice')?.frontmatter ?? {};
   const mood = files.get('mood')?.frontmatter ?? {};
 
@@ -117,16 +116,6 @@ export async function loadProfile(dir: string): Promise<Profile> {
       pronouns: text(identity.pronouns, 'she/her'),
       ethnicity: text(identity.ethnicity, 'Chinese-American'),
       from: text(identity.from, 'Oakland, California'),
-    },
-    appearance: {
-      height: text(appearance.height, `5 ft 6 in (168 cm)`),
-      bodyType: text(appearance.body_type, 'slim, slightly athletic'),
-      hairstyle: text(appearance.hairstyle, 'chin-length blunt bob'),
-      hairColor: text(appearance.hair_color, 'black'),
-      eyeColor: text(appearance.eye_color, 'dark brown'),
-      skinTone: text(appearance.skin_tone, 'light warm olive'),
-      distinguishing: text(appearance.distinguishing, ''),
-      style: text(appearance.style, 'oversized knitwear and straight-leg jeans'),
     },
     voice: {
       voice: pickVoice(voice.voice),

@@ -59,7 +59,8 @@ async function main(): Promise<number> {
     ok(`Profile at ${config.profileDir}`);
     note(
       `${brain.profile.identity.name}, ${brain.profile.identity.age}, ${brain.profile.identity.gender}, ` +
-        `${brain.profile.appearance.eyeColor} eyes, voice ${brain.profile.voice.voice}`,
+        `voice ${brain.profile.voice.voice}, ` +
+        `${brain.avatar.face() ? 'has a photograph' : 'no photograph yet'}`,
     );
     ok(`Memory at ${config.dataDir} — ${brain.memory.turnCount()} turns in this conversation`);
     ok(`Gallery has ${(await brain.gallery.list()).length} things in it`);

@@ -209,6 +209,35 @@ export class LiveConversation {
   }
 
   /**
+   * Puts a picture into context, silently and for good.
+   *
+   * Not `sendRealtimeInput` — that channel is for the live stream, a frame that
+   * describes this moment and is meant to age out. This is for a fact about the
+   * conversation that should still be true an hour in: what she looks like.
+   *
+   * `Part.inlineData` and `sendClientContent`'s `Content[]` are both in the
+   * SDK's own type definitions, and `turnComplete: false` is what keeps her
+   * from answering a photograph out loud.
+   */
+  showImage(bytes: Buffer, mimeType: string, note: string): void {
+    if (bytes.length === 0 || !this.#socket) return;
+    this.#guard(() =>
+      this.#socket?.sendClientContent({
+        turns: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { data: bytes.toString('base64'), mimeType } },
+              { text: `⟦context⟧ ${note}` },
+            ],
+          },
+        ],
+        turnComplete: false,
+      }),
+    );
+  }
+
+  /**
    * Asks Anna to speak now, for a stated reason, without the user having said
    * anything. This is the mechanism behind the three-minute rule.
    */

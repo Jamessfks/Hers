@@ -61,14 +61,17 @@ send when it fits the conversation, and she can make new ones.
 ### The profile folder
 
 Everything about who she is lives in `anna-profile/`, which is written on first
-run and is then yours. Seven markdown files, each with a short `key: value`
+run and is then yours. Six markdown files, each with a short `key: value`
 header the app reads and prose underneath that goes to the model.
+
+What she *looks* like is not one of them. That is the photograph you gave her,
+and she is shown it directly at the start of every conversation rather than
+told about it — see [Her face](#her-face).
 
 | File              | What it decides                                             |
 | ----------------- | ----------------------------------------------------------- |
 | `personality.md`  | How she thinks, jokes, argues, and cares                     |
 | `identity.md`     | Age, gender, ethnicity, where she is from                    |
-| `appearance.md`   | Height, hairstyle, hair and eye colour, body type, how she dresses |
 | `voice.md`        | Which of the 30 Gemini voices she speaks in                  |
 | `mood.md`         | Her baseline temperament and how hard events move her        |
 | `relationship.md` | Who you are to her                                           |
@@ -78,10 +81,9 @@ Edit them in a text editor, or in the app under **Profile**. Changes take effect
 the next time she wakes — a Live session's system instruction is fixed when the
 session opens, and the UI says so rather than pretending otherwise.
 
-The default Anna is 26, Chinese-American, from Oakland; 5'6" and slim with a
-blunt chin-length black bob, dark brown eyes and a small scar through her left
-eyebrow. Warm, dry, and hard to embarrass. All of that is in the files and none
-of it is in the code.
+The default Anna is 26, Chinese-American, from Oakland. Warm, dry, and hard to
+embarrass. All of that is in the files and none of it is in the code — and what
+she looks like is whatever photograph you give her.
 
 Delete a file and it comes back with its default. Put a nonsense value in one
 and it falls back rather than failing to start.
@@ -89,7 +91,15 @@ and it falls back rather than failing to start.
 ### Her face
 
 She asks for one. On a fresh install the interface offers **Give her a face**
-before anything else, because everything about how she looks depends on it.
+before anything else, because it is the only answer to what she looks like —
+there is no written description anywhere, deliberately.
+
+At the start of every conversation the photograph itself is put into her
+context, so she can describe what is actually in it rather than reciting
+adjectives. There used to be an `appearance.md` beside it; when the two
+disagreed, the disagreement was visible — generated pictures kept the face from
+the photograph and the hair from the prose. A photograph cannot disagree with
+itself.
 
 Two ways in, and they are the same underneath:
 

@@ -115,13 +115,46 @@ test('waking builds a prompt that actually contains who she is', async () => {
 
   const prompt = f.systemInstructions[0] ?? '';
   assert.match(prompt, /not an assistant/, 'her personality must reach the model');
-  assert.match(prompt, /dark brown/, 'her eye colour is in the prompt for a reason');
-  assert.match(prompt, /5 ft 6 in/, 'and her height');
+  assert.match(
+    prompt,
+    /no face yet/,
+    'with no photograph she must say so rather than invent a description',
+  );
   assert.match(prompt, /Chinese-American/);
   assert.match(prompt, /⟦director⟧/, 'without this she answers a stage direction out loud');
   assert.match(prompt, /⟦context⟧/);
   assert.match(prompt, /you can hear them/, 'the senses that are on must be stated');
   assert.match(prompt, /988/, 'the crisis floor is not optional');
+  await f.companion.sleep();
+});
+
+test('her photograph is put into the conversation, not described in it', async () => {
+  /*
+   * The whole point of deleting appearance.md. A photograph cannot disagree
+   * with itself; a paragraph beside one can, and did — generated pictures kept
+   * the face from the photograph and the hair from the prose.
+   */
+  const f = await fixture();
+  const png = Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000001900000021808060000001f15c489',
+    'hex',
+  );
+  await f.brain.avatar.setSource(png, 'image/png');
+  await f.companion.wake();
+
+  const sent = f.socket().content.map((entry) => JSON.stringify(entry.turns));
+  const withImage = sent.find((body) => body.includes('inlineData'));
+  assert.ok(withImage, 'she was never shown her own face');
+  assert.match(withImage, /image\/png/);
+  assert.match(withImage, /This is you/);
+
+  // Sent as context, so she absorbs it rather than answering a photograph.
+  const entry = f.socket().content.find((each) => JSON.stringify(each.turns).includes('inlineData'));
+  assert.equal(entry?.turnComplete, false);
+
+  const prompt = f.systemInstructions[0] ?? '';
+  assert.match(prompt, /shown a photograph of yourself/);
+  assert.ok(!/eye colour|hairstyle|body type/i.test(prompt), 'the prose description is back');
   await f.companion.sleep();
 });
 
