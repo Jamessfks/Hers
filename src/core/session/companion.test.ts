@@ -129,7 +129,7 @@ test('a finished user turn is written to memory and lifts her mood', async () =>
 
   f.socket().emit({
     serverContent: { inputTranscription: { text: 'my sister is called Mei' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   const turns = f.brain.memory.liveTranscript(10);
   assert.equal(turns.at(-1)?.text, 'my sister is called Mei');
@@ -148,7 +148,7 @@ test('both halves of a turn reach the transcript and memory', async () => {
       outputTranscription: { text: 'Hey yourself.' },
       turnComplete: true,
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   const speakers = f.brain.memory.liveTranscript(10).map((turn) => turn.speaker);
   assert.deepEqual(speakers, ['user', 'anna']);
@@ -167,7 +167,7 @@ test('the feel tool moves her mood and tells the UI', async () => {
         { id: '1', name: 'feel', args: { warmth: 0.6, valence: 0.4, why: 'that was kind' } },
       ],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   assert.ok(f.brain.mood.read().current.warmth > before);
@@ -185,7 +185,7 @@ test('the remember tool writes a fact, and a bad kind does not lose it', async (
         { id: '1', name: 'remember', args: { kind: 'nonsense', text: 'He is dreading Thursday.' } },
       ],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   const recalled = await f.brain.memory.recall('Thursday');
@@ -208,7 +208,7 @@ test('the show tool sends what is in the gallery and never invents one', async (
     toolCall: {
       functionCalls: [{ id: '1', name: 'show', args: { description: 'watching the rain' } }],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   assert.equal(f.shown.at(0)?.name, 'at-the-window-rainy.jpg');
@@ -217,7 +217,7 @@ test('the show tool sends what is in the gallery and never invents one', async (
     toolCall: {
       functionCalls: [{ id: '2', name: 'show', args: { description: 'riding a motorbike on mars' } }],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   assert.equal(f.shown.length, 1, 'a bad match is worse than no picture');
@@ -229,7 +229,7 @@ test('an unknown tool is answered rather than left hanging', async () => {
   await f.companion.wake();
   f.socket().emit({
     toolCall: { functionCalls: [{ id: '1', name: 'launch_missiles', args: {} }] },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   const responses = f.socket().tools[0] as Array<{ response: { ok: boolean } }>;
@@ -338,7 +338,7 @@ test('memory carries between two conversations', async () => {
         { id: '1', name: 'remember', args: { kind: 'identity', text: 'His sister is Mei.' } },
       ],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
   await f.companion.sleep();
 

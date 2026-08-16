@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PROFILE_ORDER } from './profile-order.ts';
-import { PROFILE_FILES } from '../core/profile/types.ts';
+import { PROFILE_ORDER } from '../../web/profile-order.ts';
+import { PROFILE_FILES } from './types.ts';
 
 /**
  * The browser cannot import the server's copy of this list — that module is

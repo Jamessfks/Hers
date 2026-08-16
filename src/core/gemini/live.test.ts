@@ -252,10 +252,10 @@ test('audio parts become audio and transcripts accumulate until the turn closes'
       },
       outputTranscription: { text: 'You are up ' },
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   socket.emit({
     serverContent: { outputTranscription: { text: 'early.' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   assert.equal(f.audio.length, 1);
   assert.equal(f.audio[0]?.toString(), 'hi');
@@ -270,10 +270,10 @@ test('the transcript buffer resets between turns', async () => {
 
   socket.emit({
     serverContent: { outputTranscription: { text: 'first' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   socket.emit({
     serverContent: { outputTranscription: { text: 'second' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   assert.equal(f.annaText.at(-1)?.text, 'second', 'a turn must not inherit the last one');
 });
@@ -285,11 +285,11 @@ test('being interrupted clears what she was going to say', async () => {
 
   socket.emit({
     serverContent: { outputTranscription: { text: 'I was going to say' } },
-  } as LiveServerMessage);
-  socket.emit({ serverContent: { interrupted: true } } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
+  socket.emit({ serverContent: { interrupted: true } } as unknown as LiveServerMessage);
   socket.emit({
     serverContent: { outputTranscription: { text: 'Sorry.' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   assert.equal(f.interruptions, 1);
   assert.equal(
@@ -317,7 +317,7 @@ test('every tool call gets a response, including one that throws', async () => {
         { id: 'b', name: 'boom', args: {} },
       ],
     },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   const responses = f.latest().toolResponses[0] as Array<{ id: string; response: unknown }>;
@@ -331,7 +331,7 @@ test('a non-object tool result is still a valid response', async () => {
   await f.live.start();
   f.latest().emit({
     toolCall: { functionCalls: [{ id: 'a', name: 'show', args: {} }] },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   await settle();
 
   const responses = f.latest().toolResponses[0] as Array<{ response: unknown }>;
@@ -346,10 +346,10 @@ test('a resumption handle is carried into the reconnect', async () => {
 
   f.latest().emit({
     sessionResumptionUpdate: { resumable: true, newHandle: 'handle-one' },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
   f.latest().emit({
     sessionResumptionUpdate: { resumable: true, newHandle: 'handle-two' },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   f.latest().fail('dropped');
   await new Promise((resolve) => setTimeout(resolve, 600));
@@ -367,7 +367,7 @@ test('a handle marked unresumable is not kept', async () => {
   await f.live.start();
   f.latest().emit({
     sessionResumptionUpdate: { resumable: false, newHandle: 'do-not-use' },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   f.latest().fail('dropped');
   await new Promise((resolve) => setTimeout(resolve, 600));
@@ -379,7 +379,7 @@ test('goAway rebuilds before the socket dies, not after', async () => {
   await f.live.start();
   const first = f.latest();
 
-  first.emit({ goAway: { timeLeft: '5s' } } as LiveServerMessage);
+  first.emit({ goAway: { timeLeft: '5s' } } as unknown as LiveServerMessage);
   await new Promise((resolve) => setTimeout(resolve, 700));
 
   assert.equal(f.configs.length, 2, 'a goAway must be acted on rather than waited out');
@@ -438,13 +438,13 @@ test('a message from a socket that has been replaced is ignored', async () => {
   await f.live.start();
   const first = f.latest();
 
-  first.emit({ goAway: { timeLeft: '1s' } } as LiveServerMessage);
+  first.emit({ goAway: { timeLeft: '1s' } } as unknown as LiveServerMessage);
   await new Promise((resolve) => setTimeout(resolve, 700));
 
   // The old socket is still capable of emitting; nothing it says counts.
   first.emit({
     serverContent: { outputTranscription: { text: 'ghost' }, turnComplete: true },
-  } as LiveServerMessage);
+  } as unknown as LiveServerMessage);
 
   assert.equal(f.annaText.length, 0, 'a superseded socket spoke into the live conversation');
 });

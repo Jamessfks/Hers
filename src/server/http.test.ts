@@ -69,6 +69,19 @@ test('the site is served, and unknown paths fall back to it', async () => {
   assert.equal(unknown.status, 200, 'a single-page app needs its own 404 handling');
 });
 
+test('a directory serves its own index, not the app shell', async () => {
+  const app = await serve();
+  await mkdir(path.join(app.root, 'web', 'call'), { recursive: true });
+  await writeFile(path.join(app.root, 'web', 'call', 'index.html'), '<title>Calling Anna</title>');
+
+  const response = await app.get('/call/');
+  assert.match(
+    await response.text(),
+    /Calling Anna/,
+    'falling through to the app shell here looks exactly like the call page being broken',
+  );
+});
+
 test('status is JSON', async () => {
   const app = await serve();
   const response = await app.get('/api/status');

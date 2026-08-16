@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex" />
+    <title>Calling Anna</title>
+
+    <!--
+      The phone's end of a call.
+
+      One static file, deliberately. It is served from GitHub Pages — or any
+      static host — because a phone cannot reach the machine Anna runs on, and
+      opening a port or running a tunnel is a worse thing to ask of someone
+      than a free LiveKit project. Nothing here talks to Anna's server at all:
+      the page joins a LiveKit room, Anna joins the same room from her side,
+      and LiveKit is the only thing either end has to reach.
+
+      The room name and the token arrive in the URL *fragment*. A fragment is
+      never sent to the server hosting this page, never lands in its logs, and
+      does not survive into a Referer header — which matters, because this is
+      hosting we do not control and that token is a credential.
+    -->
+
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c0d12;
+        --raised: #15161f;
+        --line: #24263180;
+        --text: #eceaf5;
+        --dim: #8b8a9e;
+        --accent: #7b6bff;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        position: relative;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      /* The camera fills the screen: this is a video call, so they should see
+         what they are pointing at her. */
+      #self {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1);
+        opacity: 0.9;
+      }
+      .veil {
+        position: relative;
+        text-align: center;
+        padding: 24px;
+        z-index: 1;
+        text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+      }
+      .orb {
+        width: 108px;
+        height: 108px;
+        margin: 0 auto 20px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 34% 30%, #c7b6ff, #6c5ce7 62%, #3b2f8f);
+        box-shadow: 0 0 60px rgba(124, 108, 255, 0.5);
+        transition: transform 110ms ease-out, box-shadow 160ms ease-out;
+      }
+      body[data-state='talking'] .orb {
+        transform: scale(1.09);
+        box-shadow: 0 0 96px rgba(124, 108, 255, 0.75);
+      }
+      h1 { margin: 0 0 6px; font-size: 21px; font-weight: 560; letter-spacing: -0.01em; }
+      p { margin: 0; color: var(--dim); font-size: 14px; max-width: 30ch; margin-inline: auto; }
+      footer {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 40%);
+      }
+      button {
+        font: inherit;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 13px 26px;
+        background: var(--raised);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.go { background: var(--accent); border-color: transparent; color: #0b0a10; font-weight: 600; }
+      button.end { background: #c4453c; border-color: transparent; color: #fff; }
+      button[hidden] { display: none; }
+      .error { color: #f0a5a0; }
+    </style>
+  </head>
+  <body data-state="idle">
+    <main>
+      <video id="self" autoplay playsinline muted hidden></video>
+      <div class="veil">
+        <div class="orb"></div>
+        <h1 id="title">Anna</h1>
+        <p id="status">Tap to call.</p>
+      </div>
+    </main>
+
+    <footer>
+      <button class="go" id="join" type="button">Call</button>
+      <button class="end" id="leave" type="button" hidden>Hang up</button>
+    </footer>
+
+    <script type="module">
+      import {
+        Room,
+        RoomEvent,
+        createLocalTracks,
+      } from 'https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.esm.mjs';
+
+      const $ = (id) => document.getElementById(id);
+      const status = $('status');
+      const title = $('title');
+      const joinButton = $('join');
+      const leaveButton = $('leave');
+      const self = $('self');
+
+      const params = new URLSearchParams(location.hash.slice(1));
+      const url = params.get('url');
+      const token = params.get('token');
+      title.textContent = params.get('name') || 'Anna';
+
+      let room = null;
+
+      if (!url || !token) {
+        status.textContent = 'This link is missing its call details. Ask her for a new one.';
+        status.className = 'error';
+        joinButton.hidden = true;
+      }
+
+      joinButton.addEventListener('click', async () => {
+        joinButton.disabled = true;
+        status.textContent = 'Connecting…';
+
+        try {
+          /*
+           * Tracks are created before connecting on purpose. The permission
+           * prompt then happens while the user is still looking at the button
+           * they just pressed, rather than a second later against a screen
+           * that says "connected" — and if they refuse, nothing has joined
+           * anything yet.
+           */
+          const tracks = await createLocalTracks({
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: { facingMode: 'user' },
+          });
+
+          room = new Room({ adaptiveStream: true, dynacast: true });
+
+          room.on(RoomEvent.TrackSubscribed, (track) => {
+            if (track.kind === 'audio') {
+              // Attaching to a detached element is what actually plays her
+              // voice; iOS will not play it any other way.
+              const element = track.attach();
+              element.autoplay = true;
+              element.setAttribute('playsinline', '');
+              document.body.append(element);
+            }
+          });
+
+          room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+            const annaTalking = speakers.some((speaker) => speaker.identity === 'anna');
+            document.body.dataset.state = annaTalking ? 'talking' : 'connected';
+          });
+
+          room.on(RoomEvent.Disconnected, () => finish('Call ended.'));
+
+          await room.connect(url, token);
+          for (const track of tracks) await room.localParticipant.publishTrack(track);
+
+          const camera = tracks.find((track) => track.kind === 'video');
+          if (camera) {
+            camera.attach(self);
+            self.hidden = false;
+          }
+
+          status.textContent = 'She can see you and hear you.';
+          document.body.dataset.state = 'connected';
+          joinButton.hidden = true;
+          leaveButton.hidden = false;
+        } catch (error) {
+          joinButton.disabled = false;
+          status.className = 'error';
+          status.textContent =
+            error && error.name === 'NotAllowedError'
+              ? 'Camera and microphone were refused. If this opened inside Telegram, open it in Safari or Chrome instead.'
+              : `Could not connect: ${error?.message ?? error}`;
+        }
+      });
+
+      leaveButton.addEventListener('click', () => room?.disconnect());
+
+      function finish(message) {
+        status.className = '';
+        status.textContent = message;
+        document.body.dataset.state = 'idle';
+        self.hidden = true;
+        leaveButton.hidden = true;
+        joinButton.hidden = false;
+        joinButton.disabled = false;
+        room = null;
+      }
+
+      // Leaving the page must actually leave the room, or Anna sits in an
+      // empty call until her own timeout fires.
+      addEventListener('pagehide', () => room?.disconnect());
+    </script>
+  </body>
+</html>

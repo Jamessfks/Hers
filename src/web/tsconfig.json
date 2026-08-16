@@ -23,5 +23,11 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["./**/*.ts", "../shared/**/*.ts"]
+  "include": ["./**/*.ts", "../shared/**/*.ts"],
+  /*
+   * Tests run in Node, not in a tab, so they belong to the other project. Left
+   * in here they fail on `node:test` — which has nothing to do with the browser
+   * code they are checking.
+   */
+  "exclude": ["**/*.test.ts", "../shared/**/*.test.ts"]
 }

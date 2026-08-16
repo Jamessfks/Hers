@@ -1,0 +1,45 @@
+# Publishes the phone's call page.
+#
+# `call/` is one static HTML file and it has to be somewhere public, because a
+# phone cannot reach the machine Anna runs on — that is the entire reason the
+# LiveKit bridge exists. GitHub Pages is free, is HTTPS (which `getUserMedia`
+# requires), and is already where this repository lives.
+#
+# Nothing secret is published. The page is inert until it is opened with a room
+# and a token in its URL fragment, and Anna's server mints those locally.
+#
+# Enable it once under Settings -> Pages -> Source: GitHub Actions, then point
+# ANNA_CALL_PAGE_URL at https://<you>.github.io/<repo>/
+
+name: Publish the call page
+
+on:
+  push:
+    branches: [main]
+    paths: ['call/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: call
+      - id: deploy
+        uses: actions/deploy-pages@v4

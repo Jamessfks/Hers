@@ -118,9 +118,7 @@ async function serveStatic(
     return;
   }
 
-  const file = existsSync(target) && (await stat(target)).isFile()
-    ? target
-    : path.join(root, 'index.html');
+  const file = (await resolveFile(target)) ?? path.join(root, 'index.html');
 
   const { size } = await stat(file);
   response.writeHead(200, {
@@ -129,6 +127,22 @@ async function serveStatic(
     'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000',
   });
   createReadStream(file).pipe(response);
+}
+
+/**
+ * A file, or the `index.html` inside a directory, or nothing.
+ *
+ * The directory case is what makes `/call/` work rather than silently falling
+ * through to the app's own index — which looks, from the outside, exactly like
+ * the call page being broken.
+ */
+async function resolveFile(target: string): Promise<string | null> {
+  if (!existsSync(target)) return null;
+  const stats = await stat(target);
+  if (stats.isFile()) return target;
+  if (!stats.isDirectory()) return null;
+  const index = path.join(target, 'index.html');
+  return existsSync(index) ? index : null;
 }
 
 function send(response: ServerResponse, status: number, type: string, body: string): void {
