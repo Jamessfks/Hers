@@ -6,18 +6,38 @@
  * "Anna is broken". So capabilities are declared here and the session strips
  * anything the chosen model cannot take.
  *
- * Facts as documented by Google at the time of writing:
+ * As documented by Google:
  *
  *   gemini-2.5-flash-native-audio-preview-12-2025
  *     Native audio. Supports affective dialog and proactive audio.
  *   gemini-3.1-flash-live-preview
  *     Newer, native audio, thinking. Affective dialog and proactive audio are
- *     explicitly *not yet supported*, and function calling is synchronous only.
+ *     documented as not yet supported.
  *
- * Anna defaults to the 2.5 native-audio model, and the reason is narrow: mood
- * is a headline feature here, and `enableAffectiveDialog` is what puts the mood
- * in her actual voice rather than only in her word choice. Set `ANNA_MODEL` to
- * the 3.1 model to trade that for the newer model's reasoning.
+ * ## Why the default is 3.1, despite 2.5 having the feature we wanted
+ *
+ * Measured, not read. On `gemini-2.5-flash-native-audio-preview-12-2025`,
+ * **function declarations combined with audio input close the socket with
+ * `1011 Internal error occurred.`** Reproduced every time, and narrowed by
+ * bisection:
+ *
+ *     tools + text input     works
+ *     audio input, no tools  works
+ *     tools + audio input    1011, immediately, on every attempt
+ *
+ * The same session config on `gemini-3.1-flash-live-preview` works with one
+ * tool and with all of them.
+ *
+ * That is not a trade worth making. Anna's tools are how she feels, remembers,
+ * sends a picture and moves her face; a model that drops the connection the
+ * moment a user *speaks to her with tools attached* has no working voice path
+ * at all. `enableAffectiveDialog` — mood carried in the voice rather than only
+ * in word choice — is the thing 2.5 was chosen for, and it is a refinement of a
+ * feature, not the feature.
+ *
+ * So: 3.1 by default, mood still reaches her through the prompt, and
+ * `ANNA_MODEL` will still select 2.5 for anyone who wants affective dialog and
+ * can live without tools on the voice path.
  */
 
 export interface ModelCapabilities {
@@ -25,6 +45,13 @@ export interface ModelCapabilities {
   proactiveAudio: boolean;
   /** Native-audio models take `speechConfig`; all Live models here do. */
   nativeAudio: boolean;
+  /**
+   * Whether function declarations survive being combined with audio input.
+   *
+   * A strange thing to have to record about a model, and it is here because one
+   * of them does not.
+   */
+  toolsWithAudio: boolean;
 }
 
 const CAPABILITIES: Record<string, ModelCapabilities> = {
@@ -32,15 +59,18 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
     affectiveDialog: true,
     proactiveAudio: true,
     nativeAudio: true,
+    // See the header: tools plus audio input is a 1011 on this model.
+    toolsWithAudio: false,
   },
   'gemini-3.1-flash-live-preview': {
     affectiveDialog: false,
     proactiveAudio: false,
     nativeAudio: true,
+    toolsWithAudio: true,
   },
 };
 
-export const DEFAULT_LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+export const DEFAULT_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 
 export const KNOWN_LIVE_MODELS = Object.keys(CAPABILITIES);
 
@@ -57,6 +87,9 @@ export function capabilitiesOf(model: string): ModelCapabilities {
       affectiveDialog: false,
       proactiveAudio: false,
       nativeAudio: true,
+      // Optimistic on this one alone: refusing tools by default would silently
+      // disable half of Anna on every model released after this file.
+      toolsWithAudio: true,
     }
   );
 }

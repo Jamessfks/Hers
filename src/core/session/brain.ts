@@ -118,7 +118,18 @@ export class Brain {
     return this.memory.turnCount() > 0 || Boolean(this.memory.runningSummary());
   }
 
+  /**
+   * Shuts down without losing the conversation that just happened.
+   *
+   * Consolidation is fired and not awaited everywhere else, deliberately — it
+   * costs a model call and a companion that pauses to think about its filing
+   * system has a stutter. But at shutdown there is nothing left to be slow for,
+   * and *not* waiting here means quitting right after a conversation throws
+   * away every fact it contained. Found by the live audit: a fact stated in one
+   * session was missing from the next, because the process had moved on before
+   * the distillation finished.
+   */
   async close(): Promise<void> {
-    await this.mood.flush();
+    await Promise.allSettled([this.memory.consolidate(), this.mood.flush()]);
   }
 }

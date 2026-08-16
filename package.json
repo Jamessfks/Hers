@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p src/web/tsconfig.json --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
     "check": "npm run typecheck && npm run test",
-    "doctor": "node src/server/doctor.ts"
+    "doctor": "node src/server/doctor.ts",
+    "audit": "node scripts/audit.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

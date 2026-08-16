@@ -307,9 +307,9 @@ export class LiveConversation {
             if (generation !== this.#generation || this.#closing) return;
             this.#scheduleReconnect(describeError(error));
           },
-          onclose: () => {
+          onclose: (event) => {
             if (generation !== this.#generation || this.#closing) return;
-            this.#scheduleReconnect('the connection closed');
+            this.#scheduleReconnect(describeClose(event));
           },
         },
       });
@@ -371,14 +371,39 @@ export class LiveConversation {
     };
 
     if (this.#options.tools?.length) {
-      config.tools = [{ functionDeclarations: this.#options.tools }];
+      if (caps.toolsWithAudio) {
+        config.tools = [{ functionDeclarations: this.#options.tools }];
+      } else {
+        /*
+         * Deliberately dropped rather than sent.
+         *
+         * On a model where tools and audio input cannot coexist, attaching them
+         * does not degrade the session — it closes it with a 1011 the instant
+         * the user speaks, over and over. A companion who cannot use her tools
+         * is diminished; one who disconnects whenever she is spoken to does not
+         * work at all.
+         */
+        this.#options.handlers.onTrouble(
+          `${this.#options.model} drops the connection when tools are used with speech, so she is running without them. Use ANNA_MODEL=gemini-3.1-flash-live-preview to get them back.`,
+        );
+      }
     }
     if (caps.affectiveDialog) config.enableAffectiveDialog = true;
 
     return config;
   }
 
+  /**
+   * `ANNA_DEBUG=1` prints every reconnect and why.
+   *
+   * Off by default because a single reconnect is routine and not worth a line
+   * in someone's terminal. On, because the alternative is what happened here:
+   * a model-specific server fault closing the socket on every spoken turn,
+   * which from the outside was indistinguishable from "she just doesn't
+   * answer". The reason string is the whole diagnosis.
+   */
   #scheduleReconnect(reason: string): void {
+    if (process.env.ANNA_DEBUG) console.error(`[live] reconnecting — ${reason}`);
     if (this.#closing || this.#reconnectTimer) return;
     this.#socket = null;
     this.#setState('reconnecting');
@@ -495,6 +520,24 @@ export class LiveConversation {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A close event, in enough detail to act on.
+ *
+ * The code and reason are the only thing that distinguishes "the server is
+ * rotating you" from "your setup was rejected" from "the network went away",
+ * and they arrive on the close event. Discarding them — which this did — leaves
+ * every disconnection looking identical in the logs, which is exactly the
+ * situation where you most need them to differ.
+ */
+function describeClose(event: unknown): string {
+  if (!isRecord(event)) return 'the connection closed';
+  const code = Number(event.code);
+  const reason = typeof event.reason === 'string' ? event.reason.trim() : '';
+  const parts = [reason || 'the connection closed'];
+  if (Number.isFinite(code) && code !== 0) parts.push(`(code ${code})`);
+  return parts.join(' ');
 }
 
 export function describeError(error: unknown): string {

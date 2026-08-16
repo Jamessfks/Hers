@@ -231,11 +231,28 @@ The short one:
 
 ```bash
 npm run dev        # rebuilds the site and restarts the server on save
-npm run check      # typecheck + the full test suite
+npm run check      # typecheck + the full test suite, no API key needed
 npm run doctor     # opens a real Gemini session and reports what works
+npm run audit      # every success criterion, against the real APIs
 ```
 
-`npm run doctor` is the one thing the tests cannot do. Every test here fakes the
+`npm run audit` is the one that matters when something feels wrong. It speaks to
+her with real synthesised speech, shows her real images, waits for her to open a
+conversation on her own, and holds an audio+video session open past the point
+Google documents it as ending — and prints what it actually observed rather than
+only a verdict. It costs a few cents. `--quick` skips the multi-minute checks,
+`--paid` includes image generation, `--only=mood` runs one of them.
+
+Set `ANNA_DEBUG=1` to have every reconnect print its reason. A single reconnect
+is routine; a stream of them with the same reason is a diagnosis.
+
+These two exist because the unit tests, by design, prove that the code does what
+it was written to do — not that Gemini does what its documentation says. That
+gap is not academic: the audit found that the model this project originally
+shipped with closes the connection with an internal error whenever function
+calling is combined with speech, which no amount of reading would have caught.
+
+`npm run doctor` is the smallest version of that. Every test here fakes the
 network deliberately — a reconnect is not reproducible against a real socket,
 and a suite that needs an API key is a suite nobody runs — so `doctor` covers the
 gap: it opens a real Live session, says one thing, waits for audio, and tells you
