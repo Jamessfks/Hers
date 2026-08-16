@@ -12,7 +12,12 @@ import { test } from 'node:test';
 import {
   completeClip,
   createLibrary,
+  evictClip,
+  notePlayed,
+  parseLibrary,
   recordSeam,
+  reconcile,
+  requeueClip,
   startGenerating,
   unverifiedClips,
   type ClipLibrary,
@@ -108,4 +113,96 @@ test('a verified clip does not reappear on the queue after another change', () =
   const verified = recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' });
   const andAnother = completeClip(verified, 'nod', { file: 'nod.mp4', durationMs: 4000 });
   assert.deepEqual(unverifiedClips(andAnother), ['nod']);
+});
+
+/*
+ * The verdict has to outlive the process, and it did not.
+ *
+ * `save` serialises the whole entry, so `verified` reached the manifest — and
+ * `parseEntry` dropped it on the way back, along with `lastPlayedAt`. Every
+ * launch therefore started from "measured nothing, played nothing", which
+ * re-decoded a library's worth of video to reach conclusions already written
+ * down, and reduced the eviction ordering to BUILD_ORDER.
+ */
+test('a measurement survives a restart', () => {
+  const measured = recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' });
+  const reloaded = parseLibrary(JSON.parse(JSON.stringify(measured)))!;
+  assert.equal(reloaded.clips['wave'].verified, true);
+  assert.deepEqual(unverifiedClips(reloaded), [], 'and is not measured all over again');
+});
+
+test('a drifting clip is measured once, not on every launch', () => {
+  // `verified: false` is a third state, not a falsy one. Testing it for
+  // truthiness put every drifting clip back on the queue forever.
+  const drifted = recordSeam(withClip(), 'wave', { closesCleanly: false, summary: 'moved 40%' });
+  assert.equal(drifted.clips['wave'].verified, false);
+  assert.deepEqual(unverifiedClips(drifted), []);
+
+  const reloaded = parseLibrary(JSON.parse(JSON.stringify(drifted)))!;
+  assert.equal(reloaded.clips['wave'].verified, false);
+  assert.deepEqual(unverifiedClips(reloaded), []);
+});
+
+test('when the file used goes, so does the verdict about it', () => {
+  const measured = recordSeam(withClip(), 'wave', { closesCleanly: false, summary: 'moved 40%' });
+
+  // Evicted for room: the bytes are deleted, so there is nothing measured.
+  const evicted = evictClip(measured, 'wave');
+  assert.equal(evicted.clips['wave'].verified, undefined);
+
+  // Rendered again into the same slot: new bytes, and it goes back on the queue
+  // rather than inheriting the previous occupant's verdict.
+  const again = completeClip(
+    startGenerating(evicted, 'wave'),
+    'wave',
+    { file: 'wave.mp4', durationMs: 4000 },
+  );
+  assert.equal(again.clips['wave'].verified, undefined);
+  assert.deepEqual(unverifiedClips(again), ['wave']);
+});
+
+test('a slot put back in the queue forgets what was measured about the old clip', () => {
+  const measured = recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' });
+  const requeued = requeueClip(measured, 'wave', 'user asked for a redo');
+  assert.equal(requeued.clips['wave'].verified, undefined);
+});
+
+test('a clip that fails its seam at write time is not measured again later', () => {
+  // completeClip fails it, leaving the paid-for bytes on disk. reconcile then
+  // finds those bytes and promotes the slot back to ready on the next launch —
+  // at which point nothing should ask the renderer to reach the same verdict.
+  const failed = completeClip(
+    startGenerating(createLibrary({ sourceHash: 'abc', sourceFile: 's.jpg', providerId: 'hedra' }), 'wave'),
+    'wave',
+    { file: 'wave.mp4', durationMs: 4000, seam: { closesCleanly: false, summary: 'moved 40%' } },
+  );
+  assert.equal(failed.clips['wave'].status, 'failed');
+
+  const recovered = reconcile(failed, new Set(['wave.mp4']));
+  assert.equal(recovered.clips['wave'].status, 'ready');
+  assert.deepEqual(unverifiedClips(recovered), []);
+});
+
+test('different bytes in the same slot are measured again', () => {
+  // Someone drops a `.webm` over our `.mp4`. The recorded verdict is about a
+  // file that is no longer there.
+  const measured = recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' });
+  const swapped = reconcile(measured, new Set(['wave.webm']));
+  assert.equal(swapped.clips['wave'].file, 'wave.webm');
+  assert.deepEqual(unverifiedClips(swapped), ['wave']);
+});
+
+test('when a clip was last played survives a restart', () => {
+  // Without this the eviction ordering starts every session believing nothing
+  // has ever been played, which collapses least-recently-used into BUILD_ORDER.
+  const played = notePlayed(withClip(), 'wave', 1_700_000_000_000);
+  const reloaded = parseLibrary(JSON.parse(JSON.stringify(played)))!;
+  assert.equal(reloaded.clips['wave'].lastPlayedAt, 1_700_000_000_000);
+});
+
+test('a play reported for a slot that is not in the library is ignored', () => {
+  // The renderer is the one that knows what reached the screen, so this name
+  // now crosses a process boundary and is an input rather than a constant.
+  const library = withClip();
+  assert.equal(notePlayed(library, 'not_a_slot' as never), library);
 });

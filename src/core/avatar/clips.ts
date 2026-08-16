@@ -108,12 +108,19 @@ export interface ClipJobRef {
 
 export interface ClipEntry {
   /**
-   * True when this clip's loop closure was actually measured.
+   * What the seam measurement concluded, or absent if nobody has measured.
    *
-   * A hand-dropped clip, or one recovered from disk after a crash, has bytes
-   * but no verdict. It plays — refusing to would make the feature unusable —
-   * but nothing claims it is seamless, and the setup screen can offer to check
-   * it rather than quietly implying it already has been.
+   * Three states, not two. A hand-dropped clip, or one recovered from disk
+   * after a crash, has bytes but no verdict: it plays — refusing to would make
+   * the feature unusable — but nothing claims it is seamless, and the setup
+   * screen can offer to check it rather than quietly implying it already has
+   * been. `false` is a different thing again: measured, and it drifts. That
+   * clip also keeps playing (see {@link recordSeam}), but it has been looked at
+   * and there is nothing to learn by looking again, so it is not on the queue.
+   *
+   * Every transition that changes or removes the bytes clears this back to
+   * absent, because a verdict belongs to a particular file rather than to a
+   * slot.
    */
   verified?: boolean;
   slot: ClipSlotName;
@@ -292,10 +299,25 @@ function withEntry(
   if (patch.status && !canTransition(current.status, patch.status)) {
     throw new Error(`${slot}: cannot go from ${current.status} to ${patch.status}`);
   }
-  return {
-    ...library,
-    clips: { ...library.clips, [slot]: { ...current, ...patch, updatedAt: now } },
-  };
+
+  const next: ClipEntry = { ...current, ...patch, updatedAt: now };
+  /*
+   * `undefined` in a patch clears the field rather than writing the key.
+   *
+   * `verified` has three states and the third one is *absent* — see the note on
+   * it — so something has to be able to put a slot back to "never measured".
+   * Spreading `{ verified: undefined }` leaves the key present holding
+   * undefined, which reads the same everywhere in this module and is not the
+   * same on disk: `JSON.stringify` drops it, so the library in memory and the
+   * library reloaded from the manifest stop being deep-equal. That difference
+   * is invisible until something compares them, which is exactly the kind of
+   * bug a manifest is not allowed to have.
+   */
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete (next as unknown as Record<string, unknown>)[key];
+  }
+
+  return { ...library, clips: { ...library.clips, [slot]: next } };
 }
 
 /**
@@ -390,6 +412,11 @@ export function completeClip(
         file: clip.file,
         durationMs: clip.durationMs,
         job: null,
+        // Measured, and it drifts. Recorded so that if the bytes are later
+        // promoted back to `ready` — reconcile does that for any file it finds
+        // on disk — nothing asks the renderer to decode them again to reach the
+        // verdict already written here.
+        verified: false,
         error: `Clip does not return to the source pose — ${clip.seam.summary}`,
         spentUsd: entry.spentUsd + (clip.costUsd ?? 0),
       },
@@ -406,9 +433,11 @@ export function completeClip(
       // A measured cut point beats the nominal one: the hold keeps breathing,
       // so a fixed timestamp lands at an arbitrary phase of that movement.
       durationMs: clip.seam?.cutAtMs ?? clip.durationMs,
-      // Only written when true: an absent flag already means "not measured",
-      // and a `false` in every manifest is noise that has to round-trip.
-      ...(clip.seam ? { verified: true } : {}),
+      // Written either way, including as `undefined`. These are new bytes, so
+      // whatever verdict the slot's previous occupant earned is about a file
+      // that no longer exists — leaving it in place would mean a fresh render
+      // inheriting "already measured" and never being looked at.
+      verified: clip.seam ? true : undefined,
       job: null,
       error: null,
       spentUsd: entry.spentUsd + (clip.costUsd ?? 0),
@@ -500,8 +529,11 @@ export function notePlayed(
   slot: ClipSlotName,
   now = Date.now(),
 ): ClipLibrary {
-  const entry = library.clips[slot];
-  if (entry.status !== 'ready') return library;
+  // Guarded rather than indexed straight through, because the caller is now the
+  // renderer reporting what it actually put on screen (see main/index.ts), and
+  // a name that crosses a process boundary is an input rather than a constant.
+  const entry = library.clips[slot] as ClipEntry | undefined;
+  if (!entry || entry.status !== 'ready') return library;
   // Straight through rather than via `withEntry`: this is not a state change and
   // must not touch `updatedAt`, which several other things read as "when did
   // this slot last actually change".
@@ -565,7 +597,11 @@ export function evictClip(
       durationMs: 0,
       job: null,
       error: null,
-      verified: false,
+      // Cleared rather than set false: the file is about to be deleted, so
+      // there is nothing measured any more. `false` would say "measured, and it
+      // drifts" about a clip that no longer exists, and would keep the slot off
+      // the verification queue after it was re-rendered.
+      verified: undefined,
       // Attempts reset too: this slot is being given up for room, not because
       // anything about it failed, and carrying a strike into its next life
       // would exhaust a perfectly renderable gesture.
@@ -578,13 +614,17 @@ export function evictClip(
 /**
  * Clips that are on disk and playable but whose seam has never been measured.
  *
- * The renderer asks for this list and works through it. `verified` is only ever
- * written as `true`, so its absence is the question rather than a third state.
+ * The renderer asks for this list and works through it. Never-measured is
+ * `verified === undefined`, which is not the same as falsy: a clip measured and
+ * found to drift is recorded `verified: false` and stays off this list. Testing
+ * for falsy — which this did — put every drifting clip back on the queue on
+ * every launch, so the app re-decoded the same megabytes to reach the same
+ * verdict for the life of the library.
  */
 export function unverifiedClips(library: ClipLibrary): ClipSlotName[] {
   return BUILD_ORDER.filter((slot) => {
     const entry = library.clips[slot];
-    return entry.status === 'ready' && entry.file !== null && !entry.verified;
+    return entry.status === 'ready' && entry.file !== null && entry.verified === undefined;
   });
 }
 
@@ -638,7 +678,14 @@ export function requeueClip(
   reason: string | null = null,
   now = Date.now(),
 ): ClipLibrary {
-  return withEntry(library, slot, { status: 'pending', job: null, error: reason }, now);
+  // `verified` goes with it: whatever was measured was measured about bytes
+  // this slot is being re-rendered to replace.
+  return withEntry(
+    library,
+    slot,
+    { status: 'pending', job: null, error: reason, verified: undefined },
+    now,
+  );
 }
 
 /** Clear the attempt counter so a slot that hit {@link MAX_ATTEMPTS} can run. */
@@ -690,7 +737,21 @@ export function reconcile(
 
     if (file) {
       if (entry.status !== 'ready' || entry.file !== file) {
-        next = withEntry(next, slot, { status: 'ready', file, job: null, error: null }, now);
+        next = withEntry(
+          next,
+          slot,
+          {
+            status: 'ready',
+            file,
+            job: null,
+            error: null,
+            // A different file name in the slot is different bytes — someone
+            // dropped a `.webm` over our `.mp4` — so the recorded verdict is
+            // about a clip that is no longer there. Same name, same verdict.
+            ...(entry.file !== file ? { verified: undefined } : {}),
+          },
+          now,
+        );
       }
       continue;
     }
@@ -863,7 +924,26 @@ function parseEntry(raw: unknown, slot: ClipSlotName, now: number): ClipEntry {
       ? (raw.status as ClipStatus)
       : 'pending';
 
-  return {
+  /*
+   * `verified` and `lastPlayedAt` are read back, and their absence here was not
+   * cosmetic.
+   *
+   * Both are written to the manifest — `save` serialises the whole entry — and
+   * both were dropped on the way back in, so every launch started from
+   * "measured nothing, played nothing". That cost two different things.
+   * Measuring a clip means decoding a multi-megabyte video frame by frame, and
+   * {@link unverifiedClips} asks for exactly the slots with no `verified` flag,
+   * so a library that had been fully measured was measured again from scratch
+   * on every start, forever. And {@link evictionCandidate} orders by
+   * `lastPlayedAt` to answer "which of these is she not actually using" — with
+   * every clip reading as never-played, the answer collapsed to whichever came
+   * first in BUILD_ORDER, which is close to the opposite of least-recently-used.
+   *
+   * `verified` is only carried when it is literally `true` or `false`, keeping
+   * "absent means never measured" as the third state the rest of the module
+   * relies on.
+   */
+  const entry: ClipEntry = {
     slot,
     status,
     file: typeof raw.file === 'string' ? raw.file : null,
@@ -874,6 +954,11 @@ function parseEntry(raw: unknown, slot: ClipSlotName, now: number): ClipEntry {
     spentUsd: numberOr(raw.spentUsd, 0),
     updatedAt: numberOr(raw.updatedAt, now),
   };
+  if (typeof raw.verified === 'boolean') entry.verified = raw.verified;
+  if (typeof raw.lastPlayedAt === 'number' && Number.isFinite(raw.lastPlayedAt)) {
+    entry.lastPlayedAt = raw.lastPlayedAt;
+  }
+  return entry;
 }
 
 function parseJob(raw: unknown): ClipJobRef | null {
