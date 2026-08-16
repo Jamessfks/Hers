@@ -20,6 +20,7 @@
           <button class="ghost" id="face-open" type="button">Face</button>
           <button class="ghost" id="memory-open" type="button">Memory</button>
           <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
+          <button class="ghost" id="setup-open" type="button" aria-label="Setup">Setup</button>
         </div>
       </header>
 
@@ -154,6 +155,65 @@
         </div>
         <div class="memory-list" id="memory-list"></div>
         <p class="memory-summary" id="memory-summary" hidden></p>
+      </div>
+    </dialog>
+
+    <dialog class="settings" id="setup">
+      <form method="dialog" class="settings-head">
+        <h2>Setup</h2>
+        <button class="ghost" value="close" aria-label="Close">Close</button>
+      </form>
+
+      <div class="setup-body">
+        <section class="setup-block">
+          <h3>Gemini API key</h3>
+          <p class="settings-note">
+            This is the one thing she cannot work without. It is checked with Google
+            before it is saved, then written to the <code>.env</code> file next to
+            <code>package.json</code> — it stays on this machine and is never sent back
+            to this page.
+          </p>
+          <div class="setup-row">
+            <input
+              id="key-input"
+              type="password"
+              placeholder="AIza…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Gemini API key"
+            />
+            <button class="primary" id="key-save" type="button">Save</button>
+          </div>
+          <p class="setup-status" id="key-status"></p>
+          <p class="settings-note">
+            Get one at
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer noopener"
+              >aistudio.google.com/apikey</a
+            >.
+          </p>
+        </section>
+
+        <section class="setup-block danger-block">
+          <h3>Start over</h3>
+          <p class="settings-note">
+            Everything she has: what she remembers, this conversation and every
+            conversation on Telegram, her mood, her profile, her photograph and every
+            movement rendered from it. All of it deleted, and she meets you as a
+            stranger with a new face. Your API keys are not touched.
+          </p>
+          <div class="setup-row">
+            <input
+              id="reset-confirm"
+              type="text"
+              placeholder="Type: start over"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Type start over to confirm"
+            />
+            <button class="danger" id="reset-go" type="button" disabled>Delete everything</button>
+          </div>
+          <p class="setup-status" id="reset-status"></p>
+        </section>
       </div>
     </dialog>
 

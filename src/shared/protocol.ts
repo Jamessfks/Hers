@@ -168,6 +168,14 @@ export type ServerMessage =
       senses: Record<SenseName, boolean>;
       /** False when the server has no Gemini key; the UI shows setup instead. */
       configured: boolean;
+      /**
+       * The last four characters of the key in force, or empty.
+       *
+       * Enough to tell two keys apart and useless to anybody else. The key
+       * itself never leaves the server — Google's own guidance is that it must
+       * not be in anything client-side, and a local page is still client-side.
+       */
+      keyHint: string;
       telegram: boolean;
       livekit: boolean;
       /**

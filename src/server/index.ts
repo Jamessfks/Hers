@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { Brain } from '../core/session/brain.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
+import { applyGeminiKey, checkGeminiKey, maskKey } from './setup.ts';
 import { WebBridge } from './ws.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
@@ -31,33 +32,87 @@ const repoRoot = path.resolve(here, '..', '..');
 
 export async function main(): Promise<void> {
   loadDotEnv();
-  const config = loadConfig();
+  // Not `const`: pasting a key into the website re-reads the environment, and
+  // everything downstream has to be looking at the new one rather than the one
+  // this process happened to start with.
+  let config = loadConfig();
   const brain = await Brain.open(config);
 
   for (const warning of config.warnings) console.warn(`! ${warning}`);
 
-  // Declared before the handler so the upload route can announce a change to
-  // whoever is connected. The closure only runs once a request arrives, long
-  // after this is assigned.
+  // Declared before the handler so the routes can reach them: an upload has to
+  // announce itself to whoever is connected, and a reset has to end every
+  // conversation on every transport before the memory under them is deleted.
+  // The closures only run once a request arrives, long after these are set.
   let web: WebBridge;
+  let telegram: TelegramBridge | null = null;
+  let calls: CallBridge | null = null;
 
   const server = createServer(
     createRequestHandler({
       webRoot: path.join(repoRoot, 'dist', 'web'),
-      gallery: brain.gallery,
-      avatar: brain.avatar,
+      gallery: () => brain.gallery,
+      avatar: () => brain.avatar,
       onAvatarChanged: () => web.announceAvatar(),
       onMissingBuild: missingBuildPage,
       status: () => ({
         version: VERSION,
         model: config.model,
         configured: Boolean(config.geminiApiKey),
+        keyHint: maskKey(config.geminiApiKey),
         telegram: Boolean(config.telegram),
         livekit: Boolean(config.livekit),
         hedra: Boolean(config.hedra),
         profileDir: config.profileDir,
         warnings: config.warnings,
       }),
+
+      /**
+       * A key pasted into the website.
+       *
+       * Checked against Google before anything is written, so a typo is a
+       * message on the page rather than a conversation that fails to start an
+       * hour later. The conversation in progress is ended rather than kept: it
+       * was built without a key, which means without a live session, and a
+       * fresh one is what the key was for.
+       */
+      setKey: async (key) => {
+        const check = await checkGeminiKey(key);
+        if (!check.ok) return { ok: false, ...(check.reason ? { error: check.reason } : {}) };
+        try {
+          await web.endSession();
+          config = await applyGeminiKey(brain, key);
+          web.refresh();
+          console.log(`  key updated — ${maskKey(config.geminiApiKey)}`);
+          return { ok: true, keyHint: maskKey(config.geminiApiKey) };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+
+      /**
+       * Everything she has, deleted.
+       *
+       * Every conversation is closed first, on every transport. Telegram and a
+       * phone call each hold their own companion, and one still running would
+       * be writing turns into a database that no longer exists — and would
+       * answer the next message as the person who had just been forgotten.
+       */
+      reset: async () => {
+        try {
+          await telegram?.forgetSessions();
+          // `hangUp`, not `close`: closing releases the LiveKit runtime for
+          // good, and phone calls should still work after a reset.
+          await calls?.hangUp();
+          await web.endSession();
+          await brain.wipe();
+          web.refresh();
+          console.log('  reset — she does not know anyone now');
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      },
     }),
   );
 
@@ -68,8 +123,8 @@ export async function main(): Promise<void> {
     allowedOrigins: allowedOrigins(config.host, config.port),
   });
 
-  const calls = config.livekit ? new CallBridge({ brain, livekit: config.livekit }) : null;
-  const telegram = config.telegram
+  calls = config.livekit ? new CallBridge({ brain, livekit: config.livekit }) : null;
+  telegram = config.telegram
     ? new TelegramBridge({
         brain,
         token: config.telegram.token,

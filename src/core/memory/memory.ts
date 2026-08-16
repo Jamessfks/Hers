@@ -80,6 +80,17 @@ export class Memory {
     this.#lastTurnAt = recent ? last.at : 0;
   }
 
+  /**
+   * Releases the database handle.
+   *
+   * Needed before the file can be deleted or reopened. Windows will not unlink
+   * a file that is still open, so a reset that skipped this would leave the old
+   * memory on disk on exactly one of the two platforms Anna supports.
+   */
+  dispose(): void {
+    this.#store.close();
+  }
+
   /** Starts a new continuous stretch of conversation. */
   beginSession(): void {
     this.#sessionId = crypto.randomUUID();

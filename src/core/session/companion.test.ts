@@ -556,3 +556,59 @@ test('the screen watcher reaches her, and only while she is sharing a screen', a
   f.companion.noteScreen('still', 900);
   assert.ok(f.companion.situation.snapshot().screen.stillSeconds >= 900);
 });
+
+test('when she speaks first she looks at the screen as it is now, not as it was', async () => {
+  // A real opener, on a real timer, wound down to seconds.
+  const f = await fixture({ ANNA_MIN_SILENCE_MS: '1000', ANNA_MAX_SILENCE_MS: '5000' });
+  await f.companion.wake();
+  f.companion.setSense('screen', true);
+
+  const frame = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x41, 0x4e, 0x4e, 0x41, 0xff, 0xd9]);
+  f.companion.see(frame, 'screen');
+
+  const deadline = Date.now() + 9000;
+  let director = -1;
+  while (Date.now() < deadline && director < 0) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    director = f.socket().content.findIndex((each) =>
+      JSON.stringify(each.turns).includes('⟦director⟧'),
+    );
+  }
+  assert.ok(director >= 0, 'she never spoke first');
+
+  const looked = f
+    .socket()
+    .content.findIndex((each) => JSON.stringify(each.turns).includes('inlineData'));
+  assert.ok(looked >= 0, 'she opened without looking at anything');
+  assert.ok(looked < director, 'the picture has to be in front of her before she is told to speak');
+
+  const note = JSON.stringify(f.socket().content[looked]?.turns);
+  assert.match(note, /right now, this second/, 'and she has to know it is current');
+  assert.ok(note.includes(frame.toString('base64')), 'it should be the frame that just arrived');
+
+  await f.companion.sleep();
+});
+
+test('a frame from a sense that has since been switched off is not used', async () => {
+  const f = await fixture({ ANNA_MIN_SILENCE_MS: '1000', ANNA_MAX_SILENCE_MS: '5000' });
+  await f.companion.wake();
+  f.companion.setSense('screen', true);
+  f.companion.see(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'screen');
+  f.companion.setSense('screen', false);
+
+  const deadline = Date.now() + 9000;
+  let director = -1;
+  while (Date.now() < deadline && director < 0) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    director = f.socket().content.findIndex((each) =>
+      JSON.stringify(each.turns).includes('⟦director⟧'),
+    );
+  }
+  assert.ok(director >= 0, 'she never spoke first');
+  assert.ok(
+    !f.socket().content.some((each) => JSON.stringify(each.turns).includes('inlineData')),
+    'the share is over; that picture is no longer of anything',
+  );
+
+  await f.companion.sleep();
+});

@@ -45,15 +45,33 @@ const TYPES: Record<string, string> = {
 export interface StaticOptions {
   /** Built website. */
   webRoot: string;
-  gallery: Gallery;
-  avatar: AvatarStudio;
+  /*
+   * Looked up per request rather than held.
+   *
+   * Both of these are replaced wholesale when the conversation is reset — the
+   * gallery and the photograph are files that get deleted — and a handler
+   * holding the originals would go on serving a directory that no longer
+   * exists. One indirection here is cheaper than a class of bug.
+   */
+  gallery: () => Gallery;
+  avatar: () => AvatarStudio;
   /** Called after a successful upload so connected browsers are told. */
   onAvatarChanged?: () => void;
   /** Rendered when the site has not been built yet. */
   onMissingBuild: () => string;
   /** Answers `GET /api/status`. */
   status: () => unknown;
+  /** Takes a pasted Gemini key. Rejects it with something worth reading. */
+  setKey?: (key: string) => Promise<{ ok: boolean; error?: string; keyHint?: string }>;
+  /** Forgets everything and starts again. */
+  reset?: () => Promise<{ ok: boolean; error?: string }>;
 }
+
+/** A key, a confirmation word — nothing that reaches here is large. */
+const MAX_JSON_BYTES = 8 * 1024;
+
+/** Typed by hand into the reset box, so a stray click cannot do this. */
+export const RESET_PHRASE = 'start over';
 
 export function createRequestHandler(options: StaticOptions) {
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -67,18 +85,28 @@ export function createRequestHandler(options: StaticOptions) {
       return;
     }
 
+    if (request.method === 'POST' && pathname === '/api/key') {
+      await setKey(options, request, response);
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === '/api/reset') {
+      await reset(options, request, response);
+      return;
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       send(response, 405, 'text/plain; charset=utf-8', 'Method not allowed');
       return;
     }
 
     if (pathname === '/avatar/source') {
-      await serveAvatarSource(options.avatar, response);
+      await serveAvatarSource(options.avatar(), response);
       return;
     }
 
     if (pathname.startsWith('/avatar/clips/')) {
-      await serveAvatarClip(options.avatar, pathname.slice('/avatar/clips/'.length), response);
+      await serveAvatarClip(options.avatar(), pathname.slice('/avatar/clips/'.length), response);
       return;
     }
 
@@ -87,8 +115,17 @@ export function createRequestHandler(options: StaticOptions) {
       return;
     }
 
+    // Everything else under /api is a mistake rather than a page. Falling
+    // through to the single-page fallback would answer `GET /api/key` with the
+    // app shell, and an endpoint that returns HTML when you get it wrong is an
+    // endpoint nobody can debug.
+    if (pathname.startsWith('/api/')) {
+      send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'No such route.' }));
+      return;
+    }
+
     if (pathname.startsWith('/gallery/')) {
-      await serveGalleryItem(options.gallery, pathname.slice('/gallery/'.length), response);
+      await serveGalleryItem(options.gallery(), pathname.slice('/gallery/'.length), response);
       return;
     }
 
@@ -159,7 +196,7 @@ async function uploadAvatar(
   }
 
   try {
-    const state = await options.avatar.setSource(
+    const state = await options.avatar().setSource(
       Buffer.concat(chunks),
       String(request.headers['content-type'] ?? ''),
     );
@@ -169,6 +206,114 @@ async function uploadAvatar(
     const message =
       error instanceof AvatarError ? error.message : 'That image could not be read.';
     send(response, 422, TYPES['.json']!, JSON.stringify({ error: message }));
+  }
+}
+
+/**
+ * A Gemini key, pasted into the website.
+ *
+ * It arrives over a loopback connection to a process that already has the
+ * user's other keys, is checked against Google before anything is written, and
+ * goes into `.env` — never back out to the browser, which is the whole of
+ * Google's guidance on the subject. The reply says which key is in force by its
+ * last four characters and nothing more.
+ */
+async function setKey(
+  options: StaticOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (!options.setKey) {
+    send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'Not available.' }));
+    return;
+  }
+
+  const body = await readJson(request, response);
+  if (!body) return;
+
+  const key = typeof body.key === 'string' ? body.key.trim() : '';
+  if (!key) {
+    send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'No key was sent.' }));
+    return;
+  }
+
+  const result = await options.setKey(key);
+  send(
+    response,
+    result.ok ? 200 : 422,
+    TYPES['.json']!,
+    JSON.stringify(result.ok ? { ok: true, keyHint: result.keyHint ?? '' } : { error: result.error }),
+  );
+}
+
+/**
+ * Delete everything and start again.
+ *
+ * Gated on a phrase typed by hand rather than on a button alone. This is the
+ * one request in the program that destroys something the user cannot get back,
+ * and a POST that does that on the strength of a single click is a POST that
+ * will eventually be made by accident.
+ */
+async function reset(
+  options: StaticOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (!options.reset) {
+    send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'Not available.' }));
+    return;
+  }
+
+  const body = await readJson(request, response);
+  if (!body) return;
+
+  const confirm = typeof body.confirm === 'string' ? body.confirm.trim().toLowerCase() : '';
+  if (confirm !== RESET_PHRASE) {
+    send(
+      response,
+      400,
+      TYPES['.json']!,
+      JSON.stringify({ error: `Type “${RESET_PHRASE}” to confirm.` }),
+    );
+    return;
+  }
+
+  const result = await options.reset();
+  send(
+    response,
+    result.ok ? 200 : 500,
+    TYPES['.json']!,
+    JSON.stringify(result.ok ? { ok: true } : { error: result.error }),
+  );
+}
+
+/** A small JSON body, or nothing — having already answered the request. */
+async function readJson(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<Record<string, unknown> | null> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of request) {
+      const bytes = chunk as Buffer;
+      total += bytes.length;
+      if (total > MAX_JSON_BYTES) {
+        send(response, 413, TYPES['.json']!, JSON.stringify({ error: 'That is too long.' }));
+        request.destroy();
+        return null;
+      }
+      chunks.push(bytes);
+    }
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'Expected an object.' }));
+      return null;
+    }
+    return value as Record<string, unknown>;
+  } catch {
+    send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'That request was not readable.' }));
+    return null;
   }
 }
 

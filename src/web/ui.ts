@@ -37,7 +37,14 @@ export interface UiHandlers {
   onEditMemory(id: number, text: string): void;
   onForgetMemory(id: number): void;
   onAddMemory(text: string): void;
+  /** A pasted Gemini key. Resolves to null on success, or to why not. */
+  onSaveKey(key: string): Promise<string | null>;
+  /** Delete everything. Resolves to null on success, or to why not. */
+  onReset(confirm: string): Promise<string | null>;
 }
+
+/** What has to be typed before the delete button will do anything. */
+const RESET_PHRASE = 'start over';
 
 export class Ui {
   readonly #handlers: UiHandlers;
@@ -70,6 +77,13 @@ export class Ui {
   readonly #spend = need('spend');
   readonly #giveFace = need<HTMLButtonElement>('give-face');
   readonly #takeover = need('takeover');
+  readonly #setup = need<HTMLDialogElement>('setup');
+  readonly #keyInput = need<HTMLInputElement>('key-input');
+  readonly #keySave = need<HTMLButtonElement>('key-save');
+  readonly #keyStatus = need('key-status');
+  readonly #resetConfirm = need<HTMLInputElement>('reset-confirm');
+  readonly #resetGo = need<HTMLButtonElement>('reset-go');
+  readonly #resetStatus = need('reset-status');
   readonly #memory = need<HTMLDialogElement>('memory');
   readonly #memoryList = need('memory-list');
   readonly #memorySummary = need('memory-summary');
@@ -88,6 +102,8 @@ export class Ui {
   #micLevel = 0;
   #annaLevel = 0;
   #avatar: AvatarView | null = null;
+  /** So a reconnect on an unconfigured server does not reopen the dialog. */
+  #offeredSetup = false;
   /** Queued so two gestures in quick succession play in order, not on top. */
   #moving = false;
 
@@ -141,6 +157,22 @@ export class Ui {
     this.#memoryNew.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') addMemory();
     });
+
+    need('setup-open').addEventListener('click', () => this.#setup.showModal());
+
+    this.#keySave.addEventListener('click', () => void this.#saveKey());
+    this.#keyInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') void this.#saveKey();
+    });
+
+    // The button stays dead until the words are typed. The server checks the
+    // same thing — this is so the interface cannot invite the mistake, not so
+    // the interface can prevent it.
+    const armReset = () => {
+      this.#resetGo.disabled = this.#resetConfirm.value.trim().toLowerCase() !== RESET_PHRASE;
+    };
+    this.#resetConfirm.addEventListener('input', armReset);
+    this.#resetGo.addEventListener('click', () => void this.#reset());
 
     need('takeover-claim').addEventListener('click', () => {
       this.#takeover.hidden = true;
@@ -198,12 +230,7 @@ export class Ui {
         for (const [sense, on] of Object.entries(message.senses)) {
           this.setSense(sense as SenseName, on);
         }
-        if (!message.configured) {
-          this.toast(
-            'No Gemini API key. Put GEMINI_API_KEY in a .env file next to package.json and restart.',
-            0,
-          );
-        }
+        this.#setConfigured(message.configured, message.keyHint);
         return;
 
       case 'state':
@@ -517,6 +544,78 @@ export class Ui {
   #settle(): void {
     this.#portrait.dataset.moving = 'false';
     this.#moving = false;
+  }
+
+  /**
+   * Sends the key and reports what happened, in place.
+   *
+   * The box is cleared on success and left alone on failure — a rejected key is
+   * usually a key with one character wrong, and clearing the field would make
+   * them paste it again to find out which.
+   */
+  async #saveKey(): Promise<void> {
+    const key = this.#keyInput.value.trim();
+    if (!key) return;
+
+    this.#keySave.disabled = true;
+    this.#status(this.#keyStatus, 'Checking it with Google…', 'working');
+    const error = await this.#handlers.onSaveKey(key);
+    this.#keySave.disabled = false;
+
+    if (error) {
+      this.#status(this.#keyStatus, error, 'bad');
+      return;
+    }
+    this.#keyInput.value = '';
+    this.#status(this.#keyStatus, 'Saved. Wake her.', 'good');
+  }
+
+  async #reset(): Promise<void> {
+    const confirm = this.#resetConfirm.value.trim();
+    this.#resetGo.disabled = true;
+    this.#status(this.#resetStatus, 'Deleting…', 'working');
+
+    const error = await this.#handlers.onReset(confirm);
+    if (error) {
+      this.#status(this.#resetStatus, error, 'bad');
+      this.#resetGo.disabled = false;
+      return;
+    }
+
+    this.#resetConfirm.value = '';
+    this.#status(this.#resetStatus, 'Gone. She does not know you.', 'good');
+    // The server re-sends everything; this only clears what it has no reason
+    // to send — an empty transcript is an absence, not a message.
+    this.#transcript.replaceChildren(this.#empty);
+    this.#pending.clear();
+    this.#empty.hidden = false;
+  }
+
+  /**
+   * Whether she has a key, and which one.
+   *
+   * The first run opens the setup dialog by itself. Everything on the page is
+   * inert without a key, and a first-time user staring at a wake button that
+   * does nothing has no way to discover why — that used to be a line of toast
+   * telling them to go and edit a file.
+   */
+  #setConfigured(configured: boolean, keyHint: string): void {
+    this.#notice.hidden = configured;
+    if (!configured) {
+      this.#notice.textContent = 'She needs a Gemini API key before she can hear you.';
+    }
+
+    this.#keyInput.placeholder = keyHint ? `${keyHint} — paste a new one to replace it` : 'AIza…';
+
+    if (!configured && !this.#offeredSetup) {
+      this.#offeredSetup = true;
+      if (!this.#setup.open) this.#setup.showModal();
+    }
+  }
+
+  #status(element: HTMLElement, message: string, kind: 'working' | 'good' | 'bad'): void {
+    element.textContent = message;
+    element.dataset.kind = kind;
   }
 
   #renderGestureList(avatar: AvatarView): void {

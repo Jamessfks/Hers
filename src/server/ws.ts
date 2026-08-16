@@ -32,6 +32,7 @@ import {
 } from '../shared/protocol.ts';
 import type { ClientMessage, SenseName, ServerMessage } from '../shared/protocol.ts';
 import { Companion } from '../core/session/companion.ts';
+import { maskKey } from './setup.ts';
 import type { Brain } from '../core/session/brain.ts';
 import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
 import { AvatarError, isGesture } from '../core/avatar/studio.ts';
@@ -121,39 +122,72 @@ export class WebBridge {
       previous.close(CLOSE_SUPERSEDED, 'superseded');
     }
 
-    // The companion outlives the socket on purpose: a tab reload should not end
-    // the conversation, restart the mood, or re-bill a fresh Gemini session.
-    if (!this.#companion) {
-      this.#companion = new Companion({
-        brain: this.#options.brain,
-        channel: 'desktop',
-        sink: {
-          audio: (pcm) => this.#sendMedia(MediaKind.ANNA_PCM24, pcm),
-          transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
-          state: (state) => this.#send({ t: 'state', state }),
-          mood: (mood) => this.#send({ t: 'mood', mood }),
-          interrupted: () => this.#send({ t: 'interrupted' }),
-          show: (item) =>
-            this.#send({
-              t: 'show',
-              url: `/gallery/${encodeURIComponent(item.name)}`,
-              kind: item.kind,
-              caption: item.label,
-            }),
-          move: (gesture) => this.#send({ t: 'move', gesture }),
-          trouble: (message) => this.#send({ t: 'trouble', message }),
-        },
-      });
-    }
+    const companion = this.#ensureCompanion();
+    this.#sendOpening(socket);
+    if (companion.live) sendJson(socket, { t: 'state', state: 'listening' });
 
+    socket.on('message', (data, isBinary) => {
+      void this.#onMessage(socket, data as Buffer, isBinary);
+    });
+    const dropped = () => {
+      if (this.#socket !== socket) return;
+      this.#socket = null;
+      this.#armOrphanTimer();
+    };
+    socket.on('close', dropped);
+    socket.on('error', dropped);
+  }
+
+  /**
+   * The conversation this page is having, made if there is not one.
+   *
+   * The companion outlives the socket on purpose — a tab reload should not end
+   * the conversation, restart the mood, or re-bill a fresh Gemini session — but
+   * it does not outlive a reset, which throws away the memory underneath it. So
+   * this is called on every inbound message and not only on connect: after a
+   * reset the page is still open and still talking, and the tab going silent
+   * until somebody reloads it is not a way to meet someone new.
+   */
+  #ensureCompanion(): Companion {
+    if (this.#companion) return this.#companion;
+    this.#companion = new Companion({
+      brain: this.#options.brain,
+      channel: 'desktop',
+      sink: {
+        audio: (pcm) => this.#sendMedia(MediaKind.ANNA_PCM24, pcm),
+        transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
+        state: (state) => this.#send({ t: 'state', state }),
+        mood: (mood) => this.#send({ t: 'mood', mood }),
+        interrupted: () => this.#send({ t: 'interrupted' }),
+        show: (item) =>
+          this.#send({
+            t: 'show',
+            url: `/gallery/${encodeURIComponent(item.name)}`,
+            kind: item.kind,
+            caption: item.label,
+          }),
+        move: (gesture) => this.#send({ t: 'move', gesture }),
+        trouble: (message) => this.#send({ t: 'trouble', message }),
+      },
+    });
+    return this.#companion;
+  }
+
+  /** Who she is, what she looks like, and what has been said so far. */
+  #sendOpening(socket: WebSocket): void {
     const brain = this.#options.brain;
     sendJson(socket, {
       t: 'ready',
       version: this.#options.version,
       model: brain.config.model,
       voice: brain.profile.voice.voice,
-      senses: this.#companion.situation.senses,
+      senses: this.#companion?.situation.senses ?? {
+        hearing: false,
+        sight: false,
+        screen: false,
+      },
       configured: Boolean(brain.config.geminiApiKey),
+      keyHint: maskKey(brain.config.geminiApiKey),
       telegram: Boolean(brain.config.telegram),
       livekit: Boolean(brain.config.livekit),
       cameraFps: brain.config.cameraFps,
@@ -169,23 +203,10 @@ export class WebBridge {
         at: turn.at,
       })),
     });
-    if (this.#companion.live) sendJson(socket, { t: 'state', state: 'listening' });
-
-    socket.on('message', (data, isBinary) => {
-      void this.#onMessage(socket, data as Buffer, isBinary);
-    });
-    const dropped = () => {
-      if (this.#socket !== socket) return;
-      this.#socket = null;
-      this.#armOrphanTimer();
-    };
-    socket.on('close', dropped);
-    socket.on('error', dropped);
   }
 
   async #onMessage(socket: WebSocket, data: Buffer, isBinary: boolean): Promise<void> {
-    const companion = this.#companion;
-    if (!companion) return;
+    const companion = this.#ensureCompanion();
 
     if (isBinary) {
       const { kind, payload } = decodeMediaFrame(data);
@@ -219,7 +240,19 @@ export class WebBridge {
         return;
 
       case 'say':
-        if (typeof message.text === 'string') companion.say(message.text.slice(0, 4000));
+        if (typeof message.text !== 'string') return;
+        /*
+         * Typing to her while she is asleep is a request to talk to her.
+         *
+         * The browser does send `wake` as well, but the two messages are
+         * handled concurrently and there is no ordering between them: the text
+         * would reach a companion with no session, be filed into memory, and
+         * get no answer. Which is precisely what the first message after
+         * setting up a key is. Waking here is ordered by the `await` and is a
+         * no-op when a session already exists.
+         */
+        if (!companion.live) await companion.wake();
+        companion.say(message.text.slice(0, 4000));
         return;
 
       case 'sense': {
@@ -330,6 +363,39 @@ export class WebBridge {
   /** Tells whoever is connected that the photograph or the clips changed. */
   announceAvatar(): void {
     this.#send({ t: 'avatar', avatar: this.#options.brain.avatar.state() });
+  }
+
+  /**
+   * Ends the conversation and lets go of it entirely.
+   *
+   * Different from `close`, which is for shutdown: the socket stays up and the
+   * page stays open. This is what has to happen before the memory underneath a
+   * companion is deleted — a live session holding a `Brain` whose database has
+   * been unlinked would go on writing turns into nothing.
+   */
+  async endSession(): Promise<void> {
+    this.#cancelOrphanTimer();
+    const companion = this.#companion;
+    this.#companion = null;
+    await companion?.sleep();
+  }
+
+  /**
+   * Repaints the whole interface from a brain that has just changed underneath
+   * it — a key that has come into force, or everything having been deleted.
+   *
+   * Everything is re-sent rather than a delta: after a reset, the correct
+   * transcript, memory, mood, avatar and configuration are all different at
+   * once, and a browser that patched some of them would be showing a mixture of
+   * two Annas.
+   */
+  refresh(): void {
+    const socket = this.#socket;
+    if (!socket || socket.readyState !== socket.OPEN) return;
+    this.#ensureCompanion();
+    this.#sendOpening(socket);
+    sendJson(socket, this.#memory());
+    sendJson(socket, { t: 'state', state: this.#companion?.live ? 'listening' : 'asleep' });
   }
 
   /**

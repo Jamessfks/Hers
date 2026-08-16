@@ -52,7 +52,37 @@ const ui = new Ui({
     connection.send({ t: 'avatar.render', gesture });
     ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);
   },
+  onSaveKey: (key) => post('/api/key', { key }),
+  onReset: async (confirm) => {
+    // Whatever is playing is about to belong to somebody who no longer exists.
+    player.flush();
+    awake = false;
+    return post('/api/reset', { confirm });
+  },
 });
+
+/**
+ * A small JSON POST. Resolves to null when it worked, or to why it did not.
+ *
+ * The server's own wording is passed straight through: it is the end that knows
+ * whether Google refused the key, whether the file could not be written, or
+ * whether a directory was in the way, and a message invented here would be a
+ * guess at all three.
+ */
+async function post(url: string, body: unknown): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const parsed = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (response.ok) return null;
+    return parsed?.error ?? `That failed (HTTP ${response.status}).`;
+  } catch (error) {
+    return `Could not reach the server: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
 
 /**
  * Sends the picture as the raw request body.
@@ -132,6 +162,18 @@ const connection = new Connection({
 function onMessage(message: ServerMessage): void {
   if (message.t === 'ready') {
     vision.setRates(message.cameraFps, message.screenFps);
+    /*
+     * Tell the server about any device that is actually open.
+     *
+     * `ready` carries the server's view of the senses, and after a reconnect or
+     * a reset that view is a fresh one — while this page still has the camera
+     * light on. The device is the fact; the server's record of it is not. Left
+     * alone, the buttons would go dark on a page that is still sharing, which
+     * is the worst possible way for that to be wrong.
+     */
+    for (const [sense, on] of Object.entries(senses) as [SenseName, boolean][]) {
+      if (on && !message.senses[sense]) connection.send({ t: 'sense', sense, on: true });
+    }
   }
   if (message.t === 'interrupted') {
     player.flush();

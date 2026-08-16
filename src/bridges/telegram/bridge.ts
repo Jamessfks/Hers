@@ -592,6 +592,18 @@ export class TelegramBridge {
     await this.#api.sendMessage(chatId, text);
   }
 
+  /**
+   * Ends the conversation without stopping the bot.
+   *
+   * Called when everything she remembers is deleted from the website. A
+   * companion left running would hold the old memory open, write into a
+   * database that no longer exists, and answer the next message as somebody who
+   * has just been forgotten.
+   */
+  async forgetSessions(): Promise<void> {
+    await this.#sleep();
+  }
+
   async #sleep(): Promise<void> {
     this.#clearIdle();
     const companion = this.#companion;

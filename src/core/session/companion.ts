@@ -69,6 +69,15 @@ export interface CompanionOptions {
 
 /** How far her mood has to move before it is worth telling her about. */
 const MOOD_NOTIFY_DELTA = 0.25;
+/**
+ * How long a frame is still a fair description of the room.
+ *
+ * Past this she says "you look tired" about a chair. Screen frames arrive every
+ * two seconds and camera frames every second while a sense is on, so the only
+ * way to have one this old is for the sense to have just been switched off — in
+ * which case it should not be used at all.
+ */
+const FRAME_STILL_TRUE_MS = 20_000;
 /** Facts pulled into the system instruction at wake. */
 const RECALL_LIMIT = 8;
 
@@ -83,6 +92,13 @@ export class Companion {
   #connect: LiveConnector | undefined;
   /** Timestamps of the last frame accepted, per source. */
   #lastFrameAt = 0;
+  /**
+   * The most recent frame, kept so she can look again before speaking first.
+   *
+   * One frame, overwritten — this is not a buffer of the last minute, it is the
+   * answer to "what is in front of her right now".
+   */
+  #lastFrame: { bytes: Buffer; kind: 'camera' | 'screen'; at: number } | null = null;
   /** True between a `⟦director⟧` cue and the turn it produces. */
   #openerInFlight = false;
   #speaking = false;
@@ -263,6 +279,7 @@ export class Companion {
     const now = this.#now();
     if (now - this.#lastFrameAt < 1000 / Math.max(fps, 0.01) - 20) return;
     this.#lastFrameAt = now;
+    this.#lastFrame = { bytes: jpeg, kind, at: now };
     this.#live?.sendImage(jpeg);
   }
 
@@ -455,11 +472,43 @@ export class Companion {
   // Internals
   // -------------------------------------------------------------------------
 
+  /**
+   * She speaks first.
+   *
+   * The frame goes in before the note, and that ordering is the whole feature.
+   * Realtime video is *realtime*: frames are turn-scoped and age out, so by the
+   * time a two-minute silence has run down, the last picture she has any real
+   * hold on is two minutes old. Told to "open with something you can see", she
+   * would faithfully describe whatever was on screen when they stopped talking.
+   *
+   * Re-sending the newest frame as context — the same way she is shown her own
+   * face — puts *this moment* in front of her, so the specific thing the note
+   * asks for is a thing that is actually there. Sent only when a frame is fresh
+   * enough to still be true, and it costs one image per opener at most.
+   */
   #open(reason: string): void {
     if (!this.#live?.isLive) return;
     this.#openerInFlight = true;
     this.#emitMood(false, () => this.#brain.mood.feel('long-silence', 0.5));
+    this.#lookAgain();
     this.#live.prompt(reason);
+  }
+
+  #lookAgain(): void {
+    const frame = this.#lastFrame;
+    if (!frame || !this.#live) return;
+
+    const sense: SenseName = frame.kind === 'camera' ? 'sight' : 'screen';
+    if (!this.situation.senses[sense]) return;
+    if (this.#now() - frame.at > FRAME_STILL_TRUE_MS) return;
+
+    this.#live.showImage(
+      frame.bytes,
+      'image/jpeg',
+      frame.kind === 'screen'
+        ? 'This is their screen as it is right now, this second. Anything you say about it should be about this picture and not about what was there earlier.'
+        : 'This is them right now, this second. Anything you say about how they look should be about this picture.',
+    );
   }
 
   async #recall(): Promise<string[]> {

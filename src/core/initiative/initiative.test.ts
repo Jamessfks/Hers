@@ -256,6 +256,21 @@ test('what the screen is doing is a reason to speak', () => {
   assert.match(working, /keeps changing/);
 });
 
+test('with eyes open, the reason is to look rather than to greet', () => {
+  const both = pickReason(situation({ senses: { hearing: true, sight: true, screen: true } }));
+  assert.match(both, /worth remarking on/);
+  assert.match(both, /only this minute could have produced it/);
+  assert.match(both, /nothing stands out/, 'she must have somewhere to go when it is a dull minute');
+
+  const eyes = pickReason(situation({ senses: { hearing: true, sight: true, screen: false } }));
+  assert.match(eyes, /concretely/);
+
+  // The two ways an opener becomes wallpaper, ruled out in the instruction.
+  for (const reason of [both, eyes]) {
+    assert.doesNotMatch(reason, /how they are|what they are up to/i, reason);
+  }
+});
+
 test('a switch stops being news once it is old', () => {
   const reason = pickReason(
     situation({

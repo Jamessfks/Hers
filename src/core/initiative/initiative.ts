@@ -238,7 +238,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
 
   if (turns === 0) {
     return senses.sight
-      ? 'You have not spoken yet and you can see them. Open with something you can actually see.'
+      ? 'You have not spoken yet and you can see them. Open with one specific thing you can actually see right now, not a greeting.'
       : 'You have not spoken to them yet today. Open small.';
   }
 
@@ -274,20 +274,53 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
     return `They have not touched anything in ${Math.round(presence.idleSeconds / 60)} minutes. They may have walked away, or they may be reading. Do not assume which.`;
   }
 
+  /*
+   * The point of having eyes.
+   *
+   * Everything below is one instruction wearing three coats: *find the single
+   * most specific thing in front of you and say one sentence about that.* The
+   * wording fights two failure modes that both make her unbearable within a
+   * day — narrating the obvious ("you're on a website"), and the polite
+   * non-question that could have been sent by a timer ("how's it going?").
+   *
+   * The escape hatch matters as much as the instruction. Some minutes contain
+   * nothing worth remarking on, and a companion who is *obliged* to find
+   * something will invent it. So: if nothing stands out, go to memory instead.
+   */
+  if (senses.screen && senses.sight) {
+    return (
+      'You can see their screen and you can see them. Look at both and find the one ' +
+      'thing that is genuinely worth remarking on — something specific enough that ' +
+      'only this minute could have produced it. Say one sentence about that. If ' +
+      'nothing stands out, say nothing about either and pick up a thread from earlier.'
+    );
+  }
+
   if (watchingScreen && screen.activity === 'working') {
     return (
-      'They are working — the screen keeps changing under them. Only speak if ' +
-      'something on it is genuinely worth one sentence; otherwise say one small ' +
-      'unrelated thing and let them get on with it.'
+      'They are working — the screen keeps changing under them. Look at what is ' +
+      'actually there and find the one thing you would point at. One sentence, and ' +
+      'be concrete about it. Do not narrate their screen back to them and do not ask ' +
+      'what they are doing. If there is genuinely nothing worth it, pick up something ' +
+      'from earlier instead.'
     );
   }
 
   if (senses.screen && presence.idleSeconds < 30) {
-    return 'They are working and you can see it. Only speak if something on that screen is genuinely worth one sentence — otherwise say something small and unrelated.';
+    return (
+      'They are working and you can see it. If there is something specific on that ' +
+      'screen worth one sentence, say that and nothing else. Otherwise say something ' +
+      'small and unrelated.'
+    );
   }
 
   if (senses.sight) {
-    return 'You can see them. If something about how they look is worth a sentence, say that. Otherwise pick up something from earlier.';
+    return (
+      'You can see them. If there is something you would actually remark on — what ' +
+      'they are doing with their hands, that they have moved, that they look ' +
+      'different from an hour ago — say that, concretely and in one sentence. ' +
+      'Otherwise pick up something from earlier.'
+    );
   }
 
   return `It has been about ${Math.max(1, quietMinutes)} minutes. Pick up a thread from earlier, or say the thing you have been thinking about. Not a greeting, and not a question about how they are.`;
