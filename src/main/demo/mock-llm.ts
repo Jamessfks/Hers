@@ -53,7 +53,12 @@ const SCRIPT: ScriptedReply[] = [
   },
   {
     when: /\b(tired|exhausted|knackered|sleep)\b/i,
-    say: "[concerned][lean_in] Yeah, you look it. [gaze:user] Is it the work, or is it the other thing?",
+    // The one line with two gestures in it, and that is on purpose: it is the
+    // only way the demo reaches the path where a directive arrives while
+    // another clip is still playing. `nod` is also the second slot in
+    // BUILD_ORDER, so on a part-built library this line usually has a clip to
+    // play where the rest of the script has to fall through to idle.
+    say: "[concerned][nod] Yeah, you look it. [lean_in][gaze:user] Is it the work, or is it the other thing?",
   },
   {
     when: /\b(interview|job|offer|applied)\b/i,

@@ -117,6 +117,9 @@ async function applyLibrary(view: LibraryView): Promise<void> {
   // which slots are missing so it stops asking, and the whole point of this
   // call is that one of them may have just stopped being missing.
   hologram.invalidate();
+  // Before `setIdle`, so a library that has just lost `idle` is not briefly
+  // asked to play it.
+  hologram.setAvailable(view.ready);
   await hologram.setIdle(view.ready.includes('idle') ? 'idle' : null);
   document.body.dataset['alive'] = String(view.alive);
 

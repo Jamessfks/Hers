@@ -11,17 +11,30 @@
  * makes is that a real face doing one of nineteen things beats a synthetic face
  * doing anything, for a companion you glance at rather than direct.
  *
- * ## The one invariant everything rests on
+ * ## The invariant everything rests on, and how much of it is true
  *
- * Every clip begins and ends on the source photograph. That is asked for in
- * prompts.ts and *verified* in seam.ts, and it is what lets this module cut
- * between any two clips, or between a clip and the still, with no transition at
- * all — no crossfade, no dissolve, no easing. A crossfade would be the obvious
- * defensive choice and it would be worse: dissolving between two frames that are
- * already identical adds a visible softening to a cut that was invisible.
+ * Every clip is supposed to begin *and end* on the source photograph. That is
+ * asked for in prompts.ts and measured in seam.ts, and it is what would let
+ * this module cut between any two clips, or between a clip and the still, with
+ * no transition at all — no crossfade, no dissolve, no easing. A crossfade
+ * would be the obvious defensive choice and it would be worse: dissolving
+ * between two frames that are already identical adds a visible softening to a
+ * cut that was invisible.
  *
- * If the seam check fails for a clip, the fix belongs upstream — regenerate it,
- * or cut at the frame seam.ts found — not here in a fade.
+ * Half of it holds. Measured against the three real clips (see
+ * docs/audits/hedra-generation.md), every clip's *first* frame is the same
+ * frame to within the noise of the encoder — two different clips' openings
+ * differ by 0.0027 where a just-noticeable difference is 0.02 — so cutting
+ * *into* a clip is genuinely invisible, which is what this design claimed.
+ * Every clip's *last* frame is not: they leave the source pose in the first
+ * second and hold somewhere else, three to six times over threshold. So the
+ * exit from every clip is a visible jump, and on the idle loop it repeats every
+ * few seconds.
+ *
+ * That is a defect in the clips, not in this file, and the fix belongs
+ * upstream — regenerate them, or cut at the frame seam.ts finds — not here in
+ * a fade. It is written down here because the rest of this file reads as if the
+ * seam were already solved, and it is not.
  *
  * ## Two video elements
  *
@@ -52,6 +65,34 @@ export class Hologram {
   readonly #cache = new Map<SlotName, string>();
   /** Slots known to be absent, so a missing gesture is asked for once. */
   readonly #missing = new Set<SlotName>();
+  /**
+   * Slots a {@link Hologram.play} has taken a URL for and not yet finished with.
+   *
+   * Exists for {@link invalidate}, which revokes blob URLs and used to revoke
+   * them out from under a load already in progress: `#urlFor` hands back a URL,
+   * a library event arrives, the URL is revoked, and the assignment to `src` a
+   * moment later loads nothing. There is no error to catch — the element simply
+   * never fires `loadeddata`, so it waits out `once()`'s two-second timeout and
+   * then fails silently. A build emits several library events in a row, so this
+   * raced every gesture during the one period when it was most likely to
+   * happen.
+   */
+  readonly #loading = new Set<SlotName>();
+  /**
+   * What the library says exists. Null until it has said anything.
+   *
+   * `#missing` learns the same thing the expensive way — by asking for a clip
+   * and being handed nothing — and that is one round trip too late. A gesture
+   * that cannot play still reaches {@link play}, and if something is already
+   * playing it takes the single queue slot, displacing whatever was in it. In a
+   * live run `[nod]` was queued and then thrown away by `[lean_in]` a
+   * millisecond later; `nod` had a clip, `lean_in` did not, and the turn ended
+   * with no gesture at all where it could have had one.
+   *
+   * `#missing` stays as the backstop for the case this cannot see: the manifest
+   * says ready and the bytes will not load.
+   */
+  #available: ReadonlySet<SlotName> | null = null;
 
   #front = 0;
   #playing: SlotName | null = null;
@@ -106,23 +147,37 @@ export class Hologram {
       video.preload = 'auto';
       video.hidden = true;
       video.className = 'clip';
-      video.addEventListener('ended', () => this.#onEnded(video));
+      video.addEventListener('ended', () => this.#onStopped(video, 'ended'));
+      video.addEventListener('error', () => this.#onStopped(video, 'error'));
     }
 
     options.mount.append(this.#still, ...this.#videos);
   }
 
-  /** True once she is more than a photograph. */
+  /**
+   * True once she is more than a photograph.
+   *
+   * Asks what is on screen rather than what has been *configured*. `#idle`
+   * being set says only that a slot was named; the clip behind it can be
+   * missing, in which case she is a still and this used to say otherwise.
+   */
   get animated(): boolean {
-    return this.#idle !== null;
+    return this.#playing !== null;
   }
 
   /**
-   * The photograph's pixel dimensions, once it has decoded. Null before that.
+   * Tells this module which slots the library actually holds.
    *
-   * Exposed because the panel is sized to fit her rather than the other way
-   * round, and this is the only place those numbers exist in the renderer.
+   * The model writes gesture directives without knowing what has been
+   * rendered — that is by design, the vocabulary is advisory — so most of what
+   * arrives here names a clip that does not exist. Knowing which is which
+   * before {@link play} commits to anything is what stops an unrenderable
+   * gesture from taking the queue slot off a renderable one.
    */
+  setAvailable(slots: readonly SlotName[]): void {
+    this.#available = new Set(slots);
+  }
+
   /**
    * The source photograph as pixels, scaled to the size asked for.
    *
@@ -152,6 +207,12 @@ export class Hologram {
     return context.getImageData(0, 0, width, height);
   }
 
+  /**
+   * The photograph's pixel dimensions, once it has decoded. Null before that.
+   *
+   * Exposed because the panel is sized to fit her rather than the other way
+   * round, and this is the only place those numbers exist in the renderer.
+   */
   get shape(): { width: number; height: number } | null {
     const { naturalWidth: width, naturalHeight: height } = this.#still;
     return width > 0 && height > 0 ? { width, height } : null;
@@ -180,22 +241,36 @@ export class Hologram {
    */
   async setIdle(slot: SlotName | null): Promise<void> {
     const previous = this.#idle;
-    this.#idle = slot;
-
-    if (!slot) {
-      /*
-       * Losing the idle clip has to take it off screen, not just off the books.
-       *
-       * The library can stop offering `idle` — it is evicted, its file goes
-       * missing, a new photograph replaces it — while the old one is still
-       * looping. Leaving it running showed a clip the library no longer claims
-       * to have, and left `#playing` naming a slot `#idle` no longer did, which
-       * is the state that used to jam the gesture queue for good.
-       */
-      if (this.#looping && this.#playing === previous) await this.#returnToIdle();
+    if (slot === previous) {
+      // The common call by a long way: `applyLibrary` runs on every library
+      // event and almost always names the same slot. Nothing to reconcile.
+      if (slot && !this.#playing) await this.#start(slot);
       return;
     }
-    if (!this.#playing) await this.play(slot);
+    this.#idle = slot;
+
+    /*
+     * Changing the idle clip has to change what is on screen, not just the
+     * books.
+     *
+     * The library can stop offering `idle`, or offer a different one — it is
+     * evicted, its file goes missing, a new photograph replaces it — while the
+     * old one is still looping. Leaving it running showed a clip the library no
+     * longer claims to have, and left `#playing` naming a slot `#idle` no
+     * longer did, which is the state that used to jam the gesture queue for
+     * good.
+     *
+     * The generation bump is the other half, and it is not optional: a
+     * `#start` already in flight chose its `loop` flag against the *old*
+     * `#idle`, so letting it land puts a retracted clip on screen — looping
+     * forever, if it happened to be mid-load with `loop` already true.
+     */
+    this.#generation += 1;
+    if (this.#looping || this.#playing === previous || this.#playing === null) {
+      await this.#returnToIdle();
+    }
+    // A gesture in progress is left alone. It will return to whatever `#idle`
+    // now is when it ends, which is the right moment to change the loop.
   }
 
   /**
@@ -208,18 +283,45 @@ export class Hologram {
    */
   async play(slot: SlotName): Promise<void> {
     if (this.#disposed || this.#missing.has(slot)) return;
+    if (this.#available && !this.#available.has(slot)) return;
 
-    // A gesture in progress gets to finish; the next one waits for its `ended`.
+    // A gesture in progress gets to finish; the next one waits for it to stop.
     // A looping clip is asked about rather than inferred — see `#looping`.
     if (this.#playing !== null && !this.#looping) {
       this.#next = slot;
       return;
     }
 
-    const generation = ++this.#generation;
+    await this.#start(slot);
+  }
 
-    const url = await this.#urlFor(slot);
-    if (!url || this.#disposed || generation !== this.#generation) return;
+  /**
+   * Puts a clip on screen. The only place `#front` and `#playing` move.
+   *
+   * Reports which of three things happened, because two of them look identical
+   * from outside and must not be treated alike. `superseded` means a newer call
+   * took over — the caller must do nothing at all, or it will undo the newer
+   * call's work; `failed` means nothing reached the screen and nothing else is
+   * coming, which is the case a caller may want to fall back from. Collapsing
+   * the two into "did `#playing` change" cost two gestures in a row: a queued
+   * clip bailing out because a fresh directive had superseded it was read as
+   * "the queued clip is missing", and the fallback to idle then superseded the
+   * fresh directive in turn.
+   */
+  async #start(slot: SlotName): Promise<'shown' | 'superseded' | 'failed'> {
+    if (this.#disposed) return 'failed';
+    const generation = ++this.#generation;
+    const superseded = (): boolean => this.#disposed || generation !== this.#generation;
+
+    this.#loading.add(slot);
+    let url: string | null;
+    try {
+      url = await this.#urlFor(slot);
+    } finally {
+      this.#loading.delete(slot);
+    }
+    if (superseded()) return 'superseded';
+    if (!url) return 'failed';
 
     const back = this.#videos[this.#front === 0 ? 1 : 0]!;
     back.loop = slot === this.#idle;
@@ -229,7 +331,7 @@ export class Hologram {
     if (back.src !== url) {
       back.src = url;
       await once(back, 'loadeddata');
-      if (this.#disposed || generation !== this.#generation) return;
+      if (superseded()) return 'superseded';
     }
     back.currentTime = 0;
 
@@ -238,26 +340,25 @@ export class Hologram {
     } catch {
       // Autoplay policy, or the element was swapped out from under us. Either
       // way the still is already behind it and correct.
-      return;
+      return superseded() ? 'superseded' : 'failed';
     }
-    if (this.#disposed || generation !== this.#generation) return;
+    if (superseded()) return 'superseded';
 
     const front = this.#videos[this.#front]!;
     back.hidden = false;
     // Hide the outgoing one *after* the incoming is visible. The other order
     // exposes the still for a frame, which is the flash this design exists to
-    // avoid — even though the still is, by construction, the same image.
-    if (front !== back) {
-      front.hidden = true;
-      front.pause();
-    }
+    // avoid.
+    front.hidden = true;
+    front.pause();
     this.#front = this.#front === 0 ? 1 : 0;
     this.#playing = slot;
     this.#looping = back.loop;
-    // Here rather than at the top of the method, because everything above this
-    // line is a way for a `play()` to end without anything reaching the screen.
-    // Main treats this as the record of what she actually used.
+    // Here rather than at the top, because everything above this line is a way
+    // for a start to end without anything reaching the screen. Main treats this
+    // as the record of what she actually used.
     this.#options.report?.('clip-played', { slot, looping: back.loop });
+    return 'shown';
   }
 
   /**
@@ -268,7 +369,31 @@ export class Hologram {
    */
   silence(): void {
     this.#next = null;
-    if (this.#playing !== null && !this.#looping) void this.#returnToIdle();
+
+    /*
+     * The bump comes first, and it is what makes this a barge-in rather than a
+     * note in a ledger.
+     *
+     * A gesture that is still loading when the user starts talking has not
+     * recorded itself yet — `#playing` still names the idle loop — so every
+     * test this method could make about `#playing` says "nothing to stop", and
+     * the gesture lands a moment later and plays out over them. Cancelling
+     * whatever is in flight is the only thing that reaches it.
+     */
+    this.#generation += 1;
+
+    // The idle loop is already on screen: the thing just cancelled was a
+    // gesture on its way in, and there is nothing to stop or restore.
+    if (this.#looping) return;
+
+    // Stopped now, not when the replacement has finished decoding. Freezing on
+    // a frame for the length of a load is a worse look than a cut, but a
+    // gesture that outlives the sentence it belonged to is worse than both.
+    if (this.#playing !== null) this.#videos[this.#front]!.pause();
+    // Unconditional, because `#playing` can also be null here — the cancelled
+    // start may have been the idle clip's own, in which case she is a
+    // photograph and needs putting back.
+    void this.#returnToIdle();
   }
 
   dispose(): void {
@@ -284,8 +409,24 @@ export class Hologram {
     this.#still.remove();
   }
 
-  #onEnded(video: HTMLVideoElement): void {
-    if (video.loop || this.#disposed) return;
+  /**
+   * A clip stopped: it ended, or it failed.
+   *
+   * `error` matters as much as `ended` and used not to be listened for at all.
+   * `#next` is drained here and nowhere else, so a video that stops any other
+   * way — a decode failure, a blob URL revoked out from under it — left
+   * `#playing` set forever and every subsequent gesture was filed behind a clip
+   * that was never going to finish. That is the same wedge, reached by a
+   * different door.
+   */
+  #onStopped(video: HTMLVideoElement, reason: 'ended' | 'error'): void {
+    if (this.#disposed) return;
+    // A looping clip reaching its end is not a clip stopping.
+    if (reason === 'ended' && video.loop) return;
+    // An element that is not on screen is one that was swapped out; whatever it
+    // has to say about itself is about a clip nobody is watching.
+    if (video !== this.#videos[this.#front]) return;
+
     const queued = this.#next;
     this.#next = null;
     void (queued ? this.#playAfter(queued) : this.#returnToIdle());
@@ -294,29 +435,26 @@ export class Hologram {
   async #playAfter(slot: SlotName): Promise<void> {
     this.#playing = null;
     this.#looping = false;
-    await this.play(slot);
     /*
-     * A queued clip that turns out not to exist must not leave her frozen.
-     *
-     * `play()` is deliberately silent about a missing slot, which is right at
-     * the top of a turn — the still is already behind it. Here the still is
-     * *not* what is on screen: the previous gesture has ended and its last
-     * frame is sitting there. Without this she holds that frame until the next
-     * gesture happens to arrive, which for a clip the model rarely reaches for
-     * can be the rest of the conversation.
+     * Only `failed` falls back. A queued clip that turns out not to exist must
+     * not leave her frozen — `#start` is deliberately silent about a missing
+     * slot, which is right at the top of a turn where the still is already
+     * behind it, and wrong here where the last frame of the gesture that just
+     * ended is what is on screen. But `superseded` means a *newer* clip is on
+     * its way, and returning to idle then would cancel it.
      */
-    if (this.#playing === null) await this.#returnToIdle();
+    if ((await this.#start(slot)) === 'failed') await this.#returnToIdle();
   }
 
   async #returnToIdle(): Promise<void> {
     this.#playing = null;
     this.#looping = false;
     if (this.#idle) {
-      await this.play(this.#idle);
-      // Only if it took. The idle slot can name a clip that has since been
-      // evicted, and falling through to the still is better than holding the
-      // last frame of the gesture that just ended.
-      if (this.#playing !== null) return;
+      // Only fall through on `failed`: the idle slot can name a clip that has
+      // since been evicted, and the photograph is better than the last frame of
+      // the gesture that just ended. `superseded` is somebody else's clip
+      // arriving, and must be left alone.
+      if ((await this.#start(this.#idle)) !== 'failed') return;
     }
     /*
      * Nothing left to play: hide the videos and let the photograph show.
@@ -356,10 +494,20 @@ export class Hologram {
    * Called when a clip finishes rendering, because the interesting case is the
    * slot this module has already decided is missing — without this, the first
    * clip ever generated would not appear until the app was restarted.
+   *
+   * Two slots are exempt from having their URL revoked, and the exemption is
+   * not tidiness. Revoking the URL an element is currently sourced from is
+   * legal but the element's behaviour afterwards is not something to rely on,
+   * and revoking one a load has already been handed is simply a broken load
+   * with no error attached. Both keep their entry; both are replaced normally
+   * the next time they are asked for after this.
    */
   invalidate(): void {
-    for (const url of this.#cache.values()) URL.revokeObjectURL(url);
-    this.#cache.clear();
+    for (const [slot, url] of this.#cache) {
+      if (slot === this.#playing || this.#loading.has(slot)) continue;
+      URL.revokeObjectURL(url);
+      this.#cache.delete(slot);
+    }
     this.#missing.clear();
   }
 }
