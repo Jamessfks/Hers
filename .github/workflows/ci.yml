@@ -1,10 +1,17 @@
 # CI runs the four things that can be checked without a display or an API key.
 #
-# Windows is in the matrix because "works on Mac and Windows" is a promise this
-# project makes, and the only way that promise stays true is if it is checked.
-# The things that break it are unglamorous — a path joined with a forward slash,
-# a script chained with `&`, a native module with no prebuilt binary — and every
+# Windows is here because "works on Mac and Windows" is a promise this project
+# makes, and the only way that promise stays true is if it is checked. The
+# things that break it are unglamorous — a path joined with a forward slash, a
+# script chained with `&`, a native module with no prebuilt binary — and every
 # one of them fails here rather than on someone's machine.
+#
+# macOS is deliberately *not* in the matrix, which is a change from the Electron
+# version. There is no native code, no code signing and nothing platform-
+# specific left in this tree; the runner would be testing Node, not Anna. On a
+# private repository macOS minutes bill at ten times Linux and Windows at two,
+# so the old six-job matrix cost roughly seven times this one to learn the same
+# thing.
 #
 # Node 22.18 is the floor: `node:sqlite` and running TypeScript without a build
 # step both need it, and the whole project depends on both.
@@ -22,8 +29,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [ubuntu-latest]
         node: ['22.18', '24', 'current']
+        include:
+          # One Windows job, on the floor version, because that is where a
+          # cross-platform mistake shows up first.
+          - os: windows-latest
+            node: '22.18'
 
     steps:
       - uses: actions/checkout@v4
