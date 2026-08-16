@@ -211,6 +211,15 @@ export class ClipLibraryStore {
    * therefore interleaved their writes into one file and then both renamed it,
    * which can put a truncated manifest over a real one. The manifest is the
    * index to several dollars of video, so "unlikely" is not the standard.
+   *
+   * What this orders is the *writes*, not their contents, and the difference is
+   * a convention nothing here can enforce. Which library each write carries is
+   * decided by its caller, and every caller in portrait.ts assigns
+   * `this.#library` and awaits `save(this.#library)` on the next line. Two of
+   * them interleaving between those two statements would queue the writes in
+   * the right order carrying the wrong library, and the last one to land wins.
+   * Keeping the assignment and the save adjacent is what makes that impossible;
+   * it is written down because it looks like style and is not.
    */
   async save(library: ClipLibrary): Promise<void> {
     const key = library.sourceHash;

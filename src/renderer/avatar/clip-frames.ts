@@ -22,15 +22,14 @@
 
 import type { Frame } from '../../core/avatar/seam.ts';
 
-/** Assumed frame rate when the container does not say. Only used for the back-off. */
 /**
- * The frame rate the sampling grid assumes.
+ * The frame rate the sampling grid assumes, when the container does not say.
  *
- * Exported because  is a frame number derived from it, and a
- * caller turning that index back into a timestamp — which is what a cut point
- * is — needs the same constant. Reconstructing time from the *ordinal* of a
- * sample instead gives a number that looks plausible and is wrong by whatever
- * fraction of the clip the hold window covers.
+ * Exported because {@link ClipFrames.hold}'s `index` is a frame number derived
+ * from it, and a caller turning that index back into a timestamp — which is
+ * what a cut point is — needs the same constant. Reconstructing time from the
+ * *ordinal* of a sample instead gives a number that looks plausible and is
+ * wrong by whatever fraction of the clip the hold window covers.
  */
 export const ASSUMED_FPS = 24;
 
