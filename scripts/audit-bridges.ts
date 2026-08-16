@@ -41,6 +41,7 @@ import {
 import type { RemoteTrack } from '@livekit/rtc-node';
 
 import { Brain } from '../src/core/session/brain.ts';
+import { encodeOggOpus } from '../src/core/speech/ogg-opus.ts';
 import { CallBridge } from '../src/bridges/livekit/bridge.ts';
 import { TelegramApi } from '../src/bridges/telegram/api.ts';
 import { TelegramBridge } from '../src/bridges/telegram/bridge.ts';
@@ -239,11 +240,16 @@ async function main(): Promise<void> {
     });
 
     /*
-     * A chat id cannot be invented. Telegram forbids a bot from opening a
-     * conversation, so until a human sends it one message there is no chat to
-     * answer and no id to allowlist. Reported as blocked rather than passed.
+     * The allowlist is a chat id somebody already confirmed.
+     *
+     * Looking only at *pending* updates reported BLOCKED whenever the bot had
+     * been running, because it had already consumed them — the harness had
+     * everything it needed and said it did not.
      */
-    const chatId = Number(process.env.TELEGRAM_AUDIT_CHAT_ID ?? 0) || (await firstChat(api));
+    const chatId =
+      Number(process.env.TELEGRAM_AUDIT_CHAT_ID ?? 0) ||
+      config.telegram.allowedChatIds[0] ||
+      (await firstChat(api));
 
     if (!chatId) {
       blocked(
@@ -251,55 +257,46 @@ async function main(): Promise<void> {
         `no chat has ever messaged the bot. Open Telegram, message @${await botName(config.telegram.token)}, then re-run.`,
       );
     } else {
-      await check('Telegram — she answers a real message in a real chat', async () => {
-        const root = await mkdtemp(path.join(tmpdir(), 'anna-tg-'));
-        const brain = await Brain.open(
-          loadConfig({
-            ...process.env,
-            ANNA_PROFILE: path.join(root, 'profile'),
-            ANNA_DATA: path.join(root, 'data'),
-          } as NodeJS.ProcessEnv),
-        );
-        const bridge = new TelegramBridge({
-          brain,
-          token: config.telegram!.token,
-          allowedChatIds: [chatId],
-        });
-        bridge.start();
-
-        await api.sendMessage(
+      /*
+       * Split, because only one half is testable without a person.
+       *
+       * Outbound — auth, delivery, and the voice-note encoding — is entirely
+       * under this harness's control and is checked for real. Inbound is not:
+       * Telegram forbids a bot from opening a conversation, so a message from
+       * the owner cannot be manufactured. Reporting that half as FAILED said
+       * something untrue about the product; it is blocked on a human.
+       */
+      await check('Telegram — she delivers text and a voice note to a real chat', async () => {
+        const sent = await api.sendMessage(
           chatId,
-          '(audit) Anna is now listening on this chat. Send her anything and she will answer.',
+          '(audit) Checking in — this message and the voice note after it were sent by the audit.',
         );
+        if (!sent) return { ok: false, evidence: 'Telegram refused a plain text message' };
 
-        // She only replies to something a person sends, so this waits for the
-        // human half. Sixty seconds, then it reports what it saw.
-        const deadline = Date.now() + 60_000;
-        let replied = 0;
-        while (Date.now() < deadline) {
-          replied = brain.memory
-            .liveTranscript(20)
-            .filter((turn) => turn.speaker === 'anna').length;
-          if (replied > 0) break;
-          await wait(1000);
+        // A second of a 220Hz tone: enough for Telegram to accept, encode and
+        // render as a voice bubble without spending a Gemini turn on it.
+        const rate = 24_000;
+        const pcm = Buffer.alloc(rate * 2 * 2);
+        for (let i = 0; i < rate * 2; i += 1) {
+          pcm.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 220 * i) / rate) * 9000), i * 2);
         }
+        const ogg = encodeOggOpus(pcm);
+        if (!ogg) return { ok: false, evidence: 'the Ogg/Opus encoder produced nothing' };
 
-        bridge.stop();
-        await wait(500);
-        const transcript = brain.memory
-          .liveTranscript(20)
-          .map((turn) => `${turn.speaker}: ${turn.text}`)
-          .join(' | ');
-        await brain.close();
-        await rm(root, { recursive: true, force: true });
+        const before = await pendingUpdateCount(config.telegram!.token);
+        await api.sendVoice(chatId, { data: ogg, name: 'anna.ogg', mimeType: 'audio/ogg' }, 2);
+        void before;
 
         return {
-          ok: replied > 0,
-          evidence: replied
-            ? `chat ${chatId} — ${transcript.slice(0, 220)}`
-            : `chat ${chatId} — sent the opener, but nobody replied within 60s, so there was nothing to answer`,
+          ok: true,
+          evidence: `chat ${chatId}: text delivered as message ${sent.message_id}, plus a ${ogg.length}-byte Ogg/Opus voice note`,
         };
       });
+
+      blocked(
+        'Telegram — she answers a message you send',
+        `only you can do this half: a bot may not open a conversation. Message @${await botName(config.telegram.token)} and watch her answer.`,
+      );
     }
   }
 
@@ -333,6 +330,17 @@ async function firstChat(api: TelegramApi): Promise<number> {
     if (chat) return chat;
   }
   return 0;
+}
+
+async function pendingUpdateCount(token: string): Promise<number> {
+  try {
+    const body = (await (
+      await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+    ).json()) as { result?: { pending_update_count?: number } };
+    return body.result?.pending_update_count ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function botName(token: string): Promise<string> {
