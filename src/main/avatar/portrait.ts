@@ -30,11 +30,14 @@ import {
   failClip,
   libraryProgress,
   pendingWork,
+  recordSeam,
   resumableJobs,
+  unverifiedClips,
   attachJob,
   startGenerating,
   type ClipLibrary,
   type ClipSlotName,
+  type SeamVerdict,
 } from '../../core/avatar/clips.ts';
 import { sniffImage, type ImageInfo } from '../../core/avatar/image-info.ts';
 import { ClipLibraryStore, hashSourceImage } from '../../core/avatar/library-store.ts';
@@ -472,6 +475,25 @@ export class PortraitLibrary extends EventEmitter {
    * that it changes: a clip finishing mid-conversation should be usable in the
    * next turn, not the next launch.
    */
+  /**
+   * Records what the renderer measured for a clip that is already on disk.
+   *
+   * The bytes are not re-examined and the verdict is not second-guessed: main
+   * cannot decode a video, which is the entire reason this arrives from the
+   * other process. What main does own is the consequence — a clip that does not
+   * close is demoted, and `completeClip`'s rules for that are reused rather than
+   * restated.
+   */
+  async recordSeam(slot: ClipSlotName, seam: SeamVerdict): Promise<LibraryView> {
+    if (!this.#library) return this.view();
+    if (!this.#library.clips[slot]?.file) return this.view();
+
+    this.#library = recordSeam(this.#library, slot, seam);
+    await this.#store.save(this.#library);
+    this.#emit();
+    return this.view();
+  }
+
   readyGestures(): string[] {
     if (!this.#library) return [];
     return Object.entries(this.#library.clips)
@@ -482,7 +504,16 @@ export class PortraitLibrary extends EventEmitter {
   view(): LibraryView {
     const library = this.#library;
     if (!library) {
-      return { portrait: '', ready: [], building: null, failed: [], total: 0, alive: false, spentUsd: 0 };
+      return {
+        portrait: '',
+        ready: [],
+        building: null,
+        failed: [],
+        unverified: [],
+        total: 0,
+        alive: false,
+        spentUsd: 0,
+      };
     }
 
     const progress = libraryProgress(library);
@@ -498,6 +529,7 @@ export class PortraitLibrary extends EventEmitter {
       ready,
       building: this.#building,
       failed,
+      unverified: unverifiedClips(library),
       total: BUILD_ORDER.length,
       alive: library.clips[IDLE_SLOT].status === 'ready',
       spentUsd: progress.spentUsd,

@@ -21,6 +21,7 @@ import {
   type MemoryFactView,
   type MemoryStats,
   type PerformanceEvent,
+  type SeamVerdict,
   type PermissionReport,
   type SenseEvent,
   type VideoProviderView,
@@ -101,6 +102,18 @@ const api = {
   /** What exists in the clip library right now. */
   libraryStatus(): Promise<LibraryView> {
     return ipcRenderer.invoke(IPC.libraryStatus);
+  },
+
+  /**
+   * Reports how a clip measured against the source frame.
+   *
+   * The only call on this bridge that sends a *judgement* to main rather than
+   * asking for something. It exists because the capability is split: main owns
+   * the file and the manifest, and this process owns the only video decoder in
+   * the app.
+   */
+  reportSeam(slot: string, seam: SeamVerdict): Promise<LibraryView> {
+    return ipcRenderer.invoke(IPC.clipSeam, slot, seam);
   },
 
   /** The video providers, each with what a full library would cost. */

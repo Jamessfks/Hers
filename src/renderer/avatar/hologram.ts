@@ -96,6 +96,35 @@ export class Hologram {
    * Exposed because the panel is sized to fit her rather than the other way
    * round, and this is the only place those numbers exist in the renderer.
    */
+  /**
+   * The source photograph as pixels, scaled to the size asked for.
+   *
+   * Here rather than in verify.ts because this class already owns the decoded
+   * still — it is the element behind every clip — and decoding the same image a
+   * second time to measure against it would be doing the work twice and risking
+   * the two copies disagreeing.
+   *
+   * The caller passes the clip's render size; see `VerifyDeps.sourceFrame` for
+   * why that cannot be decided here.
+   */
+  async sourceFrame(width: number, height: number): Promise<ImageData | null> {
+    const still = this.#still;
+    if (!still?.src || !still.naturalWidth) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+
+    // Stretched to the clip's frame rather than letterboxed into it: the clip
+    // was generated *from* this image, so the two are the same picture at
+    // whatever resolution the vendor chose, and any padding here would be
+    // measured as a difference that is not there.
+    context.drawImage(still, 0, 0, width, height);
+    return context.getImageData(0, 0, width, height);
+  }
+
   get shape(): { width: number; height: number } | null {
     const { naturalWidth: width, naturalHeight: height } = this.#still;
     return width > 0 && height > 0 ? { width, height } : null;

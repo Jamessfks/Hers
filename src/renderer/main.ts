@@ -10,6 +10,7 @@
 import type { AnnaConfig, LibraryView, PerformanceEvent } from '../shared/protocol.ts';
 import { SpeechPlayer } from './audio/player.ts';
 import { Hologram } from './avatar/hologram.ts';
+import { verifyPending } from './avatar/verify.ts';
 import { Thread } from './chat.ts';
 import { fitComposer, showListening } from './composer.ts';
 import { Microphone } from './audio/microphone.ts';
@@ -85,6 +86,32 @@ async function showAvatar(): Promise<void> {
  * calls it.
  */
 
+/**
+ * Measures any clip that has never been measured, one at a time.
+ *
+ * Guarded by a flag rather than queued: `applyLibrary` fires on every library
+ * change, and a build emits several in a row, so without this a second pass
+ * would start while the first was still decoding and they would fight over the
+ * same slots. Whatever the second pass would have found is still unverified
+ * when the first finishes, and the next event picks it up.
+ */
+let verifying = false;
+
+async function verifyLibrary(view: LibraryView): Promise<void> {
+  if (verifying || view.unverified.length === 0) return;
+  verifying = true;
+  try {
+    await verifyPending(view.unverified, {
+      loadClip: (slot) => window.anna.getClip(slot),
+      sourceFrame: (width, height) => hologram.sourceFrame(width, height),
+      report: (slot, seam) => window.anna.reportSeam(slot, seam),
+      note: (event, detail) => window.anna.report(event, detail),
+    });
+  } finally {
+    verifying = false;
+  }
+}
+
 async function applyLibrary(view: LibraryView): Promise<void> {
   // The cache has to be dropped before idle is re-checked: this module records
   // which slots are missing so it stops asking, and the whole point of this
@@ -92,6 +119,11 @@ async function applyLibrary(view: LibraryView): Promise<void> {
   hologram.invalidate();
   await hologram.setIdle(view.ready.includes('idle') ? 'idle' : null);
   document.body.dataset['alive'] = String(view.alive);
+
+  // Not awaited. Measuring is minutes of decoding on a good day and none of it
+  // is on the path to her being on screen — the clips play unverified, which is
+  // the whole reason `unverified` is a state rather than an error.
+  void verifyLibrary(view);
 }
 
 /*

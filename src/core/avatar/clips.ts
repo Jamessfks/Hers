@@ -32,7 +32,7 @@
  * fails forever — are testable without a filesystem and without a vendor.
  */
 
-import { GESTURE_NAMES, type GestureName } from '../../shared/protocol.ts';
+import { GESTURE_NAMES, type GestureName, type SeamVerdict } from '../../shared/protocol.ts';
 
 // ---------------------------------------------------------------------------
 // Slots
@@ -178,9 +178,25 @@ export const MAX_ATTEMPTS = 3;
  * every direction except this one.
  */
 export const CLIP_TRANSITIONS: Record<ClipStatus, readonly ClipStatus[]> = {
-  pending: ['pending', 'generating', 'ready'],
+  /*
+   * `pending -> failed` and `ready -> failed` were both missing, and their
+   * absence made the seam check unreachable rather than merely unwired.
+   *
+   * A clip is written `ready` and unmeasured, because measuring needs a decoder
+   * that only the renderer has. When the verdict comes back and says the clip
+   * drifted, demoting it is `ready -> failed` — which threw. So the branch in
+   * `completeClip` that has always handled a failing seam could never have run
+   * even if something had called it, and the first thing to wire the check up
+   * would have crashed on the first bad clip rather than recording it.
+   *
+   * Failing is legal from anywhere, for the same reason `failed -> failed` had
+   * to be added: it is not a corrupt state, it is the outcome of an attempt, and
+   * a state machine that refuses to record a real outcome turns a finding into
+   * an exception thrown from inside the code handling the finding.
+   */
+  pending: ['pending', 'generating', 'ready', 'failed'],
   generating: ['pending', 'ready', 'failed'],
-  ready: ['pending', 'generating', 'ready'],
+  ready: ['pending', 'generating', 'ready', 'failed'],
   // `failed -> failed` was missing, and its absence was not theoretical: a slot
   // that fails twice is ordinary, and the second `failClip` threw *inside the
   // catch block* that was handling the first failure. That replaced the real
@@ -311,21 +327,14 @@ export function attachJob(
 }
 
 /**
- * The seam verdict for a finished clip.
+ * Re-exported so callers of this module do not need two imports.
  *
- * Carried in rather than computed here, because measuring it needs a video
- * decoder and `core` must stay runnable without one.
+ * Declared in shared/protocol.ts because it crosses the process boundary: the
+ * renderer measures it and main records it. Measuring needs a video decoder and
+ * `core` must stay runnable without one, which is why it is carried in rather
+ * than computed here.
  */
-export interface SeamVerdict {
-  closesCleanly: boolean;
-  /** Human-readable, for the setup screen and the diagnostics log. */
-  summary: string;
-  /**
-   * Where to cut, in milliseconds, if a better point than the nominal end was
-   * found by searching the hold.
-   */
-  cutAtMs?: number;
-}
+export type { SeamVerdict };
 
 export interface CompletedClip {
   /** File name inside `clips/`, already written to disk. */
@@ -396,6 +405,77 @@ export function completeClip(
 }
 
 /**
+ * Applies a seam measurement to a clip that is already on disk.
+ *
+ * {@link completeClip} takes a verdict too, and would be the whole story if the
+ * measurement were available when the bytes land. It is not, and cannot be:
+ * measuring needs a video decoder, only the renderer has one, and main is the
+ * process that writes the file. So a clip arrives unmeasured — `ready` with no
+ * `verified` flag — and the verdict follows a moment later, from the other side
+ * of the IPC boundary, through here.
+ *
+ * The two functions deliberately reach the same conclusions from the same
+ * verdict. A clip that does not close is failed with its file left in place,
+ * because the bytes are paid for and a player that wants to fall back to them
+ * still can; a clip that does is `verified` and takes the measured cut point
+ * over the nominal one.
+ *
+ * Refuses a slot with no file. A seam verdict about a clip that was never
+ * written is a bug in the caller, and silently inventing a `ready` entry for it
+ * would put a manifest into a state nothing else in this module can produce.
+ */
+export function recordSeam(
+  library: ClipLibrary,
+  slot: ClipSlotName,
+  seam: SeamVerdict,
+  now = Date.now(),
+): ClipLibrary {
+  const entry = library.clips[slot];
+  if (!entry.file) {
+    throw new Error(`${slot} has no clip on disk, so there is no seam to record`);
+  }
+
+  if (!seam.closesCleanly) {
+    return withEntry(
+      library,
+      slot,
+      {
+        status: 'failed',
+        error: `Clip does not return to the source pose — ${seam.summary}`,
+        job: null,
+      },
+      now,
+    );
+  }
+
+  return withEntry(
+    library,
+    slot,
+    {
+      status: 'ready',
+      durationMs: seam.cutAtMs ?? entry.durationMs,
+      verified: true,
+      error: null,
+      job: null,
+    },
+    now,
+  );
+}
+
+/**
+ * Clips that are on disk and playable but whose seam has never been measured.
+ *
+ * The renderer asks for this list and works through it. `verified` is only ever
+ * written as `true`, so its absence is the question rather than a third state.
+ */
+export function unverifiedClips(library: ClipLibrary): ClipSlotName[] {
+  return BUILD_ORDER.filter((slot) => {
+    const entry = library.clips[slot];
+    return entry.status === 'ready' && entry.file !== null && !entry.verified;
+  });
+}
+
+/**
  * A failed attempt is still billed by most vendors, so `costUsd` is accepted
  * here too. A library that under-reports what it spent is worse than one that
  * reports nothing, because it will be believed.
@@ -407,6 +487,24 @@ export function failClip(
   options: { costUsd?: number; now?: number } = {},
 ): ClipLibrary {
   const entry = library.clips[slot];
+
+  /*
+   * A failed *attempt* never demotes a clip that already exists.
+   *
+   * This used to be enforced by the transition table refusing `ready -> failed`
+   * at all, which was the right protection expressed in the wrong place: it also
+   * blocked {@link recordSeam}, whose entire job is to demote a clip on disk
+   * that turns out not to loop. The two are different events — "the render did
+   * not work" and "the render worked and the result is wrong" — and only the
+   * second is entitled to take a playable clip away.
+   *
+   * The bytes are the truth. A retry that fails after a clip has landed leaves
+   * the landed clip alone.
+   */
+  if (entry.status === 'ready') {
+    throw new Error(`${slot} is already ready; a failed attempt cannot go from ready to failed`);
+  }
+
   return withEntry(
     library,
     slot,

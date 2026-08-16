@@ -174,6 +174,25 @@ export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
  */
 export type GenerationTier = 'low' | 'medium' | 'high';
 
+/**
+ * How a finished clip measured against the photograph it was generated from.
+ *
+ * Declared here because it crosses the process boundary — the renderer decodes
+ * the clip and main writes the verdict down — and this file is where anything
+ * that crosses is declared. The arithmetic behind it is in core/avatar/seam.ts;
+ * this is only the shape of the answer.
+ */
+export interface SeamVerdict {
+  closesCleanly: boolean;
+  /** Human-readable, for the setup screen and the diagnostics log. */
+  summary: string;
+  /**
+   * Where to cut, in milliseconds, if a better point than the nominal end was
+   * found by searching the hold.
+   */
+  cutAtMs?: number;
+}
+
 export interface AnnaConfig {
   llm: {
     provider: LlmProviderId;
@@ -299,6 +318,20 @@ export const IPC = {
   /** main -> renderer: the library changed — a clip started, finished or failed. */
   libraryChanged: 'anna:library:changed',
   /**
+   * renderer -> main: how a finished clip measured against the source frame.
+   *
+   * This direction is unusual and is forced by where the capability lives.
+   * Everything else about a clip is main's business — it pays for it, downloads
+   * it and writes it — but judging whether it loops cleanly needs a video
+   * decoder, and only the window has one. So main writes the clip unmeasured
+   * and the renderer sends the verdict back.
+   *
+   * Nothing here is trusted with money or the filesystem: the payload is a
+   * boolean, a sentence and a millisecond offset, applied to a slot main
+   * already knows about.
+   */
+  clipSeam: 'anna:clip:seam',
+  /**
    * renderer -> main: the panel wants to be this tall.
    *
    * The renderer asks rather than main deciding, because the height that fits
@@ -418,6 +451,15 @@ export interface LibraryView {
   building: string | null;
   /** Slots that failed and will not be retried without being asked. */
   failed: string[];
+  /**
+   * Playable, but never measured against the source frame.
+   *
+   * A subset of `ready`, and the renderer's work queue: it is the only process
+   * that can decode a clip, so it reads this, measures what is on it, and sends
+   * each verdict back on `clipSeam`. An empty list means every clip on disk has
+   * been judged, not that none needed judging.
+   */
+  unverified: string[];
   total: number;
   /** True once the idle clip exists, which is when she stops being a still. */
   alive: boolean;

@@ -47,6 +47,7 @@ import { readActivity, readNextEvent } from './senses/macos.ts';
 import {
   IPC,
   type LibraryView,
+  type SeamVerdict,
   type SenseEvent,
   type VideoProviderView,
 } from '../shared/protocol.ts';
@@ -562,6 +563,28 @@ async function main(): Promise<void> {
    * be billed — which is the entire reason it exists as a separate call rather
    * than "try a render and see".
    */
+  /*
+   * The renderer's verdict on a clip it decoded.
+   *
+   * The slot is validated against the known list before it is used: this is the
+   * one inbound channel that writes to the manifest, and an arbitrary string
+   * from a window would otherwise reach `library.clips[slot]`.
+   */
+  ipcMain.handle(IPC.clipSeam, async (_event, slot: unknown, seam: unknown) => {
+    const name = String(slot) as ClipSlotName;
+    if (!CLIP_SLOT_NAMES.includes(name)) return portraits.view();
+
+    const verdict = seam as SeamVerdict | null;
+    if (!verdict || typeof verdict.closesCleanly !== 'boolean') return portraits.view();
+
+    diag.note('seam-measured', { slot: name, closes: verdict.closesCleanly });
+    return portraits.recordSeam(name, {
+      closesCleanly: verdict.closesCleanly,
+      summary: String(verdict.summary ?? '').slice(0, 200),
+      ...(typeof verdict.cutAtMs === 'number' ? { cutAtMs: verdict.cutAtMs } : {}),
+    });
+  });
+
   ipcMain.handle(IPC.videoCheck, async () => {
     const id = config.get().avatar.videoProvider;
     if (id === 'manual') {
