@@ -63,6 +63,19 @@ export class Hologram {
 
   /** Blob URLs by slot. Clips are small and re-fetching one costs a frame. */
   readonly #cache = new Map<SlotName, string>();
+  /**
+   * URLs dropped from {@link #cache} that something may still be reading.
+   *
+   * {@link invalidate} cannot revoke a URL an element is sourced from, or one a
+   * load has already been handed — see its note. It used to answer that by
+   * keeping the whole cache *entry*, which is the opposite of what it wanted:
+   * the stale URL was then handed out again on every later request. A gesture
+   * recovered on the next `invalidate`, because `#playing` had moved on by
+   * then; `#playing` names the idle loop permanently, so idle's bytes could
+   * never be replaced at all. The entry goes now and only the revoke waits
+   * here, until no element points at the URL.
+   */
+  readonly #stale = new Map<string, SlotName>();
   /** Slots known to be absent, so a missing gesture is asked for once. */
   readonly #missing = new Set<SlotName>();
   /**
@@ -365,6 +378,9 @@ export class Hologram {
     this.#front = this.#front === 0 ? 1 : 0;
     this.#playing = slot;
     this.#looping = back.loop;
+    // An element has just changed source, which is the event that frees
+    // whatever URL it was holding for `invalidate`.
+    this.#sweepStale();
     // Here rather than at the top, because everything above this line is a way
     // for a start to end without anything reaching the screen. Main treats this
     // as the record of what she actually used.
@@ -424,6 +440,10 @@ export class Hologram {
     }
     for (const url of this.#cache.values()) URL.revokeObjectURL(url);
     this.#cache.clear();
+    // Unconditionally, unlike the sweep: the elements have just been emptied
+    // and nothing is going to ask about these again.
+    for (const url of this.#stale.keys()) URL.revokeObjectURL(url);
+    this.#stale.clear();
     this.#loading.clear();
     this.#still.remove();
   }
@@ -514,20 +534,38 @@ export class Hologram {
    * slot this module has already decided is missing — without this, the first
    * clip ever generated would not appear until the app was restarted.
    *
-   * Two slots are exempt from having their URL revoked, and the exemption is
-   * not tidiness. Revoking the URL an element is currently sourced from is
+   * Every entry goes. Two of the *revokes* are deferred, and the deferral is
+   * not tidiness: revoking the URL an element is currently sourced from is
    * legal but the element's behaviour afterwards is not something to rely on,
    * and revoking one a load has already been handed is simply a broken load
-   * with no error attached. Both keep their entry; both are replaced normally
-   * the next time they are asked for after this.
+   * with no error attached. Those URLs move to {@link #stale} and are revoked
+   * once nothing points at them — see {@link #sweepStale}.
    */
   invalidate(): void {
     for (const [slot, url] of this.#cache) {
-      if (slot === this.#playing || this.#loading.has(slot)) continue;
-      URL.revokeObjectURL(url);
       this.#cache.delete(slot);
+      if (slot === this.#playing || this.#loading.has(slot)) this.#stale.set(url, slot);
+      else URL.revokeObjectURL(url);
     }
     this.#missing.clear();
+    this.#sweepStale();
+  }
+
+  /**
+   * Revokes what {@link invalidate} could not, once it is safe to.
+   *
+   * "Safe" is no element sourced from it and no load holding it. A clip stays
+   * as some element's `src` until that element is reused, which is one or two
+   * clips later, so at most a couple of blobs outlive their entry — and
+   * {@link dispose} revokes whatever is left whatever it is pointing at.
+   */
+  #sweepStale(): void {
+    for (const [url, slot] of this.#stale) {
+      if (this.#loading.has(slot)) continue;
+      if (this.#videos.some((video) => video.src === url)) continue;
+      URL.revokeObjectURL(url);
+      this.#stale.delete(url);
+    }
   }
 }
 

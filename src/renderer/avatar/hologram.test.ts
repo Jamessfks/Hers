@@ -488,6 +488,62 @@ test('a library change does not revoke the clip that is playing', async () => {
   assert.equal(played[played.length - 1], 'nod');
 });
 
+test('the clip that was playing is re-read after a library change, not served stale', async () => {
+  /*
+   * `invalidate` exempted the playing slot from the *revoke* and from the cache
+   * entry with it, so the stale URL was handed back on every later request.
+   * `#playing` names the idle loop for as long as she is alive, so idle was
+   * exempt from every invalidate there would ever be: a photograph swapped for
+   * one whose library also has an idle clip kept looping the previous person's.
+   */
+  const { hologram, asked } = await rig(['idle']);
+  await hologram.setIdle('idle');
+  await settle();
+  assert.equal(asked.filter((slot) => slot === 'idle').length, 1);
+
+  hologram.invalidate();
+  await hologram.setIdle(null);
+  await settle();
+  await hologram.setIdle('idle');
+  await settle();
+  assert.equal(
+    asked.filter((slot) => slot === 'idle').length,
+    2,
+    'the bytes are fetched again rather than replayed from a dropped cache',
+  );
+});
+
+test('a URL kept back by a library change is revoked once nothing points at it', async () => {
+  // The deferred revoke has to actually happen. Dropping the entry and keeping
+  // the URL forever would trade a stale clip for a multi-megabyte blob leak per
+  // library event, and a build emits several in a row.
+  const revoked: string[] = [];
+  (globalThis as Record<string, unknown>)['URL'] = {
+    createObjectURL: (() => {
+      let n = 0;
+      return () => `blob:fake/${(n += 1)}`;
+    })(),
+    revokeObjectURL: (url: string) => revoked.push(url),
+  };
+
+  const { hologram, videos, played } = await rig(['idle', 'nod']);
+  await hologram.setIdle('idle');
+  await settle();
+  const first = onScreen(videos)!.src;
+
+  hologram.invalidate();
+  assert.ok(!revoked.includes(first), 'not while the element is still sourced from it');
+
+  // Two more clips: the second is the one that re-uses the element still
+  // holding the old URL.
+  await hologram.play('nod');
+  await settle();
+  onScreen(videos)!.end();
+  await settle();
+  assert.equal(played[played.length - 1], 'idle');
+  assert.ok(revoked.includes(first), 'and once the element has moved on, it is');
+});
+
 test('she is only "animated" when something is actually on screen', async () => {
   // `#idle` being set says a slot was named, not that its clip exists.
   const { hologram } = await rig([]);
