@@ -14,8 +14,8 @@ The engineering bar is [Grok's Ani](docs/BENCHMARK.md).
 
 | | | |
 |:--:|:--:|:--:|
-| ![Anna's window on first run](docs/screenshots/first-run.png) | ![A conversation in progress](docs/screenshots/thread.png) | ![Anna composing a reply](docs/screenshots/thinking.png) |
-| **She is the window.** Her clip fills every pixel of it, cropped rather than letterboxed at any size. | **One clause, one bubble.** Her speech is chunked at breath points for the voice path, and each becomes its own message. | **Thinking.** The three dots sit in her place in the stack while the model is still answering. |
+| ![Anna mid-gesture, her first reply on screen](docs/screenshots/gesture.png) | ![A conversation in progress](docs/screenshots/thread.png) | ![Anna moving behind the thinking dots](docs/screenshots/thinking.png) |
+| **She moves mid-sentence.** The `[tilt_head]` written into this line fired while she was still saying it; the clip is still running here. | **One clause, one bubble.** Her speech is chunked at breath points for the voice path, and each becomes its own message. | **Thinking.** The three dots sit in her place in the stack while the model is still answering; behind them the idle clip is what keeps her moving. |
 
 <sub>Real captures of the running app, at its default 406×880. The avatar is
 whatever photograph you gave her — nothing is bundled.</sub>
