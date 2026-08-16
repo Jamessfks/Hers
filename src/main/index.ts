@@ -149,9 +149,14 @@ async function main(): Promise<void> {
         perform: (event) => {
           diag.noteEvent(event.kind);
           if (event.kind === 'turn-end') diag.endTurn();
-          // Main knows which gesture fired because main sent it, so the
-          // eviction ordering needs no round trip to the window.
-          if (event.kind === 'gesture') void portraits.notePlayed(event.name);
+          /*
+           * `notePlayed` used to be called here, on the grounds that main knows
+           * which gesture fired because main sent it. It does not: a gesture
+           * whose clip has not been rendered is a no-op in the window, and so
+           * is one superseded by the next directive in the same breath. Sending
+           * is not playing, and the eviction ordering is a record of what she
+           * actually used. The window reports it instead — see `clip-played`.
+           */
           send(IPC.perform, event);
         },
         audio: (clauseId, chunk) => {
@@ -203,6 +208,39 @@ async function main(): Promise<void> {
   refresh();
 
   // -- IPC ------------------------------------------------------------------
+
+  /*
+   * What the window says about itself.
+   *
+   * `AnnaApi.report` has existed and been called from four places in the
+   * renderer — a clip loading, a seam that would not decode, an uncaught error,
+   * an unhandled rejection — and nothing in main was listening, so all of it
+   * went into the void. That is the worst possible arrangement for the one
+   * process that cannot be inspected: her window is content-protected, so a
+   * screenshot of it is blank, and until now a renderer-side failure produced
+   * no screenshot, no log line and no exception anywhere a human would look.
+   *
+   * One report is more than diagnostics. `clip-played` is the window saying a
+   * clip actually reached the screen, which is a different fact from main
+   * having *sent* a gesture: a slot with no file, a directive superseded by the
+   * next one in the same breath, a decode that failed — all of those are sends
+   * that never became anything visible. The eviction ordering asks "which of
+   * these is she not actually using", so it has to be answered by the process
+   * that knows.
+   */
+  ipcMain.on(IPC.bodyReport, (_event, event: unknown, detail: unknown) => {
+    const name = String(event).slice(0, 64);
+    const fields = detail && typeof detail === 'object' ? (detail as Record<string, unknown>) : {};
+
+    if (name === 'clip-played') {
+      // Validated against the known list for the same reason `clipSeam` is:
+      // this is a string from a window reaching a manifest key.
+      const slot = String(fields['slot']) as ClipSlotName;
+      if (CLIP_SLOT_NAMES.includes(slot)) void portraits.notePlayed(slot);
+    }
+
+    diag.note(`body:${name}`, fields);
+  });
 
   ipcMain.on(IPC.sense, (_event, sensed: SenseEvent) => {
     situation.observe(sensed);
