@@ -334,6 +334,23 @@ export class AvatarStudio {
     return this.state();
   }
 
+  /**
+   * The photograph itself, for anything that needs to generate *her*.
+   *
+   * Null when none has been uploaded, in which case a generated picture falls
+   * back to the written description — a consistent stranger rather than an
+   * inconsistent her.
+   */
+  async sourceImage(): Promise<{ data: Buffer; mimeType: string } | null> {
+    const file = this.sourcePath();
+    if (!file) return null;
+    try {
+      return { data: await readFile(file), mimeType: this.sourceMimeType() };
+    } catch {
+      return null;
+    }
+  }
+
   sourcePath(): string | null {
     const source = this.#manifest.source;
     return source ? path.join(this.#dir, source.file) : null;

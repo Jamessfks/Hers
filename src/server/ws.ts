@@ -82,6 +82,13 @@ export class WebBridge {
     });
 
     this.#wss.on('connection', (socket, request) => void this.#accept(socket, request));
+
+    // Without this, an error on the server socket is an unhandled 'error'
+    // event, which in Node means the whole process dies — taking a live
+    // conversation with it because something went wrong with a listener.
+    this.#wss.on('error', (error) => {
+      console.warn(`websocket server: ${error.message}`);
+    });
   }
 
   async close(): Promise<void> {

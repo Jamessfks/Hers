@@ -46,6 +46,15 @@ export interface PickOptions {
   /** Her appearance, verbatim from the profile. Only used when generating. */
   appearance?: string;
   apiKey?: string;
+  /**
+   * The picture the new one should look like.
+   *
+   * Overrides "the newest thing in the gallery", which is the right default
+   * for a follow-up but the wrong one for a greeting: the avatar photograph is
+   * the face the user actually chose, and every generated picture should be of
+   * *her* rather than of whatever was made last.
+   */
+  reference?: { data: Buffer; mimeType: string };
 }
 
 export class Gallery {
@@ -134,7 +143,23 @@ export class Gallery {
     if (best) return best;
 
     if (!options.allowNew || !options.apiKey) return null;
-    return this.#generate(description, options.apiKey, options.appearance ?? '');
+    return this.generate(description, options);
+  }
+
+  /**
+   * Makes a new picture, whether or not one already fits.
+   *
+   * Separate from {@link pick} because a greeting is not a search: the point is
+   * that it is new, so falling back to something on disk would defeat it.
+   */
+  async generate(description: string, options: PickOptions): Promise<GalleryItem | null> {
+    if (!options.apiKey) return null;
+    return this.#generate(
+      description,
+      options.apiKey,
+      options.appearance ?? '',
+      options.reference,
+    );
   }
 
   async #bestMatch(description: string, items: GalleryItem[]): Promise<GalleryItem | null> {
@@ -171,12 +196,13 @@ export class Gallery {
     description: string,
     apiKey: string,
     appearance: string,
+    override?: { data: Buffer; mimeType: string },
   ): Promise<GalleryItem | null> {
     if (this.#generating) return this.#generating;
 
     this.#generating = (async () => {
       try {
-        const reference = await this.#reference();
+        const reference = override ?? (await this.#reference());
         const generated = await generatePortrait({
           apiKey,
           description,

@@ -295,6 +295,66 @@ test('audio only flows while hearing is on', async () => {
   await f.companion.sleep();
 });
 
+test('the first thing said opens with a freshly generated picture', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  // A real generation is a network call and a bill, so the gallery's generator
+  // is replaced — what is under test is *when* it fires and *what it is asked
+  // for*, not Nano Banana.
+  const asked: Array<{ description: string; hasReference: boolean }> = [];
+  f.brain.gallery.generate = async (description, options) => {
+    asked.push({ description, hasReference: Boolean(options.reference) });
+    return {
+      name: 'greeting.jpg',
+      absolutePath: '/tmp/greeting.jpg',
+      kind: 'image' as const,
+      caption: 'greeting',
+      modifiedAt: Date.now(),
+    };
+  };
+
+  f.companion.say('hey');
+  f.companion.say('you there?');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  assert.equal(asked.length, 1, 'one picture per conversation, not one per message');
+  assert.match(asked[0]?.description ?? '', /looking at the camera/);
+  assert.equal(f.shown.at(0)?.name, 'greeting.jpg');
+  await f.companion.sleep();
+});
+
+test('the greeting picture can be switched off', async () => {
+  const f = await fixture({ ANNA_GREETING_IMAGE: '0' });
+  await f.companion.wake();
+
+  let called = 0;
+  f.brain.gallery.generate = async () => {
+    called += 1;
+    return null;
+  };
+
+  f.companion.say('hey');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(called, 0);
+  await f.companion.sleep();
+});
+
+test('a greeting that fails costs a picture, not the conversation', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+  f.brain.gallery.generate = async () => {
+    throw new Error('the image model refused');
+  };
+
+  f.companion.say('hey');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  assert.equal(f.shown.length, 0);
+  assert.equal(f.brain.memory.liveTranscript(5).at(-1)?.text, 'hey', 'the turn still landed');
+  await f.companion.sleep();
+});
+
 test('typing to her records the turn and reaches the model', async () => {
   const f = await fixture();
   await f.companion.wake();

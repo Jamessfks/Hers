@@ -478,9 +478,37 @@ export class LiveConversation {
       this.#options.handlers.onAnnaText(this.#annaBuffer, false);
     }
 
+    /*
+     * A finished *generation* closes an utterance; a finished *turn* closes the
+     * exchange. They are usually the same moment, and when they are not, the
+     * difference is visible to the user.
+     *
+     * One turn can contain several generations — she answers, then the
+     * initiative asks her to carry on, and both land before `turnComplete`.
+     * Flushing only on the turn ran them together: transcription chunks carry
+     * their own leading spaces *within* a generation, but the first chunk of
+     * the next one does not, which produced "What's up?You know, you look like"
+     * in a real Telegram message, and stored it in memory that way too.
+     *
+     * Splitting here also gets the chat right: two things she said become two
+     * messages rather than one wall.
+     */
+    const closing = Boolean(content.generationComplete || content.turnComplete);
+
+    // The user finished speaking before she started answering, so their line is
+    // recorded first — memory replays the transcript in order, and an exchange
+    // stored answer-then-question reads as her talking to herself.
+    if (closing && this.#userBuffer.trim()) {
+      this.#options.handlers.onUserText(this.#userBuffer, true);
+      this.#userBuffer = '';
+    }
+
+    if (closing && this.#annaBuffer.trim()) {
+      this.#options.handlers.onAnnaText(this.#annaBuffer, true);
+      this.#annaBuffer = '';
+    }
+
     if (content.turnComplete) {
-      if (this.#userBuffer.trim()) this.#options.handlers.onUserText(this.#userBuffer, true);
-      if (this.#annaBuffer.trim()) this.#options.handlers.onAnnaText(this.#annaBuffer, true);
       this.#userBuffer = '';
       this.#annaBuffer = '';
       this.#options.handlers.onTurnComplete();

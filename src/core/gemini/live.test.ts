@@ -263,6 +263,42 @@ test('audio parts become audio and transcripts accumulate until the turn closes'
   assert.equal(f.turns, 1);
 });
 
+test('two generations in one turn are two utterances, not one run-on', async () => {
+  const f = fixture();
+  await f.live.start();
+  const socket = f.latest();
+
+  // She answers, the initiative makes her carry on, and only then does the
+  // turn close. Observed in a real Telegram message as "What's up?You know,".
+  socket.emit({
+    serverContent: { outputTranscription: { text: "Great, huh? What's up?" }, generationComplete: true },
+  } as unknown as LiveServerMessage);
+  socket.emit({
+    serverContent: { outputTranscription: { text: 'You know, you could use a friend.' } },
+  } as unknown as LiveServerMessage);
+  socket.emit({ serverContent: { turnComplete: true } } as unknown as LiveServerMessage);
+
+  const finals = f.annaText.filter((line) => line.final).map((line) => line.text);
+  assert.deepEqual(finals, ["Great, huh? What's up?", 'You know, you could use a friend.']);
+  assert.equal(f.turns, 1, 'it is still one turn');
+});
+
+test('a generation and its turn arriving together emit once, not twice', async () => {
+  const f = fixture();
+  await f.live.start();
+  f.latest().emit({
+    serverContent: {
+      outputTranscription: { text: 'Just the one thing.' },
+      generationComplete: true,
+      turnComplete: true,
+    },
+  } as unknown as LiveServerMessage);
+
+  const finals = f.annaText.filter((line) => line.final);
+  assert.equal(finals.length, 1, 'the usual case must not double up');
+  assert.equal(finals[0]?.text, 'Just the one thing.');
+});
+
 test('the transcript buffer resets between turns', async () => {
   const f = fixture();
   await f.live.start();

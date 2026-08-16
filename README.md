@@ -46,6 +46,11 @@ the same person, with the same memory, in the same mood.
 the fixed point every movement is generated from, so she can nod, tilt her head
 or laugh and cut straight back to the still without a jump.
 
+**She opens with a new picture of herself.** The first thing you say to her,
+she answers with a portrait generated right then — built from your avatar
+photograph so it is her, and reflecting the hour and the mood she is actually
+in. `ANNA_GREETING_IMAGE=0` turns it off; it costs about $0.04 a conversation.
+
 **She can send you pictures.** Anything in `anna-profile/gallery/` is hers to
 send when it fits the conversation, and she can make new ones.
 

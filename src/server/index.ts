@@ -79,7 +79,19 @@ export async function main(): Promise<void> {
     : null;
 
   await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      // The common one, and the one whose default message tells you nothing
+      // about what to do: another Anna is usually already running.
+      if (error.code === 'EADDRINUSE') {
+        reject(
+          new Error(
+            `Something is already using port ${config.port}. Another Anna, probably — stop it, or set ANNA_PORT to something else.`,
+          ),
+        );
+        return;
+      }
+      reject(error);
+    });
     server.listen(config.port, config.host, resolve);
   });
 

@@ -85,6 +85,8 @@ export class Companion {
   #lastNotifiedMood: MoodReadout | null = null;
   #memories: string[] = [];
   #closed = false;
+  /** Guards the opening picture: one per conversation, not one per message. */
+  #greeted = false;
 
   constructor(options: CompanionOptions) {
     this.#brain = options.brain;
@@ -159,6 +161,44 @@ export class Companion {
     this.#emitMood(true);
   }
 
+  /**
+   * The picture she opens with.
+   *
+   * Generated fresh every conversation rather than picked from the gallery —
+   * the point is that it is *new*, so reaching for something on disk would
+   * defeat it. Built from the avatar photograph when there is one, so it is her
+   * and not a stranger who matches the description.
+   *
+   * Fired and never awaited. It takes several seconds, and a companion who says
+   * nothing until her portrait finishes rendering is a companion who feels
+   * broken. Her words go out immediately; the picture catches up.
+   */
+  #greet(): void {
+    if (this.#greeted || !this.#brain.config.greetingImage) return;
+    if (!this.#brain.config.geminiApiKey) return;
+    this.#greeted = true;
+
+    void (async () => {
+      try {
+        const mood = this.#brain.mood.read();
+        const snapshot = this.situation.snapshot();
+        const reference = await this.#brain.avatar.sourceImage();
+        const item = await this.#brain.gallery.generate(
+          `${describeSetting(snapshot.hour)}, ${mood.label}, looking at the camera`,
+          {
+            apiKey: this.#brain.config.geminiApiKey,
+            appearance: this.#appearanceLine(),
+            ...(reference ? { reference } : {}),
+          },
+        );
+        if (item && !this.#closed) this.#sink.show(item);
+      } catch {
+        // A greeting that does not arrive costs a picture. It must not cost the
+        // conversation it was greeting.
+      }
+    })();
+  }
+
   async sleep(): Promise<void> {
     this.#closed = true;
     this.#initiative.stop();
@@ -220,6 +260,7 @@ export class Companion {
     this.#brain.mood.feel('exchange');
     this.#initiative.poke();
     this.#live?.sendText(trimmed);
+    this.#greet();
   }
 
   setSense(sense: SenseName, on: boolean): void {
@@ -257,6 +298,7 @@ export class Companion {
       return;
     }
     this.#userTalking = false;
+    this.#greet();
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', text);
     this.#emitMood(false, () => this.#brain.mood.feel('exchange'));
@@ -446,6 +488,15 @@ export class Companion {
     this.#lastNotifiedMood = mood;
     if (!force) this.#live?.inject(moodUpdate(mood));
   }
+}
+
+/** Somewhere plausible for her to be, given the hour. */
+function describeSetting(hour: number): string {
+  if (hour < 5) return 'awake far too late, one lamp on';
+  if (hour < 11) return 'morning light, coffee somewhere nearby';
+  if (hour < 17) return 'afternoon, by a window';
+  if (hour < 22) return 'evening, warm indoor light';
+  return 'late evening, soft light';
 }
 
 function num(value: unknown): number | undefined {

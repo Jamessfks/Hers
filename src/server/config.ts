@@ -33,6 +33,8 @@ export interface Config {
   /** Frames per second sent to Gemini. The API accepts at most one. */
   cameraFps: number;
   screenFps: number;
+  /** Send a freshly generated picture of her when a conversation opens. */
+  greetingImage: boolean;
   /** Avatar rendering. Null when there is no key; the still image still works. */
   hedra: { apiKey: string; budgetUsd: number } | null;
   telegram: { token: string; allowedChatIds: number[] } | null;
@@ -81,6 +83,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ),
     // The Live API accepts at most one frame per second and bills for every one
     // of them, so the ceiling here is the API's, not a preference.
+    greetingImage: flag(env.ANNA_GREETING_IMAGE, true),
     cameraFps: rate(env.ANNA_CAMERA_FPS, 1, 'ANNA_CAMERA_FPS', warnings),
     screenFps: rate(env.ANNA_SCREEN_FPS, 0.5, 'ANNA_SCREEN_FPS', warnings),
     hedra: hedraKey
@@ -139,6 +142,13 @@ export function loadDotEnv(file = '.env'): void {
 }
 
 // ---------------------------------------------------------------------------
+
+/** `0`, `false`, `no` and `off` are all off; anything else present is on. */
+function flag(value: string | undefined, fallback: boolean): boolean {
+  const text = value?.trim().toLowerCase();
+  if (!text) return fallback;
+  return !['0', 'false', 'no', 'off'].includes(text);
+}
 
 function str(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
