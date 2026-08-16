@@ -33,6 +33,8 @@ export interface Config {
   /** Frames per second sent to Gemini. The API accepts at most one. */
   cameraFps: number;
   screenFps: number;
+  /** Avatar rendering. Null when there is no key; the still image still works. */
+  hedra: { apiKey: string; budgetUsd: number } | null;
   telegram: { token: string; allowedChatIds: number[] } | null;
   livekit: { url: string; apiKey: string; apiSecret: string; callPageUrl: string } | null;
   warnings: string[];
@@ -41,6 +43,7 @@ export interface Config {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const warnings: string[] = [];
 
+  const hedraKey = str(env.HEDRA_API_KEY, '');
   const telegramToken = str(env.TELEGRAM_BOT_TOKEN, '');
   const livekitUrl = str(env.LIVEKIT_URL, '');
   const livekitKey = str(env.LIVEKIT_API_KEY, '');
@@ -80,6 +83,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // of them, so the ceiling here is the API's, not a preference.
     cameraFps: rate(env.ANNA_CAMERA_FPS, 1, 'ANNA_CAMERA_FPS', warnings),
     screenFps: rate(env.ANNA_SCREEN_FPS, 0.5, 'ANNA_SCREEN_FPS', warnings),
+    hedra: hedraKey
+      ? { apiKey: hedraKey, budgetUsd: money(env.ANNA_HEDRA_BUDGET_USD, 1, warnings) }
+      : null,
     telegram: telegramToken
       ? { token: telegramToken, allowedChatIds: chatIds(env.TELEGRAM_ALLOWED_CHAT_IDS, warnings) }
       : null,
@@ -100,6 +106,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       `ANNA_MIN_SILENCE_MS (${config.minSilenceMs}) is above ANNA_MAX_SILENCE_MS (${config.maxSilenceMs}); using the ceiling for both.`,
     );
     config.minSilenceMs = config.maxSilenceMs;
+  }
+
+  if (hedraKey && !hedraKey.includes(':')) {
+    warnings.push(
+      'HEDRA_API_KEY looks wrong. Hedra keys are the whole `k_live_…:sk_…` string, both halves and the colon.',
+    );
   }
 
   if (config.telegram && config.telegram.allowedChatIds.length === 0) {
@@ -165,6 +177,27 @@ function rate(value: string | undefined, fallback: number, name: string, warning
   if (parsed > 1) {
     warnings.push(`${name}=${parsed} is above the Live API's limit of 1 frame per second; using 1.`);
     return 1;
+  }
+  return parsed;
+}
+
+/**
+ * A budget in dollars.
+ *
+ * Clamped to something sane rather than trusted: this number is the only thing
+ * between a typo and a bill, and `ANNA_HEDRA_BUDGET_USD=1000` is far more
+ * likely to be a slip than an intention.
+ */
+function money(value: string | undefined, fallback: number, warnings: string[]): number {
+  if (value === undefined || value.trim() === '') return fallback;
+  const parsed = Number.parseFloat(value.trim().replace(',', '.').replace(/^\$/, ''));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    warnings.push(`ANNA_HEDRA_BUDGET_USD="${value}" is not an amount; using $${fallback}.`);
+    return fallback;
+  }
+  if (parsed > 100) {
+    warnings.push(`ANNA_HEDRA_BUDGET_USD=$${parsed} is very high; capping at $100.`);
+    return 100;
   }
   return parsed;
 }

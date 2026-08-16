@@ -21,6 +21,8 @@ import { stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 
+import type { AvatarStudio, Gesture } from '../core/avatar/studio.ts';
+import { AvatarError, IMAGE_LIMITS, isGesture } from '../core/avatar/studio.ts';
 import type { Gallery } from '../core/gallery/gallery.ts';
 import { mimeFor } from '../core/gallery/gallery.ts';
 
@@ -44,6 +46,9 @@ export interface StaticOptions {
   /** Built website. */
   webRoot: string;
   gallery: Gallery;
+  avatar: AvatarStudio;
+  /** Called after a successful upload so connected browsers are told. */
+  onAvatarChanged?: () => void;
   /** Rendered when the site has not been built yet. */
   onMissingBuild: () => string;
   /** Answers `GET /api/status`. */
@@ -57,8 +62,23 @@ export function createRequestHandler(options: StaticOptions) {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
+    if (request.method === 'POST' && pathname === '/api/avatar') {
+      await uploadAvatar(options, request, response);
+      return;
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       send(response, 405, 'text/plain; charset=utf-8', 'Method not allowed');
+      return;
+    }
+
+    if (pathname === '/avatar/source') {
+      await serveAvatarSource(options.avatar, response);
+      return;
+    }
+
+    if (pathname.startsWith('/avatar/clips/')) {
+      await serveAvatarClip(options.avatar, pathname.slice('/avatar/clips/'.length), response);
       return;
     }
 
@@ -95,6 +115,107 @@ async function serveGalleryItem(
     'cache-control': 'private, max-age=3600',
   });
   createReadStream(item.absolutePath).pipe(response);
+}
+
+/**
+ * The avatar photograph, as raw bytes on the request body.
+ *
+ * Raw rather than multipart, on purpose: a browser can `fetch(url, {body: file})`
+ * a `File` directly, which means no multipart parser, no boundary handling and
+ * no dependency — and one less place to get a length wrong.
+ *
+ * The body is read with a hard ceiling and the socket is destroyed the moment
+ * it is exceeded. Buffering first and checking afterwards would let anyone on
+ * this machine push unbounded memory into the process by holding a request open.
+ */
+async function uploadAvatar(
+  options: StaticOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const declared = Number(request.headers['content-length'] ?? 0);
+  if (Number.isFinite(declared) && declared > IMAGE_LIMITS.maxBytes) {
+    send(response, 413, TYPES['.json']!, JSON.stringify({ error: tooBig(declared) }));
+    request.destroy();
+    return;
+  }
+
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of request) {
+      const bytes = chunk as Buffer;
+      total += bytes.length;
+      if (total > IMAGE_LIMITS.maxBytes) {
+        send(response, 413, TYPES['.json']!, JSON.stringify({ error: tooBig(total) }));
+        request.destroy();
+        return;
+      }
+      chunks.push(bytes);
+    }
+  } catch {
+    send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'The upload was interrupted.' }));
+    return;
+  }
+
+  try {
+    const state = await options.avatar.setSource(
+      Buffer.concat(chunks),
+      String(request.headers['content-type'] ?? ''),
+    );
+    options.onAvatarChanged?.();
+    send(response, 200, TYPES['.json']!, JSON.stringify(state));
+  } catch (error) {
+    const message =
+      error instanceof AvatarError ? error.message : 'That image could not be read.';
+    send(response, 422, TYPES['.json']!, JSON.stringify({ error: message }));
+  }
+}
+
+async function serveAvatarSource(avatar: AvatarStudio, response: ServerResponse): Promise<void> {
+  const file = avatar.sourcePath();
+  if (!file || !existsSync(file)) {
+    send(response, 404, 'text/plain; charset=utf-8', 'No photograph yet');
+    return;
+  }
+  const { size } = await stat(file);
+  response.writeHead(200, {
+    'content-type': avatar.sourceMimeType(),
+    'content-length': size,
+    // The URL carries a content hash, so what is behind it never changes.
+    'cache-control': 'private, max-age=86400, immutable',
+  });
+  createReadStream(file).pipe(response);
+}
+
+async function serveAvatarClip(
+  avatar: AvatarStudio,
+  name: string,
+  response: ServerResponse,
+): Promise<void> {
+  // Only a name from the fixed vocabulary reaches the filesystem. `clipPath`
+  // resolves it from the manifest, so nothing a caller spells can escape.
+  const gesture: Gesture | null = isGesture(name) ? name : null;
+  const file = gesture ? avatar.clipPath(gesture) : null;
+  if (!file || !existsSync(file)) {
+    send(response, 404, 'text/plain; charset=utf-8', 'Not rendered');
+    return;
+  }
+  const { size } = await stat(file);
+  response.writeHead(200, {
+    'content-type': 'video/mp4',
+    'content-length': size,
+    'cache-control': 'private, max-age=3600',
+  });
+  createReadStream(file).pipe(response);
+}
+
+function tooBig(bytes: number): string {
+  return `That image is ${(bytes / 1024 / 1024).toFixed(1)} MB. The limit is ${(
+    IMAGE_LIMITS.maxBytes /
+    1024 /
+    1024
+  ).toFixed(0)} MB.`;
 }
 
 async function serveStatic(

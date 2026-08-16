@@ -326,6 +326,9 @@ export class TelegramBridge {
         interrupted: () => undefined,
         show: (item) =>
           void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.caption),
+        // Gesture clips are for the web interface. Sending a two-second silent
+        // video after every other message would be noise, not presence.
+        move: () => undefined,
         trouble: (message) => console.warn(`telegram: ${message}`),
       },
     });

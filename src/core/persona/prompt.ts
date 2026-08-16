@@ -41,6 +41,8 @@ export interface PromptInput {
   channel: 'desktop' | 'phone' | 'telegram';
   /** True when they have talked before and she should not act newly installed. */
   returning: boolean;
+  /** Gestures with a rendered clip. Empty when she has no face on screen. */
+  gestures: readonly string[];
 }
 
 export function buildSystemInstruction(input: PromptInput): string {
@@ -53,7 +55,7 @@ export function buildSystemInstruction(input: PromptInput): string {
     relationshipSection(input),
     sensesSection(input),
     channelSection(input),
-    toolsSection(),
+    toolsSection(input),
     input.profile.prose.boundaries ?? '',
     nowSection(input),
   ];
@@ -203,17 +205,33 @@ function channelSection({ channel }: PromptInput): string {
   ].join('\n');
 }
 
-function toolsSection(): string {
-  return [
+function toolsSection(input: PromptInput): string {
+  const lines = [
     'THINGS YOU CAN DO',
     '',
     'feel      When something genuinely moves you. Not every turn.',
     'remember  When you learn something about them worth keeping for months.',
     'show      When a picture or a clip of you fits what you are talking about.',
+  ];
+
+  if (input.gestures.length > 0) {
+    lines.push(
+      `move      Move your face. You can: ${input.gestures.join(', ')}.`,
+      '',
+      'YOU HAVE A FACE',
+      'They can see you. Move the way a person moves while they talk — on a reaction,',
+      'on the turn of a thought — not on every sentence and not on none of them.',
+      'Only the movements listed above exist; asking for any other does nothing.',
+    );
+  }
+
+  lines.push(
     '',
     'Use them mid-sentence and keep talking. Never narrate using one — do not say',
-    '"let me remember that" or "I\'m sending you a photo". Just do it.',
-  ].join('\n');
+    '"let me remember that", "I\'m sending you a photo", or anything about moving.',
+    'Never describe your own expression in words. You have a face; use it.',
+  );
+  return lines.join('\n');
 }
 
 function nowSection({ localTime, returning }: PromptInput): string {

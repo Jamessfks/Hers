@@ -42,7 +42,48 @@ const ui = new Ui({
   },
   onLoadProfile: () => connection.send({ t: 'profile.load' }),
   onSaveProfile: (files) => connection.send({ t: 'profile.save', files }),
+  onUploadFace: (file) => void uploadFace(file),
+  onRenderGesture: (gesture) => {
+    connection.send({ t: 'avatar.render', gesture });
+    ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);
+  },
 });
+
+/**
+ * Sends the picture as the raw request body.
+ *
+ * Not multipart: a `File` is a `Blob`, `fetch` will send it verbatim with its
+ * own type as the content-type, and the server needs no parser for it. The
+ * size is checked here as well as on the server — not for safety, which is the
+ * server's job, but so that choosing a 40MB photograph fails instantly instead
+ * of after uploading 40MB to be told no.
+ */
+async function uploadFace(file: File): Promise<void> {
+  const MAX_BYTES = 12 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    ui.toast(`That picture is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 12 MB.`);
+    return;
+  }
+
+  ui.toast('Uploading…', 2500);
+  try {
+    const response = await fetch('/api/avatar', {
+      method: 'POST',
+      headers: { 'content-type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    const body = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      ui.toast(body.error ?? 'That picture could not be used.');
+      return;
+    }
+    // The server announces the new state over the socket, so there is one path
+    // that updates the interface rather than two that can disagree.
+    ui.toast('That is her now. Render "idle" to bring her to life.', 6000);
+  } catch (error) {
+    ui.toast(`The upload failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 const player = new Player({ onLevel: (level) => ui.setAnnaLevel(level) });
 

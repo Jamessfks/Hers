@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 
+import { AvatarStudio } from '../core/avatar/studio.ts';
 import { Gallery } from '../core/gallery/gallery.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 
@@ -40,6 +41,11 @@ async function serve() {
     createRequestHandler({
       webRoot,
       gallery: new Gallery(galleryDir),
+      avatar: new AvatarStudio({
+        dir: path.join(root, 'avatar'),
+        client: null,
+        budgetUsd: 0,
+      }),
       onMissingBuild: missingBuildPage,
       status: () => ({ version: '1.0.0' }),
     }),

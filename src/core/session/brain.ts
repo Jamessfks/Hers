@@ -13,6 +13,8 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { AvatarStudio } from '../avatar/studio.ts';
+import { HedraClient } from '../avatar/hedra.ts';
 import { Gallery } from '../gallery/gallery.ts';
 import { createGeminiDistiller } from '../gemini/text.ts';
 import { createGoogleEmbedder, createLexicalEmbedder } from '../memory/embedder.ts';
@@ -28,6 +30,7 @@ export class Brain {
   readonly memory: Memory;
   readonly mood: Mood;
   readonly gallery: Gallery;
+  readonly avatar: AvatarStudio;
   #profile: Profile;
 
   private constructor(parts: {
@@ -36,12 +39,14 @@ export class Brain {
     memory: Memory;
     mood: Mood;
     gallery: Gallery;
+    avatar: AvatarStudio;
   }) {
     this.config = parts.config;
     this.#profile = parts.profile;
     this.memory = parts.memory;
     this.mood = parts.mood;
     this.gallery = parts.gallery;
+    this.avatar = parts.avatar;
   }
 
   /**
@@ -73,12 +78,21 @@ export class Brain {
     });
     await mood.restore();
 
+    const avatar = new AvatarStudio({
+      dir: path.join(config.profileDir, 'avatar'),
+      client:
+        config.hedra && !options.offline ? new HedraClient({ apiKey: config.hedra.apiKey }) : null,
+      budgetUsd: config.hedra?.budgetUsd ?? 0,
+    });
+    await avatar.load();
+
     return new Brain({
       config,
       profile,
       memory,
       mood,
       gallery: new Gallery(path.join(config.profileDir, 'gallery')),
+      avatar,
     });
   }
 

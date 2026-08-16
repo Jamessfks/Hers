@@ -28,10 +28,11 @@ import type { ConnectionState, MoodReadout, SenseName } from '../../shared/proto
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { ANNA_TOOLS, FACT_KINDS, FEEL, REMEMBER, SHOW } from '../gemini/tools.ts';
+import { FACT_KINDS, FEEL, MOVE, REMEMBER, SHOW, annaTools } from '../gemini/tools.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import type { FactKind } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
+import { isGesture } from '../avatar/studio.ts';
 import { Situation, isLateNight } from '../senses/situation.ts';
 import type { Brain } from './brain.ts';
 
@@ -45,6 +46,8 @@ export interface CompanionSink {
   interrupted(): void;
   /** She chose to send a picture or a clip. */
   show(item: GalleryItem): void;
+  /** Play a gesture clip. Only ever called with one that has been rendered. */
+  move(gesture: string): void;
   trouble(message: string): void;
 }
 
@@ -132,7 +135,7 @@ export class Companion {
       model: brain.config.model,
       voice: brain.profile.voice.voice,
       languageCode: brain.profile.voice.languageCode,
-      tools: ANNA_TOOLS,
+      tools: annaTools(this.#brain.avatar.readyGestures()),
       // Rebuilt rather than captured, so a reconnect picks up her current mood
       // and the senses that are on now rather than the ones that were on when
       // the conversation started.
@@ -333,6 +336,15 @@ export class Companion {
         return { ok: true, result };
       }
 
+      case MOVE: {
+        const gesture = String(args.gesture ?? '');
+        if (!isGesture(gesture) || !this.#brain.avatar.has(gesture)) {
+          return { ok: false, reason: 'that one has not been rendered' };
+        }
+        this.#sink.move(gesture);
+        return { ok: true };
+      }
+
       case SHOW: {
         const description = String(args.description ?? '').trim();
         if (!description) return { ok: false, reason: 'no description' };
@@ -389,6 +401,9 @@ export class Companion {
       localTime: snapshot.localTime,
       channel: this.#channel,
       returning: this.#brain.hasHistory,
+      // Only the desktop shows a face; a phone call and Telegram have nowhere
+      // to put one, and offering her a movement nobody can see is noise.
+      gestures: this.#channel === 'desktop' ? this.#brain.avatar.readyGestures() : [],
     });
   }
 

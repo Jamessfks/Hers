@@ -200,6 +200,9 @@ class ActiveCall {
         mood: () => undefined,
         interrupted: () => speaker.clearQueue(),
         show: () => undefined,
+        // A phone call carries her voice, not her face. Rendering a gesture
+        // clip nobody can see would be money spent on nothing.
+        move: () => undefined,
         trouble: (message) => console.warn(`call: ${message}`),
       },
     });

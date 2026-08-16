@@ -42,6 +42,10 @@ not just her word choice, and it colours the interface.
 durable facts and a rolling summary. Meeting her again on the phone is meeting
 the same person, with the same memory, in the same mood.
 
+**She has your face for her.** Upload any photograph and it becomes her. It is
+the fixed point every movement is generated from, so she can nod, tilt her head
+or laugh and cut straight back to the still without a jump.
+
 **She can send you pictures.** Anything in `anna-profile/gallery/` is hers to
 send when it fits the conversation, and she can make new ones.
 
@@ -76,6 +80,28 @@ of it is in the code.
 
 Delete a file and it comes back with its default. Put a nonsense value in one
 and it falls back rather than failing to start.
+
+### Her face
+
+Click **Face**, drop in a photograph, and that is her. JPEG, PNG or WebP, at
+most 12 MB, between 256 and 4096 pixels on a side. The bytes are checked rather
+than the file name.
+
+With a `HEDRA_API_KEY` set you can then render her movements — `idle`, `nod`,
+`tilt`, `smile`, `laugh`, `lean in`, `look away`. Each is rendered once from the
+photograph, takes a few minutes, and costs money: **a 2-second clip measured at
+$0.05.** Nothing is ever rendered automatically; every one is a click, and every
+one is checked against `ANNA_HEDRA_BUDGET_USD` first. Start with `idle` — it is
+the one she rests in between the others.
+
+Once a movement exists, Anna can choose it herself as she talks. She is only
+ever offered the ones that have actually been rendered, so she cannot reach for
+a gesture that would move nothing.
+
+Be honest with yourself about what this is: it is **body language, not lip
+sync**. Hedra's realtime product is withdrawn and what remains is a job queue
+measured in minutes, so nothing can be generated while she is speaking. Swapping
+the photograph invalidates every clip, because they all start from the old one.
 
 ### Her gallery
 
@@ -143,6 +169,12 @@ Commands: `/call`, `/photo`, `/mood`, `/bye`, `/whoami`, `/help`.
    └────────────────────────────────────────────────┘
               ▲ browser: mic · camera · screen
 ```
+
+**The photograph is the fixed point.** Every clip is generated from it and
+prompted to return to it, so the interface cuts between still and clip with no
+transition at all — a crossfade would be blurring two identical frames. It is
+also why the aspect ratio is taken from the image rather than pinned: a frame
+that is not the photograph's own makes the first frame a crop of it.
 
 **One live session type, two transports.** The browser and the phone sit in
 front of the same `Companion`, which sits on the same `LiveConversation`. There

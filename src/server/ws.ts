@@ -32,6 +32,7 @@ import type { ClientMessage, SenseName, ServerMessage } from '../shared/protocol
 import { Companion } from '../core/session/companion.ts';
 import type { Brain } from '../core/session/brain.ts';
 import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
+import { AvatarError, isGesture } from '../core/avatar/studio.ts';
 
 /** A screen frame at 1080p JPEG is comfortably under this; nothing legitimate is not. */
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -126,6 +127,7 @@ export class WebBridge {
               kind: item.kind,
               caption: item.caption,
             }),
+          move: (gesture) => this.#send({ t: 'move', gesture }),
           trouble: (message) => this.#send({ t: 'trouble', message }),
         },
       });
@@ -145,6 +147,7 @@ export class WebBridge {
       screenFps: brain.config.screenFps,
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
+    sendJson(socket, { t: 'avatar', avatar: brain.avatar.state() });
     if (this.#companion.live) sendJson(socket, { t: 'state', state: 'listening' });
 
     socket.on('message', (data, isBinary) => {
@@ -214,6 +217,19 @@ export class WebBridge {
         companion.interrupt();
         return;
 
+      case 'avatar.load':
+        sendJson(socket, { t: 'avatar', avatar: this.#options.brain.avatar.state() });
+        return;
+
+      case 'avatar.render': {
+        const gesture = message.gesture;
+        if (!isGesture(gesture)) return;
+        // Deliberately not awaited: a render takes minutes, and the socket has
+        // to stay responsive — including for the message that says it failed.
+        void this.#render(gesture, Number(message.seconds) || undefined);
+        return;
+      }
+
       case 'profile.load':
         sendJson(socket, {
           t: 'profile',
@@ -240,6 +256,36 @@ export class WebBridge {
 
       default:
         return;
+    }
+  }
+
+  /** Tells whoever is connected that the photograph or the clips changed. */
+  announceAvatar(): void {
+    this.#send({ t: 'avatar', avatar: this.#options.brain.avatar.state() });
+  }
+
+  /**
+   * One gesture render, start to finish, reported as it goes.
+   *
+   * The `avatar` message is sent three times on purpose — before, on failure,
+   * and after. A render is minutes long and costs money, so "nothing appears to
+   * be happening" is not an acceptable state for the interface to sit in.
+   */
+  async #render(gesture: string, seconds: number | undefined): Promise<void> {
+    const avatar = this.#options.brain.avatar;
+    if (!isGesture(gesture)) return;
+
+    this.announceAvatar();
+    try {
+      await avatar.render(gesture, { ...(seconds ? { seconds } : {}) });
+      this.#send({ t: 'trouble', message: `She can ${gesture.replace('_', ' ')} now.` });
+    } catch (error) {
+      this.#send({
+        t: 'trouble',
+        message: error instanceof AvatarError ? error.message : `That render failed: ${String(error)}`,
+      });
+    } finally {
+      this.announceAvatar();
     }
   }
 

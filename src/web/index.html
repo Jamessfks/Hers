@@ -17,6 +17,7 @@
         </div>
         <div class="bar-actions">
           <span class="state" id="state">asleep</span>
+          <button class="ghost" id="face-open" type="button">Face</button>
           <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
         </div>
       </header>
@@ -25,6 +26,10 @@
 
       <main class="stage">
         <div class="presence">
+          <div class="portrait" id="portrait" hidden>
+            <img id="portrait-still" alt="Anna" />
+            <video id="portrait-clip" muted playsinline preload="auto"></video>
+          </div>
           <div class="orb" id="orb">
             <div class="orb-core"></div>
             <div class="orb-ring"></div>
@@ -91,6 +96,38 @@
       <div class="settings-foot">
         <span id="saved"></span>
         <button class="primary" id="save" type="button">Save</button>
+      </div>
+    </dialog>
+
+    <dialog class="settings face" id="face">
+      <form method="dialog" class="settings-head">
+        <h2>Her face</h2>
+        <button class="ghost" value="close" aria-label="Close">Close</button>
+      </form>
+      <p class="settings-note">
+        Give her a photograph. It is the starting point every movement is generated
+        from — so every clip begins and ends on this exact picture, and the interface
+        can cut between them without a jump.
+      </p>
+
+      <div class="face-body">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="face-file" accept="image/jpeg,image/png,image/webp" hidden />
+          <img id="face-preview" alt="" hidden />
+          <span id="dropzone-label">Drop a picture here, or click to choose one</span>
+        </label>
+
+        <div class="gestures">
+          <p class="gestures-head">
+            Movements
+            <span class="spend" id="spend"></span>
+          </p>
+          <p class="gestures-note" id="gestures-note">
+            Each one is rendered once, from the picture, and costs money. Start with
+            <strong>idle</strong> — it is the one she rests in between the others.
+          </p>
+          <div class="gesture-list" id="gesture-list"></div>
+        </div>
       </div>
     </dialog>
 

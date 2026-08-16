@@ -36,10 +36,17 @@ export async function main(): Promise<void> {
 
   for (const warning of config.warnings) console.warn(`! ${warning}`);
 
+  // Declared before the handler so the upload route can announce a change to
+  // whoever is connected. The closure only runs once a request arrives, long
+  // after this is assigned.
+  let web: WebBridge;
+
   const server = createServer(
     createRequestHandler({
       webRoot: path.join(repoRoot, 'dist', 'web'),
       gallery: brain.gallery,
+      avatar: brain.avatar,
+      onAvatarChanged: () => web.announceAvatar(),
       onMissingBuild: missingBuildPage,
       status: () => ({
         version: VERSION,
@@ -47,13 +54,14 @@ export async function main(): Promise<void> {
         configured: Boolean(config.geminiApiKey),
         telegram: Boolean(config.telegram),
         livekit: Boolean(config.livekit),
+        hedra: Boolean(config.hedra),
         profileDir: config.profileDir,
         warnings: config.warnings,
       }),
     }),
   );
 
-  const web = new WebBridge({
+  web = new WebBridge({
     brain,
     server,
     version: VERSION,
@@ -79,6 +87,7 @@ export async function main(): Promise<void> {
   console.log(`  profile   ${config.profileDir}`);
   console.log(`  memory    ${path.join(config.dataDir, 'memory.db')}`);
   console.log(`  model     ${config.model}`);
+  console.log(`  avatar    ${config.hedra ? `on, budget $${config.hedra.budgetUsd.toFixed(2)}` : 'still only (no HEDRA_API_KEY)'}`);
   console.log(`  telegram  ${telegram ? 'on' : 'off'}`);
   console.log(`  calls     ${calls ? 'on' : 'off'}\n`);
 

@@ -216,6 +216,12 @@ button {
  * from it directly rather than from an animation, so what is on screen is the
  * actual amplitude of what is being said rather than a loop that looks like it.
  */
+/* `display` beats the `hidden` attribute, so an element given `display` has to
+   opt back out of it explicitly or it can never be hidden. */
+.orb[hidden] {
+  display: none;
+}
+
 .orb {
   --level: 0;
   position: relative;
@@ -652,4 +658,185 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* --------------------------------------------------------------------------
+   The portrait
+   --------------------------------------------------------------------------
+   Her photograph, with gesture clips cutting over it.
+
+   The still and the clip are stacked and exactly the same size, and the cut
+   between them is hard rather than a crossfade. That is only possible because
+   every clip is generated from this image and prompted to return to it: the
+   first and last frames are the still, so a fade would be blurring two
+   identical pictures together for no reason.
+
+   The clip is revealed on its `playing` event rather than when its `src` is
+   set — a video element shows a black frame while it buffers, and a black
+   flash on every gesture is worse than no gesture. */
+
+.portrait {
+  position: relative;
+  width: clamp(150px, 22vw, 230px);
+  aspect-ratio: var(--portrait-ratio, 1);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 calc(20px + var(--level, 0) * 44px)
+    hsl(var(--mood-hue) 70% 55% / calc(0.12 + var(--level, 0) * 0.3));
+  transition: box-shadow 160ms ease-out;
+}
+
+.portrait[hidden] {
+  display: none;
+}
+
+.portrait img,
+.portrait video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.portrait video {
+  opacity: 0;
+}
+
+.portrait[data-moving='true'] video {
+  opacity: 1;
+}
+
+.app[data-state='asleep'] .portrait img,
+.app[data-state='asleep'] .portrait video {
+  filter: saturate(0.4) brightness(0.62);
+  transition: filter 600ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   The face dialog
+   -------------------------------------------------------------------------- */
+
+.face-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 20px;
+  padding: 4px 20px 18px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .face-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dropzone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px dashed #33354a;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+  padding: 18px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.dropzone:hover,
+.dropzone[data-over='true'] {
+  border-color: var(--accent);
+  color: var(--text-dim);
+}
+
+.dropzone img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dropzone img[hidden] {
+  display: none;
+}
+
+.gestures-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.spend {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gestures-note {
+  margin: 0 0 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gesture-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gesture {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.gesture:hover:not(:disabled) {
+  border-color: #3a3c52;
+  color: var(--text);
+}
+
+.gesture:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.gesture[data-ready='true'] {
+  background: var(--accent-soft);
+  border-color: hsl(var(--mood-hue) 60% 62% / 0.42);
+  color: var(--text);
+  opacity: 1;
+}
+
+.gesture .mark {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.gesture[data-ready='true'] .mark {
+  color: var(--accent);
+}
+
+.gesture[data-rendering='true'] .mark {
+  animation: pulse 1.2s ease-in-out infinite;
 }
