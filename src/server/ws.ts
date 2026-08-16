@@ -36,6 +36,18 @@ import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
 /** A screen frame at 1080p JPEG is comfortably under this; nothing legitimate is not. */
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
+/**
+ * How long the conversation survives with nobody connected.
+ *
+ * The companion deliberately outlives the socket, so that reloading the page
+ * does not end the conversation, reset her mood or start a second billed Gemini
+ * session. But *forever* is the wrong number: close the tab and go to lunch,
+ * and she would sit there holding a live session open, being prompted to say
+ * something into the void every three minutes, all afternoon. Ninety seconds is
+ * comfortably longer than a reload and far shorter than lunch.
+ */
+const ORPHAN_GRACE_MS = 90_000;
+
 export interface WebBridgeOptions {
   brain: Brain;
   server: Server;
@@ -49,6 +61,7 @@ export class WebBridge {
   readonly #wss: WebSocketServer;
   #socket: WebSocket | null = null;
   #companion: Companion | null = null;
+  #orphanTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: WebBridgeOptions) {
     this.#options = options;
@@ -71,6 +84,7 @@ export class WebBridge {
   }
 
   async close(): Promise<void> {
+    this.#cancelOrphanTimer();
     await this.#companion?.sleep();
     this.#companion = null;
     for (const client of this.#wss.clients) client.close(1001, 'Anna is shutting down');
@@ -82,6 +96,7 @@ export class WebBridge {
   async #accept(socket: WebSocket, request: IncomingMessage): Promise<void> {
     void request;
 
+    this.#cancelOrphanTimer();
     const previous = this.#socket;
     this.#socket = socket;
     if (previous && previous.readyState === previous.OPEN) {
@@ -135,12 +150,13 @@ export class WebBridge {
     socket.on('message', (data, isBinary) => {
       void this.#onMessage(socket, data as Buffer, isBinary);
     });
-    socket.on('close', () => {
-      if (this.#socket === socket) this.#socket = null;
-    });
-    socket.on('error', () => {
-      if (this.#socket === socket) this.#socket = null;
-    });
+    const dropped = () => {
+      if (this.#socket !== socket) return;
+      this.#socket = null;
+      this.#armOrphanTimer();
+    };
+    socket.on('close', dropped);
+    socket.on('error', dropped);
   }
 
   async #onMessage(socket: WebSocket, data: Buffer, isBinary: boolean): Promise<void> {
@@ -225,6 +241,26 @@ export class WebBridge {
       default:
         return;
     }
+  }
+
+  /**
+   * Nobody is connected. Give them a moment to come back, then let her rest.
+   */
+  #armOrphanTimer(): void {
+    this.#cancelOrphanTimer();
+    this.#orphanTimer = setTimeout(() => {
+      this.#orphanTimer = null;
+      if (this.#socket) return;
+      const companion = this.#companion;
+      this.#companion = null;
+      void companion?.sleep();
+    }, ORPHAN_GRACE_MS);
+    this.#orphanTimer.unref?.();
+  }
+
+  #cancelOrphanTimer(): void {
+    if (this.#orphanTimer) clearTimeout(this.#orphanTimer);
+    this.#orphanTimer = null;
   }
 
   #send(message: ServerMessage): void {
