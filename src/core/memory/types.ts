@@ -89,3 +89,14 @@ export interface Embedder {
   readonly dimensions: number;
   embed(texts: readonly string[]): Promise<Float32Array[]>;
 }
+
+/**
+ * A one-shot text completion, used only to distil transcripts into facts.
+ *
+ * Narrow on purpose. Consolidation is the one place Anna needs a model that is
+ * *not* the live conversation, and giving that job a two-method interface keeps
+ * the whole of `memory/` testable without a network and without the Live API.
+ */
+export interface Distiller {
+  distil(system: string, transcript: string): Promise<string>;
+}

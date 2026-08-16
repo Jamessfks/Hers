@@ -14,10 +14,9 @@
  * its filing system is a companion with a stutter.
  */
 
-import type { LlmProvider } from '../llm/types.ts';
 import { similarity } from './embedder.ts';
 import { MemoryStore } from './store.ts';
-import type { Embedder, FactKind, RecalledFact } from './types.ts';
+import type { Distiller, Embedder, FactKind, RecalledFact } from './types.ts';
 
 /** Above this cosine similarity two facts are the same fact. */
 const DUPLICATE_THRESHOLD = 0.92;
@@ -47,9 +46,12 @@ const VALID_KINDS = new Set<FactKind>(['identity', 'preference', 'thread', 'even
 export interface MemoryOptions {
   store: MemoryStore;
   embedder: Embedder;
-  /** Model used for consolidation. Cheap and fast beats smart here. */
-  llm?: LlmProvider;
-  consolidationModel?: string;
+  /**
+   * Turns a transcript into facts. Omit and memory still records and recalls
+   * everything — it simply never distils, which is the right behaviour when
+   * there is no API key rather than a reason to fail.
+   */
+  distiller?: Distiller;
   /** Injectable for tests. */
   now?: () => number;
 }
@@ -57,8 +59,7 @@ export interface MemoryOptions {
 export class Memory {
   readonly #store: MemoryStore;
   readonly #embedder: Embedder;
-  readonly #llm: LlmProvider | undefined;
-  readonly #model: string;
+  readonly #distiller: Distiller | undefined;
   readonly #now: () => number;
   #sessionId: string;
   #lastTurnAt: number;
@@ -68,8 +69,7 @@ export class Memory {
   constructor(options: MemoryOptions) {
     this.#store = options.store;
     this.#embedder = options.embedder;
-    this.#llm = options.llm;
-    this.#model = options.consolidationModel ?? options.llm?.suggestedModels[0] ?? '';
+    this.#distiller = options.distiller;
     this.#now = options.now ?? (() => Date.now());
 
     // Resume rather than always starting fresh: relaunching the app in the
@@ -220,8 +220,8 @@ export class Memory {
   }
 
   async #runConsolidation(): Promise<void> {
-    const llm = this.#llm;
-    if (!llm) return;
+    const distiller = this.#distiller;
+    if (!distiller) return;
 
     const lastConsolidated = Number(this.#store.get('lastConsolidatedTurnId') ?? '0');
     const turns = this.#store.turnsSince(lastConsolidated);
@@ -232,16 +232,7 @@ export class Memory {
       .join('\n');
 
     try {
-      const raw = await collect(
-        llm.stream({
-          model: this.#model,
-          maxTokens: 700,
-          temperature: 0.2,
-          system: EXTRACTION_PROMPT,
-          messages: [{ role: 'user', content: transcript }],
-        }),
-      );
-
+      const raw = await distiller.distil(EXTRACTION_PROMPT, transcript);
       const parsed = parseExtraction(raw);
       for (const fact of parsed.facts) {
         await this.remember(fact.kind, fact.text, { confidence: fact.confidence });
@@ -351,10 +342,4 @@ export function parseExtraction(raw: string): { facts: ExtractedFact[]; summary:
 function mergeSummaries(previous: string, next: string): string {
   const merged = `${next.trim()}\n\nBefore that: ${previous.trim()}`;
   return merged.length > 1600 ? `${merged.slice(0, 1600).trimEnd()}…` : merged;
-}
-
-async function collect(stream: AsyncIterable<string>): Promise<string> {
-  let output = '';
-  for await (const chunk of stream) output += chunk;
-  return output;
 }

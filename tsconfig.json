@@ -1,29 +1,33 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"],
-    "allowImportingTsExtensions": true,
+
+    /*
+     * Node runs the server's TypeScript directly by stripping types, and only
+     * erasable syntax survives that. `verbatimModuleSyntax` keeps type-only
+     * imports marked so they vanish cleanly, and `erasableSyntaxOnly` fails the
+     * build on an `enum` or a parameter property rather than at runtime on
+     * someone else's machine.
+     */
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "noEmit": true,
+
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@core/*": ["src/core/*"],
-      "@main/*": ["src/main/*"],
-      "@shared/*": ["src/shared/*"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
-  "//": "harness/ is included because it imports the app's own modules and is how the UI is reviewed; a page that stands in for the window should not be the one file nothing checks.",
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "harness/*.ts"],
-  "exclude": ["node_modules", "out", "release"]
+  "include": ["src/**/*.ts", "scripts/**/*.mjs", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"]
 }

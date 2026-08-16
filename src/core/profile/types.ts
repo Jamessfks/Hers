@@ -1,0 +1,109 @@
+/**
+ * The shape of Anna's personalization folder once it has been read off disk.
+ *
+ * Every field here has a default. A profile folder that is missing, empty,
+ * half-edited or full of typos must still produce a complete `Profile`, because
+ * the alternative is an app that refuses to start because someone deleted a
+ * line from a markdown file.
+ */
+
+import type { MoodVector } from '../../shared/protocol.ts';
+
+/** The attributes the app understands structurally, as opposed to as prose. */
+export interface Appearance {
+  height: string;
+  bodyType: string;
+  hairstyle: string;
+  hairColor: string;
+  eyeColor: string;
+  skinTone: string;
+  distinguishing: string;
+  style: string;
+}
+
+export interface Identity {
+  name: string;
+  age: string;
+  gender: string;
+  pronouns: string;
+  ethnicity: string;
+  from: string;
+}
+
+export interface VoiceSettings {
+  /** A Gemini prebuilt voice name, e.g. "Aoede". Validated on load. */
+  voice: string;
+  languageCode: string;
+  pace: string;
+  accent: string;
+}
+
+export interface Profile {
+  identity: Identity;
+  appearance: Appearance;
+  voice: VoiceSettings;
+  /** The long-run temperament the current mood is pulled back toward. */
+  moodBaseline: MoodVector;
+  /**
+   * The prose half, keyed by file name without extension.
+   *
+   * Kept as raw text rather than parsed because this is the half that is for
+   * the model, not for the app. Anything a person can write in a paragraph
+   * should reach Gemini as that paragraph.
+   */
+  prose: Record<string, string>;
+  /** Absolute path the profile was read from, for the UI and for saving. */
+  dir: string;
+}
+
+/** One file in the folder: `key: value` frontmatter, then markdown. */
+export interface ProfileFile {
+  frontmatter: Record<string, string>;
+  body: string;
+}
+
+export const PREBUILT_VOICES = [
+  'Zephyr',
+  'Puck',
+  'Charon',
+  'Kore',
+  'Fenrir',
+  'Leda',
+  'Orus',
+  'Aoede',
+  'Callirrhoe',
+  'Autonoe',
+  'Enceladus',
+  'Iapetus',
+  'Umbriel',
+  'Algieba',
+  'Despina',
+  'Erinome',
+  'Algenib',
+  'Rasalgethi',
+  'Laomedeia',
+  'Achernar',
+  'Alnilam',
+  'Schedar',
+  'Gacrux',
+  'Pulcherrima',
+  'Achird',
+  'Zubenelgenubi',
+  'Vindemiatrix',
+  'Sadachbia',
+  'Sadaltager',
+  'Sulafat',
+] as const;
+
+/** The files the loader reads, in the order they reach the model. */
+export const PROFILE_FILES = [
+  'personality',
+  'identity',
+  'appearance',
+  'voice',
+  'mood',
+  'relationship',
+  'boundaries',
+] as const;
+
+export type ProfileFileName = (typeof PROFILE_FILES)[number];

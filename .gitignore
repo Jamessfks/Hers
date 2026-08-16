@@ -1,18 +1,16 @@
 node_modules/
 dist/
-dist-electron/
-out/
 .DS_Store
 *.log
 .env
 .env.*
 !.env.example
+
+# Anna's data: her memory database, and whatever she has been told.
 data/
-release/
-native/build/
-# The harness page is source and is committed; the media it points at is a copy
-# of whatever avatar happens to be installed, so it is not.
-harness/*.mp4
-harness/*.jpg
-harness/*.png
-progress.html
+
+# The profile folder is written on first run from src/core/profile/defaults.ts
+# and is yours to edit from then on. It is not checked in, because a character
+# sheet that ships as both source and as generated output drifts apart within a
+# week and the copy the model reads is never the copy you edited.
+anna-profile/

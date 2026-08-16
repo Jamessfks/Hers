@@ -1,35 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { CompletionRequest, LlmProvider } from '../llm/types.ts';
+import type { Distiller } from './types.ts';
 import { createLexicalEmbedder, similarity } from './embedder.ts';
 import { Memory, parseExtraction } from './memory.ts';
 import { MemoryStore } from './store.ts';
 
-function fixture(options: { llm?: LlmProvider; now?: () => number } = {}) {
+function fixture(options: { distiller?: Distiller; now?: () => number } = {}) {
   const store = new MemoryStore({ path: ':memory:' });
   const memory = new Memory({
     store,
     embedder: createLexicalEmbedder(256),
-    ...(options.llm && { llm: options.llm }),
+    ...(options.distiller && { distiller: options.distiller }),
     ...(options.now && { now: options.now }),
   });
   return { store, memory };
 }
 
-function stubLlm(reply: string): LlmProvider {
+function stubDistiller(reply: string): Distiller {
   return {
-    id: 'stub',
-    label: 'stub',
-    suggestedModels: ['stub-1'],
-    async *stream(_request: CompletionRequest) {
-      yield reply;
-    },
-    async validateKey() {
-      return { ok: true as const };
-    },
-    async listModels() {
-      return [];
+    async distil() {
+      return reply;
     },
   };
 }
@@ -175,7 +166,7 @@ test('extraction tolerates fences, preamble and bulleted lines', () => {
 
 test('consolidation writes facts and a summary', async () => {
   const { store, memory } = fixture({
-    llm: stubLlm(
+    distiller: stubDistiller(
       [
         'FACTS',
         'identity | 0.9 | He is called Zicheng.',
@@ -196,22 +187,12 @@ test('consolidation writes facts and a summary', async () => {
 });
 
 test('a failing consolidation never throws into the conversation', async () => {
-  const failing: LlmProvider = {
-    id: 'boom',
-    label: 'boom',
-    suggestedModels: ['x'],
-    // eslint-disable-next-line require-yield
-    async *stream() {
+  const failing: Distiller = {
+    async distil() {
       throw new Error('network down');
     },
-    async validateKey() {
-      return { ok: true as const };
-    },
-    async listModels() {
-      return [];
-    },
   };
-  const { memory } = fixture({ llm: failing });
+  const { memory } = fixture({ distiller: failing });
   memory.record('user', 'hi');
   await assert.doesNotReject(() => memory.consolidate());
 });

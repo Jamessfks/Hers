@@ -1,74 +1,33 @@
 {
-  "name": "anna",
+  "name": "anna-companion",
   "version": "1.0.0",
   "private": true,
-  "description": "Anna \u2014 an always-on AI companion who lives at the edge of your screen.",
+  "description": "Anna — an AI companion who can see your screen, see you, and hear you, in your browser and on your phone.",
   "author": "Zicheng Zhao",
   "license": "MIT",
   "type": "module",
-  "main": "./out/main/index.js",
   "engines": {
-    "node": ">=24"
+    "node": ">=22.18"
   },
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "npm run build:native && electron-vite build",
-    "build:native": "bash scripts/build-native.sh",
-    "start": "electron-vite preview",
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "start": "node src/server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --disable-warning=ExperimentalWarning \"src/**/*.test.ts\"",
-    "lint": "tsc --noEmit",
-    "dist:mac": "bash scripts/build-native.sh --required && electron-vite build && electron-builder --mac --publish never",
-    "demo": "electron-vite build && ANNA_DEMO=1 electron out/main/index.js"
+    "test": "node --test \"src/**/*.test.ts\"",
+    "check": "npm run typecheck && npm run test",
+    "doctor": "node src/server/doctor.ts"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "@google/genai": "^2.17.1",
+    "@livekit/rtc-node": "^0.13.33",
+    "livekit-server-sdk": "^2.17.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "electron": "^43.4.0",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "^5.0.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.9.0",
     "vite": "^7.1.14"
-  },
-  "build": {
-    "appId": "dev.anna.companion",
-    "productName": "Anna",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "out/**/*",
-      "resources/**/*",
-      "package.json"
-    ],
-    "mac": {
-      "category": "public.app-category.lifestyle",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ],
-      "extendInfo": {
-        "NSCameraUsageDescription": "Anna looks up to see how you are doing. The camera is off until you turn it on, and frames are never stored.",
-        "NSMicrophoneUsageDescription": "Anna listens so she can answer you out loud.",
-        "NSCalendarsUsageDescription": "Anna reads your calendar so she knows what your day looks like.",
-        "NSSpeechRecognitionUsageDescription": "Anna transcribes your speech so she can reply.",
-        "NSAppleEventsUsageDescription": "Anna asks the system which app you are in, and your calendar what is coming up. She never sends keystrokes or controls other apps.",
-        "LSUIElement": true,
-        "NSCameraUseContinuityCameraDeviceType": true
-      }
-    },
-    "extraResources": [
-      {
-        "from": "native/build/anna-transcribe.app",
-        "to": "anna-transcribe.app"
-      }
-    ]
   }
 }

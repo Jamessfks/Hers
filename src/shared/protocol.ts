@@ -1,524 +1,165 @@
 /**
- * The wire contract between Anna's brain (Electron main process) and her body
- * (the renderer that draws the VRM).
+ * The wire between the browser and the local Anna server.
  *
- * Everything that crosses the process boundary is declared here and nowhere
- * else. If a message is not in this file it does not exist.
- */
-
-// ---------------------------------------------------------------------------
-// Body: what the renderer is asked to do
-// ---------------------------------------------------------------------------
-
-/**
- * A single beat of performance. The brain emits these as a stream while the
- * model is still generating, so Anna starts moving and speaking before she has
- * finished deciding what to say — the same trick that makes a stage actor read
- * as alive rather than as a recording.
- */
-export type PerformanceEvent =
-  /** A clause of speech, already chunked at a natural breath point. */
-  | { kind: 'say'; text: string; clauseId: number }
-  /** Play a named clip from the gesture library. */
-  | { kind: 'gesture'; name: GestureName; intensity?: number }
-  /** Cross-fade the face into a named expression. */
-  | { kind: 'expression'; name: ExpressionName; weight?: number }
-  /** Where Anna's eyes go. `user` means the webcam-tracked head position. */
-  | { kind: 'gaze'; target: 'user' | 'away' | 'down' | 'screen' }
-  /** Anna's turn is over; the body should settle back to idle. */
-  | { kind: 'turn-end'; turnId: string }
-  /** Anna was interrupted mid-turn and must stop immediately. */
-  | { kind: 'barge-in' };
-
-/**
- * The gesture library. Deliberately small and hand-picked: an animation that
- * fires at the wrong moment is worse than no animation at all, and a large
- * library makes the model's choice noisier. Grow this only with clips that
- * have an unambiguous emotional meaning.
- */
-export const GESTURE_NAMES = [
-  'nod',
-  'shake_head',
-  'tilt_head',
-  'lean_in',
-  'lean_back',
-  'shrug',
-  'wave',
-  'point_at_user',
-  'hands_behind_back',
-  'hand_to_chest',
-  'cover_mouth_laugh',
-  'stretch',
-  'look_away_thinking',
-  'reach_toward_user',
-  'sit_down',
-  'stand_up',
-  'sway',
-  'fidget',
-] as const;
-export type GestureName = (typeof GESTURE_NAMES)[number];
-
-/**
- * Facial expressions. These map onto VRM 1.0 standard expression presets where
- * one exists, and onto custom blendshapes otherwise.
- */
-export const EXPRESSION_NAMES = [
-  'neutral',
-  'happy',
-  'warm',
-  'amused',
-  'sad',
-  'concerned',
-  'surprised',
-  'skeptical',
-  'playful',
-  'smirk',
-  'thoughtful',
-  'tender',
-] as const;
-export type ExpressionName = (typeof EXPRESSION_NAMES)[number];
-
-// ---------------------------------------------------------------------------
-// Senses: what the world tells the brain
-// ---------------------------------------------------------------------------
-
-export type SenseEvent =
-  | { kind: 'user-speech'; text: string; final: boolean; at: number }
-  | { kind: 'user-typed'; text: string; at: number }
-  | {
-      kind: 'presence';
-      /**
-       * Is the user at the machine at all?
-       *
-       * Optional, because the camera must not answer it. A dark room is not an
-       * empty chair, and letting a failed look write `present: false` silenced
-       * every opener Anna had — including the calendar and late-night ones that
-       * have nothing to do with the camera.
-       */
-      present?: boolean;
-      /** Free-text read of the user from the vision model, e.g. "slumped, rubbing eyes". */
-      read?: string;
-      /** True when this read says something different from the last one. */
-      readChanged?: boolean;
-      /** The vision model's own judgement that they are having a hard time. */
-      distressed?: boolean;
-      at: number;
-    }
-  | {
-      kind: 'activity';
-      app: string;
-      windowTitle: string;
-      /** Seconds since the last keyboard or mouse input. */
-      idleSeconds: number;
-      at: number;
-    }
-  | { kind: 'calendar'; summary: string; startsInMinutes: number; at: number }
-  | { kind: 'ambient'; description: string; at: number }
-  /**
-   * A finished utterance, still as audio. Transcription happens in main so the
-   * renderer never needs a provider key. See core/speech/stt.ts.
-   */
-  | { kind: 'user-audio'; audio: Uint8Array; mimeType: string; at: number }
-  /**
-   * A single camera frame, JPEG, base64. Sampled on a slow timer and never
-   * stored — main sends it to the vision model and keeps only the sentence
-   * that comes back.
-   */
-  | { kind: 'camera-frame'; jpegBase64: string; at: number };
-
-export type SenseKind = SenseEvent['kind'];
-
-// ---------------------------------------------------------------------------
-// Configuration surfaced to the settings UI
-// ---------------------------------------------------------------------------
-
-export type LlmProviderId = 'anthropic' | 'openai' | 'google';
-export type TtsProviderId = 'cartesia' | 'elevenlabs' | 'hume';
-/**
- * `apple` is macOS's own recogniser, running offline on this machine. It is the
- * default because it is the only one of the three that needs no account: the
- * other two turn "she can hear you" into a second signup and a second bill,
- * after the user has already paid for a language model and a voice.
- */
-export type SttProviderId = 'apple' | 'deepgram' | 'openai';
-/**
- * How Anna is drawn.
+ * Twoframe kinds, on purpose:
  *
- * This used to be `'vrm' | 'heygen' | 'tavus'` — one implemented renderer and
- * two streaming services named as if they were nearly wired. Both of those bets
- * have now been settled by the market rather than by us: Hedra's realtime avatar
- * returns `410 Gone`, and the whole per-minute streaming-avatar category is
- * priced for a kiosk rather than for something left running all day.
+ *   binary  media, and only media. One leading byte says what it is, the rest
+ *           is the payload verbatim. Audio arrives every 20-40ms for as long as
+ *           the microphone is on, and base64 inside JSON would cost a third
+ *           more bytes and a parse on both ends for no benefit at all.
+ *   text    JSON control messages, which are rare, structured, and worth being
+ *           able to read in a devtools network pane.
  *
- * What is left is one renderer: a photograph, and short clips generated from it
- * ahead of time. A union of one is kept rather than deleted because the field is
- * in every user's config file on disk, and because the next renderer — if there
- * is one — should have to be added here deliberately.
+ * Everything here is shared by `src/web` (runs in the browser) and `src/server`
+ * (runs in Node), so it must not import from either.
  */
-export type AvatarRendererId = 'photo';
-
-/**
- * Who renders the clip library. Declared here rather than in core/avatar so
- * that shared/ stays a leaf: the config needs the name, and importing core into
- * the protocol would point the dependency the wrong way.
- */
-export type VideoProviderId = 'manual' | 'hedra' | 'runway' | 'luma' | 'kling';
-
-/**
- * How freely Anna may spend on rendering clips she does not have.
- *
- * Declared here rather than imported from core/avatar/generation-policy.ts
- * because this module is the contract between main and the renderer and must
- * not drag the policy's implementation across that line. The policies keyed by
- * these names live there.
- */
-export type GenerationTier = 'low' | 'medium' | 'high';
-
-/**
- * How a finished clip measured against the photograph it was generated from.
- *
- * Declared here because it crosses the process boundary — the renderer decodes
- * the clip and main writes the verdict down — and this file is where anything
- * that crosses is declared. The arithmetic behind it is in core/avatar/seam.ts;
- * this is only the shape of the answer.
- */
-export interface SeamVerdict {
-  closesCleanly: boolean;
-  /** Human-readable, for the setup screen and the diagnostics log. */
-  summary: string;
-  /**
-   * Where to cut, in milliseconds, if a better point than the nominal end was
-   * found by searching the hold.
-   */
-  cutAtMs?: number;
-}
-
-export interface AnnaConfig {
-  llm: {
-    provider: LlmProviderId;
-    /** The model actually used. Always belongs to `provider`. */
-    model: string;
-    /**
-     * What was last chosen for each provider.
-     *
-     * Without this, switching provider to try something and switching back
-     * silently drops your model choice — and because the two settings live in
-     * different fields, the loss is invisible until a reply comes back from the
-     * wrong model.
-     */
-    modelByProvider?: Partial<Record<LlmProviderId, string>>;
-  };
-  tts: { provider: TtsProviderId; voiceId: string };
-  stt: { provider: SttProviderId };
-  avatar: {
-    renderer: AvatarRendererId;
-    /**
-     * Full sha-256 of the source photograph, or '' when none has been chosen.
-     *
-     * A hash rather than a path because the hash *is* the identity of the clip
-     * library: it names the directory the clips live in, and a different
-     * photograph is therefore a different library rather than a library that has
-     * quietly gone stale. See core/avatar/library-store.ts.
-     */
-    portrait: string;
-    /** Who renders the clips. `manual` needs no key and no account. */
-    videoProvider: VideoProviderId;
-    /**
-     * How freely she may spend money rendering clips she does not have yet.
-     *
-     * Separate from `videoProvider` because the two answer different questions:
-     * that one is *who* would be billed, this one is *how much and how often*.
-     * A user can be perfectly happy having a Hedra key on file and still want
-     * the app to render exactly one clip and then stop asking.
-     *
-     * The tiers themselves, and the reasoning behind every number in them, are
-     * in core/avatar/generation-policy.ts. Nothing at any tier can cause a clip
-     * that already exists to be rendered again.
-     */
-    generationTier: GenerationTier;
-    /**
-     * How many clips her library may hold at once.
-     *
-     * Separate from the tier, which governs how freely she may *spend*. This
-     * governs how much she may *keep* — and the two are different questions, so
-     * a user can allow generous spending on a small rotating set, or a tight
-     * budget on a library that never evicts.
-     *
-     * When the library is full and she reaches for something she does not have,
-     * the least-recently-played clip is given up to make room.  is never
-     * a candidate; see evictionCandidate in core/avatar/clips.ts.
-     */
-    maxClips: number;
-    /**
-     * Where hand-made clips are dropped, for the `manual` provider.
-     *
-     * Empty until chosen. It is a real folder the user opens in Finder, which is
-     * the whole point of that provider: the clips are theirs, rendered wherever
-     * they already pay for renders.
-     */
-    clipFolder: string;
-  };
-  senses: {
-    camera: boolean;
-    microphone: boolean;
-    screenActivity: boolean;
-    calendar: boolean;
-    /** How often the camera is sampled, in seconds. Never faster than 15. */
-    cameraIntervalSeconds: number;
-  };
-  presence: {
-    /** Anna may start a conversation on her own. */
-    proactive: boolean;
-    /** Never speak first more than this often, in minutes. */
-    minMinutesBetweenOpeners: number;
-    /** Hours during which Anna stays quiet unless spoken to, e.g. [0, 8]. */
-    quietHours: [number, number] | null;
-  };
-}
 
 // ---------------------------------------------------------------------------
-// IPC channel names
+// Binary media frames
 // ---------------------------------------------------------------------------
 
-export const IPC = {
-  /** main -> renderer: a beat of performance. */
-  perform: 'anna:perform',
-  /** main -> renderer: audio for the current clause, as a transferable buffer. */
-  audio: 'anna:audio',
-  /** renderer -> main: something the senses picked up. */
-  sense: 'anna:sense',
-  /** renderer -> main: read or write configuration. */
-  configGet: 'anna:config:get',
-  configSet: 'anna:config:set',
-  /** renderer -> main: store a provider key in the OS keychain. */
-  keySet: 'anna:key:set',
-  keyStatus: 'anna:key:status',
-  /** main -> renderer: brain state changed (thinking, speaking, listening). */
-  state: 'anna:state',
-  /** main -> renderer: something went wrong, phrased for a human. */
-  trouble: 'anna:trouble',
-  /** renderer -> main: user clicked through to a window control. */
-  window: 'anna:window',
-  /** renderer -> main: persist a dropped photograph; opens its clip library. */
-  portraitSet: 'anna:portrait:set',
-  /** renderer -> main: open a native picker for a photograph. */
-  portraitPick: 'anna:portrait:pick',
-  /** renderer -> main: read the stored photograph back as bytes. */
-  portraitGet: 'anna:portrait:get',
-  /** renderer -> main: read one generated clip's bytes. Null when not ready. */
-  clipGet: 'anna:clip:get',
-  /** renderer -> main: what exists in the clip library right now. */
-  libraryStatus: 'anna:library:status',
-  /** renderer -> main: the video providers, with what each would cost. */
-  videoProviders: 'anna:video:providers',
-  /**
-   * renderer -> main: is the stored video key live, and does it have credit?
-   *
-   * Distinct from `keyValidate`, which takes a key the user has just typed.
-   * This one checks the key already in the Keychain, which the renderer cannot
-   * read and must never be sent. Main does the whole thing and returns a
-   * verdict.
-   *
-   * It costs nothing. For Hedra it is a `GET /balance` — the only question
-   * about that account answerable without submitting a job, and submitting a
-   * job is billed on ingest whatever happens to it afterwards.
-   */
-  videoCheck: 'anna:video:check',
-  /** renderer -> main: pick the folder hand-made clips are dropped into. */
-  clipFolderPick: 'anna:clip-folder:pick',
-  /** renderer -> main: render the next clips. Costs money; count is a ceiling. */
-  libraryBuild: 'anna:library:build',
-  /** main -> renderer: the library changed — a clip started, finished or failed. */
-  libraryChanged: 'anna:library:changed',
-  /**
-   * renderer -> main: how a finished clip measured against the source frame.
-   *
-   * This direction is unusual and is forced by where the capability lives.
-   * Everything else about a clip is main's business — it pays for it, downloads
-   * it and writes it — but judging whether it loops cleanly needs a video
-   * decoder, and only the window has one. So main writes the clip unmeasured
-   * and the renderer sends the verdict back.
-   *
-   * Nothing here is trusted with money or the filesystem: the payload is a
-   * boolean, a sentence and a millisecond offset, applied to a slot main
-   * already knows about.
-   */
-  clipSeam: 'anna:clip:seam',
-  /**
-   * renderer -> main: the panel wants to be this tall.
-   *
-   * The renderer asks rather than main deciding, because the height that fits
-   * is a CSS question — bezel padding, composer, and the photograph's own
-   * aspect — and only the renderer can measure it.
-   */
-  windowFit: 'anna:window:fit',
-
-  // -- settings window ------------------------------------------------------
-
-  /** renderer -> main: bring up the settings window. */
-  settingsOpen: 'anna:settings:open',
-  /** renderer -> main: check a key against the provider before storing it. */
-  keyValidate: 'anna:key:validate',
-  /** renderer -> main: forget a stored key. */
-  keyDelete: 'anna:key:delete',
-  /** renderer -> main: models this account can actually use. */
-  modelsList: 'anna:models:list',
-  /** renderer -> main: voices available on the configured voice provider. */
-  voicesList: 'anna:voices:list',
-  /** renderer -> main: synthesise a sample line so a voice can be auditioned. */
-  voicePreview: 'anna:voice:preview',
-  /** renderer -> main: counts and a sample of what Anna remembers. */
-  memoryStats: 'anna:memory:stats',
-  memoryFacts: 'anna:memory:facts',
-  memoryForget: 'anna:memory:forget',
-  memoryWipe: 'anna:memory:wipe',
-  /** renderer -> main: which macOS permissions are actually granted. */
-  permissions: 'anna:permissions',
-  /** main -> renderer: configuration changed somewhere else. */
-  configChanged: 'anna:config:changed',
-  /** main -> renderer: she was hidden or brought back. */
-  visibility: 'anna:visibility',
-  /** main -> renderer: take a frame now, do not wait for the timer. */
-  cameraCapture: 'anna:camera:capture',
-  /**
-   * renderer -> main: something went wrong in the body.
-   *
-   * The renderer's console is not reachable from a packaged app, so a failure
-   * there — a character that will not load, a WebGL context that will not
-   * create — is invisible to anyone debugging from outside. This puts it in the
-   * diagnostics file alongside everything else.
-   */
-  bodyReport: 'anna:body:report',
-  /** main -> renderer: demo script spoke on the user's behalf; echo it. */
-  demoSaid: 'anna:demo:said',
-  /**
-   * main -> renderer: what the microphone turned out to have said.
-   *
-   * Typed input is already in the renderer's hands, but spoken input is only
-   * ever audio there — the transcription happens in main, and until this
-   * channel existed the window had no way to know what it had been. That was
-   * survivable when her body showed one fading line of her own speech; in a
-   * thread it means half the conversation is missing whenever you talk to her
-   * out loud instead of typing.
-   */
-  heard: 'anna:heard',
+/** First byte of every binary frame. */
+export const MediaKind = {
+  /** Browser -> server. Microphone, PCM signed 16-bit little-endian, 16kHz mono. */
+  MIC_PCM16: 0x01,
+  /** Browser -> server. A camera still, JPEG. */
+  CAMERA_JPEG: 0x02,
+  /** Browser -> server. A screen still, JPEG. */
+  SCREEN_JPEG: 0x03,
+  /** Server -> browser. Anna's voice, PCM signed 16-bit little-endian, 24kHz mono. */
+  ANNA_PCM24: 0x81,
 } as const;
 
+export type MediaKind = (typeof MediaKind)[keyof typeof MediaKind];
+
+/** Sample rate Gemini Live expects on the way in. */
+export const INPUT_SAMPLE_RATE = 16_000;
+/** Sample rate Gemini Live produces on the way out. */
+export const OUTPUT_SAMPLE_RATE = 24_000;
+
+export function encodeMediaFrame(kind: MediaKind, payload: Uint8Array): Uint8Array {
+  const frame = new Uint8Array(payload.length + 1);
+  frame[0] = kind;
+  frame.set(payload, 1);
+  return frame;
+}
+
+export function decodeMediaFrame(frame: Uint8Array): { kind: number; payload: Uint8Array } {
+  return { kind: frame[0] ?? 0, payload: frame.subarray(1) };
+}
+
 // ---------------------------------------------------------------------------
-// Settings payloads
+// Control messages: browser -> server
 // ---------------------------------------------------------------------------
 
-/** What kind of provider a key belongs to. Maps onto the SecretName prefix. */
-export type KeyKind = 'llm' | 'tts' | 'stt' | 'video';
+/** Which of the three senses a message is about. */
+export type SenseName = 'hearing' | 'sight' | 'screen';
 
-export interface KeyStatus {
-  present: boolean;
-  /** Masked tail, e.g. "••••a91f". Never the key itself. */
-  hint: string;
-}
+export const SENSE_NAMES: readonly SenseName[] = ['hearing', 'sight', 'screen'];
 
-export interface VoiceOption {
-  id: string;
-  name: string;
-  description?: string;
-}
-
-/**
- * What the renderer is told about the clip library.
- *
- * A flattened view rather than the `ClipLibrary` manifest itself. The manifest
- * carries job ids, attempt counts, seam measurements and per-slot error strings
- * — none of which the body needs to draw a frame, and all of which would have to
- * cross an IPC boundary on every change.
- */
-/**
- * One video provider, as the settings screen needs it.
- *
- * Sent from main rather than imported, even though it is static data. The
- * provider modules reach for `node:fs` and a network stack; pulling them into
- * the renderer bundle to read a label would drag both across a boundary that
- * exists specifically to keep them out.
- */
-export interface VideoProviderView {
-  id: VideoProviderId;
-  label: string;
-  /** Why someone would pick this one over the others. */
-  why: string;
-  /** The vendor's own site, for the "get a key" link. */
-  site: string | null;
-  /** False for adapters that would throw rather than call an unverified endpoint. */
-  wired: boolean;
-  /** True when this one takes a folder instead of a key. */
-  keyless: boolean;
-  /** What a full library would cost, in USD. */
-  estimate: { low: number; high: number; confident: boolean };
-  pricingUrl: string | null;
-}
-
-export interface LibraryView {
-  /** '' when no photograph has been chosen yet. */
-  portrait: string;
-  /** Slots with a playable clip on disk. */
-  ready: string[];
-  /** Currently rendering, if anything is. */
-  building: string | null;
-  /** Slots that failed and will not be retried without being asked. */
-  failed: string[];
+export type ClientMessage =
+  /** Sent once on connect. */
+  | { t: 'hello' }
+  /** Something the user typed rather than said. */
+  | { t: 'say'; text: string }
+  /** A sense was switched on or off in the UI. */
+  | { t: 'sense'; sense: SenseName; on: boolean }
   /**
-   * Playable, but never measured against the source frame.
+   * The user is present and doing things, or is not.
    *
-   * A subset of `ready`, and the renderer's work queue: it is the only process
-   * that can decode a clip, so it reads this, measures what is on it, and sends
-   * each verdict back on `clipSeam`. An empty list means every clip on disk has
-   * been judged, not that none needed judging.
+   * The browser cannot see which application has focus, and should not try —
+   * what it can honestly report is whether this tab has been touched, which is
+   * enough for Anna to tell "sitting here quietly" from "gone".
    */
-  unverified: string[];
-  total: number;
-  /** True once the idle clip exists, which is when she stops being a still. */
-  alive: boolean;
-  /** What has actually been charged so far, as reported by the provider. */
-  spentUsd: number;
+  | { t: 'presence'; idleSeconds: number; tabVisible: boolean }
+  /** Stop talking, now. Sent when the user starts speaking over her. */
+  | { t: 'interrupt' }
+  /** Start or restart the conversation. */
+  | { t: 'wake' }
+  /** Close the live session and stop the clock. */
+  | { t: 'sleep' }
+  /** Write changes back to the profile folder. */
+  | { t: 'profile.save'; files: Record<string, string> }
+  /** Ask for the profile folder as it is on disk. */
+  | { t: 'profile.load' };
+
+// ---------------------------------------------------------------------------
+// Control messages: server -> browser
+// ---------------------------------------------------------------------------
+
+/** What the server is doing, as one word the UI can render. */
+export type ConnectionState =
+  | 'asleep'
+  | 'connecting'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'reconnecting'
+  | 'error';
+
+export interface MoodReadout {
+  /** The long-run temperament, -1..1 per axis. Moves over days. */
+  baseline: MoodVector;
+  /** How she is right now, -1..1 per axis. Moves over minutes. */
+  current: MoodVector;
+  /** One or two words for the current mood, e.g. "quietly pleased". */
+  label: string;
 }
 
-export interface MemoryStats {
-  turns: number;
-  facts: number;
-  /** Oldest turn timestamp, or null when memory is empty. */
-  since: number | null;
-  summary: string | null;
+export interface MoodVector {
+  /** Miserable (-1) to delighted (+1). */
+  valence: number;
+  /** Flat (-1) to wired (+1). */
+  energy: number;
+  /** Guarded (-1) to affectionate (+1). */
+  warmth: number;
+  /** Bored (-1) to absorbed (+1). */
+  interest: number;
 }
 
-export interface MemoryFactView {
-  id: number;
-  kind: string;
-  text: string;
-  confidence: number;
-  lastSeenAt: number;
-  recallCount: number;
-}
-
-/**
- * Granted macOS permissions, as observed rather than as declared.
- *
- * Checked by attempting the cheapest real read for each one. `Info.plist`
- * entries say what an app *may* ask for; only a real call says what it actually
- * has, and the settings screen needs the truth to explain why Anna has stopped
- * noticing things.
- */
-export type PermissionState = 'granted' | 'denied' | 'not-determined' | 'unknown';
-
-export interface PermissionReport {
-  /** Read via a non-prompting API, so this is always a real answer. */
-  accessibility: boolean;
+export type ServerMessage =
+  /** First message on every connection. */
+  | {
+      t: 'ready';
+      version: string;
+      model: string;
+      voice: string;
+      senses: Record<SenseName, boolean>;
+      /** False when the server has no Gemini key; the UI shows setup instead. */
+      configured: boolean;
+      telegram: boolean;
+      livekit: boolean;
+    }
+  | { t: 'state'; state: ConnectionState }
+  | { t: 'mood'; mood: MoodReadout }
   /**
-   * Only ever probed when the calendar sense is already switched on, because
-   * the probe itself triggers the macOS consent dialog. Reported as
-   * `not-determined` otherwise.
+   * A line of conversation.
+   *
+   * `final` is false for the running transcription of speech in progress and
+   * true once the turn is closed. The UI replaces rather than appends while
+   * false, or the transcript stutters.
    */
-  calendar: PermissionState;
-  /** Camera and microphone are asked for by the renderer, not probed here. */
-  camera: PermissionState;
-  microphone: PermissionState;
-}
+  | { t: 'transcript'; who: 'user' | 'anna'; text: string; final: boolean }
+  /** Anna's audio was cut off. Drop whatever is still queued for playback. */
+  | { t: 'interrupted' }
+  | { t: 'sense'; sense: SenseName; on: boolean }
+  /** Something went wrong, phrased for a person rather than a log. */
+  | { t: 'trouble'; message: string }
+  /** A picture or clip Anna chose to show. Served from /gallery. */
+  | { t: 'show'; url: string; kind: 'image' | 'clip'; caption?: string }
+  | { t: 'profile'; files: Record<string, string> };
 
-export type BrainState = 'idle' | 'listening' | 'thinking' | 'speaking';
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+export function parseClientMessage(raw: string): ClientMessage | null {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== 'object' || value === null) return null;
+    if (typeof (value as { t?: unknown }).t !== 'string') return null;
+    return value as ClientMessage;
+  } catch {
+    return null;
+  }
+}
