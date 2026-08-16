@@ -39,6 +39,55 @@ export function createGeminiDistiller(apiKey: string, model = DISTILLER_MODEL): 
   };
 }
 
+/**
+ * Turns a file someone sent into words the live session can hear.
+ *
+ * This exists because of a codec, not a design preference. The Live API takes
+ * raw 16kHz PCM and nothing else, and a Telegram voice note is Opus in an Ogg
+ * container. Decoding that in-process would mean either a native dependency
+ * with a Windows toolchain requirement or a WebAssembly decoder several times
+ * the size of this entire program.
+ *
+ * So the file goes to a Gemini model that already understands it, and what
+ * comes back is fed to the live session as though the user had typed it. The
+ * conversation stays in one session with one memory, and the cost is one extra
+ * round trip on a message that was already asynchronous.
+ */
+export async function transcribeMedia(
+  apiKey: string,
+  media: { data: Buffer; mimeType: string },
+  model = DISTILLER_MODEL,
+): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { data: media.data.toString('base64'), mimeType: media.mimeType } },
+            {
+              text: [
+                'Write out what the person says, verbatim, as plain text with no quotation marks',
+                'and no preamble.',
+                'If the recording also shows them, add one short sentence afterwards, in square',
+                'brackets, describing only what is plainly visible — for example',
+                '[they are outside, it is dark, they look tired].',
+                'If nothing is said, give only the bracketed description.',
+              ].join('\n'),
+            },
+          ],
+        },
+      ],
+      config: { temperature: 0, maxOutputTokens: 400 },
+    });
+    return (response.text ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
 export interface PortraitRequest {
   apiKey: string;
   /** What the picture should show, in Anna's own words. */

@@ -1,33 +1,39 @@
 {
+  /*
+   * The server half. `src/web` has its own config, because the two halves must
+   * not be able to see each other's globals: server code that reaches for
+   * `window` and browser code that reaches for `Buffer` both fail at runtime in
+   * ways that are tedious to find, and both are compile errors under this split.
+   *
+   * `src/shared` is in both, and so has to compile under both.
+   */
   "compilerOptions": {
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "nodenext",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": ["ES2023"],
     "types": ["node"],
 
     /*
-     * Node runs the server's TypeScript directly by stripping types, and only
-     * erasable syntax survives that. `verbatimModuleSyntax` keeps type-only
-     * imports marked so they vanish cleanly, and `erasableSyntaxOnly` fails the
-     * build on an `enum` or a parameter property rather than at runtime on
-     * someone else's machine.
+     * Node runs this TypeScript directly by stripping types, and only erasable
+     * syntax survives that. `verbatimModuleSyntax` keeps type-only imports
+     * marked so they vanish cleanly; `erasableSyntaxOnly` fails the build on an
+     * `enum` or a parameter property rather than at runtime on someone else's
+     * machine.
      */
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
     "noEmit": true,
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": false,
     "skipLibCheck": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.mjs", "vite.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/web"]
 }

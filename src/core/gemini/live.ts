@@ -171,10 +171,16 @@ export class LiveConversation {
     });
   }
 
-  /** A still frame from the camera or the screen. JPEG. */
-  sendImage(jpeg: Buffer): void {
-    if (jpeg.length === 0) return;
-    this.#realtime({ video: { data: jpeg.toString('base64'), mimeType: 'image/jpeg' } });
+  /**
+   * A still image: a camera frame, a screen frame, or a photo they sent.
+   *
+   * The Live API takes these on the `video` channel whether or not they came
+   * from a camera — "video" there means "a picture at a moment", and it accepts
+   * JPEG or PNG.
+   */
+  sendImage(bytes: Buffer, mimeType = 'image/jpeg'): void {
+    if (bytes.length === 0) return;
+    this.#realtime({ video: { data: bytes.toString('base64'), mimeType } });
   }
 
   /** Something the user typed. Treated as speech: she answers it. */

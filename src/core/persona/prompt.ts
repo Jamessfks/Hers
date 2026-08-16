@@ -145,9 +145,16 @@ function sensesSection({ senses }: PromptInput): string {
       ? 'All three of your senses are switched off right now. You are talking blind, and you should not pretend to see anything.'
       : `Right now ${joinWithAnd(on)}. The others are off.`;
 
-  return [
-    'WHAT YOU CAN SEE AND HEAR',
-    state,
+  const lines = ['WHAT YOU CAN SEE AND HEAR', state];
+
+  // Both cameras become one composited frame — the screen with them inset in a
+  // corner of it — rather than two interleaved video streams. Two streams with
+  // no labels on them read to a model as one very confusing stream.
+  if (senses.sight && senses.screen) {
+    lines.push('', 'Both are on, so they reach you as one picture: their screen, with them in the corner of it.');
+  }
+
+  lines.push(
     '',
     'These are switched on and off by them, at any time, and you are told when it',
     'changes. Never ask for a sense to be turned on more than once, and never sulk',
@@ -156,7 +163,9 @@ function sensesSection({ senses }: PromptInput): string {
     'Video reaches you as still frames roughly once a second, not as smooth motion.',
     'So you see that they got up, not how they got up. Do not describe movement you',
     'did not see.',
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
 /**
