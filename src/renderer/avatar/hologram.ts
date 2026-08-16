@@ -344,6 +344,17 @@ export class Hologram {
     }
     if (superseded()) return 'superseded';
 
+    /*
+     * `front` and `back` are always the two different elements, and it is worth
+     * saying why since the line below pauses one of them.
+     *
+     * `back` was read from `#front` before two awaits, so in principle `#front`
+     * could have moved underneath it — and if it had, this would pause the clip
+     * it has just started. It cannot: `#front` is only assigned below, inside a
+     * `#start` holding the highest generation, and every await above is
+     * followed by a `superseded()` check. So any call that could have flipped
+     * it has already sent this one home.
+     */
     const front = this.#videos[this.#front]!;
     back.hidden = false;
     // Hide the outgoing one *after* the incoming is visible. The other order
@@ -398,6 +409,13 @@ export class Hologram {
 
   dispose(): void {
     this.#disposed = true;
+    // Anything in flight is sent home as well as blocked: `#disposed` is
+    // checked at every await, and the bump covers the one place it is not — a
+    // `#start` between its last check and its assignment to `#front`.
+    this.#generation += 1;
+    this.#playing = null;
+    this.#looping = false;
+    this.#next = null;
     for (const video of this.#videos) {
       video.pause();
       video.removeAttribute('src');
@@ -406,6 +424,7 @@ export class Hologram {
     }
     for (const url of this.#cache.values()) URL.revokeObjectURL(url);
     this.#cache.clear();
+    this.#loading.clear();
     this.#still.remove();
   }
 

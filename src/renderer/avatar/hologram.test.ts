@@ -495,3 +495,22 @@ test('she is only "animated" when something is actually on screen', async () => 
   await settle();
   assert.equal(hologram.animated, false, 'a named slot with no clip is a photograph');
 });
+
+test('disposing while a clip is loading does not put it on screen afterwards', async () => {
+  // `#disposed` is checked at every await, but a `#start` between its last
+  // check and its assignment to `#front` would still land. The generation bump
+  // covers that gap.
+  const { hologram, videos, played } = await rig(['idle', 'nod']);
+  await hologram.setIdle('idle');
+  await settle();
+
+  void hologram.play('nod');
+  hologram.dispose();
+  await settle();
+
+  assert.deepEqual(played, ['idle'], 'nothing reached the screen after dispose');
+  assert.ok(
+    videos.every((video) => video.paused),
+    'and nothing is still running',
+  );
+});
