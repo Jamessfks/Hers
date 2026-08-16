@@ -89,8 +89,17 @@ export class Hologram {
    * then fails silently. A build emits several library events in a row, so this
    * raced every gesture during the one period when it was most likely to
    * happen.
+   *
+   * Held until the *swap*, not until `#urlFor` resolves. Released at the
+   * earlier point it covered only the fetch, which is the half of the window
+   * with no element in it: the suspension that this exists to protect is the
+   * `once(back, 'loadeddata')` that comes after, and it was outside the guard.
+   *
+   * Counted rather than a set, because two `#start`s can hold the same slot at
+   * once — the superseded one returns first, and a plain `delete` would drop
+   * the guard while the winner was still loading.
    */
-  readonly #loading = new Set<SlotName>();
+  readonly #loading = new Map<SlotName, number>();
   /**
    * What the library says exists. Null until it has said anything.
    *
@@ -326,13 +335,18 @@ export class Hologram {
     const generation = ++this.#generation;
     const superseded = (): boolean => this.#disposed || generation !== this.#generation;
 
-    this.#loading.add(slot);
-    let url: string | null;
+    this.#hold(slot);
     try {
-      url = await this.#urlFor(slot);
+      return await this.#swapIn(slot, superseded);
     } finally {
-      this.#loading.delete(slot);
+      this.#release(slot);
+      this.#sweepStale();
     }
+  }
+
+  /** The body of {@link #start}, so the load guard is released on every path. */
+  async #swapIn(slot: SlotName, superseded: () => boolean): Promise<'shown' | 'superseded' | 'failed'> {
+    const url = await this.#urlFor(slot);
     if (superseded()) return 'superseded';
     if (!url) return 'failed';
 
@@ -378,9 +392,6 @@ export class Hologram {
     this.#front = this.#front === 0 ? 1 : 0;
     this.#playing = slot;
     this.#looping = back.loop;
-    // An element has just changed source, which is the event that frees
-    // whatever URL it was holding for `invalidate`.
-    this.#sweepStale();
     // Here rather than at the top, because everything above this line is a way
     // for a start to end without anything reaching the screen. Main treats this
     // as the record of what she actually used.
@@ -511,11 +522,45 @@ export class Hologram {
     }
   }
 
+  /** Marks a slot as being loaded. See {@link #loading} for the counting. */
+  #hold(slot: SlotName): void {
+    this.#loading.set(slot, (this.#loading.get(slot) ?? 0) + 1);
+  }
+
+  #release(slot: SlotName): void {
+    const held = (this.#loading.get(slot) ?? 0) - 1;
+    if (held > 0) this.#loading.set(slot, held);
+    else this.#loading.delete(slot);
+  }
+
   async #urlFor(slot: SlotName): Promise<string | null> {
     const cached = this.#cache.get(slot);
     if (cached) return cached;
 
-    const bytes = await this.#options.loadClip(slot);
+    let bytes: Uint8Array | null;
+    try {
+      bytes = await this.#options.loadClip(slot);
+    } catch (error) {
+      /*
+       * A rejected fetch is a failed start, not an exception.
+       *
+       * `#start` uses try/finally, so a throw here left it by a door that
+       * reports nothing: through `silence()` it skipped `#returnToIdle`'s
+       * fallback and left her frozen on the cancelled gesture's last frame,
+       * with `animated` reading false; through `setIdle` it rejected
+       * `applyLibrary`, so `alive` was never written and no clip was ever
+       * verified. Every other failure in `#start` returns a code.
+       *
+       * Not recorded in `#missing`: the slot is not known to be absent, only
+       * unreadable this once, and an IPC that failed under load must not
+       * blacklist a clip until the next library event.
+       */
+      this.#options.report?.('clip-load-failed', {
+        slot,
+        message: String(error).slice(0, 200),
+      });
+      return null;
+    }
     if (!bytes || bytes.length === 0) {
       this.#missing.add(slot);
       return null;

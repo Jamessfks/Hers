@@ -63,7 +63,10 @@ class FakeVideo extends FakeElement {
   paused = true;
   /** Set to make `play()` reject, as it does under an autoplay policy. */
   refusePlay = false;
+  /** Set to hold `loadeddata` back, so a test can act while a load is open. */
+  holdLoad = false;
   #src = '';
+  #held = false;
 
   get src(): string {
     return this.#src;
@@ -72,7 +75,16 @@ class FakeVideo extends FakeElement {
   /** Assignment schedules `loadeddata`, which is the event `play()` waits on. */
   set src(value: string) {
     this.#src = value;
-    if (value) queueMicrotask(() => this.emit('loadeddata'));
+    if (!value) return;
+    if (this.holdLoad) this.#held = true;
+    else queueMicrotask(() => this.emit('loadeddata'));
+  }
+
+  /** Lets a held load finish. */
+  finishLoad(): void {
+    if (!this.#held) return;
+    this.#held = false;
+    this.emit('loadeddata');
   }
 
   async play(): Promise<void> {
@@ -157,7 +169,12 @@ interface Rig {
   asked: string[];
 }
 
-async function rig(present: readonly string[]): Promise<Rig> {
+/**
+ * @param broken Slots whose fetch *rejects*, as an IPC call can. Mutable, so a
+ * test can break a slot that has already played. Different from a slot that is
+ * simply absent: that one resolves null and is a permanent answer.
+ */
+async function rig(present: readonly string[], broken: string[] = []): Promise<Rig> {
   const { Hologram } = await import('./hologram.ts');
   // Only the elements this rig makes. A test that builds two Holograms would
   // otherwise see the first one's still-visible idle video as "on screen" for
@@ -171,6 +188,7 @@ async function rig(present: readonly string[]): Promise<Rig> {
     mount: mount as unknown as HTMLElement,
     loadClip: async (slot) => {
       asked.push(slot);
+      if (broken.includes(slot)) throw new Error('the clip could not be read');
       return present.includes(slot) ? new Uint8Array([1, 2, 3]) : null;
     },
     report: (event, detail) => {
@@ -542,6 +560,81 @@ test('a URL kept back by a library change is revoked once nothing points at it',
   await settle();
   assert.equal(played[played.length - 1], 'idle');
   assert.ok(revoked.includes(first), 'and once the element has moved on, it is');
+});
+
+test('a library change during the decode does not revoke the URL being decoded', async () => {
+  /*
+   * The guard was released when `#urlFor` resolved, which is one await too
+   * early: the suspension it exists to cover is the `loadeddata` wait after
+   * `src` is assigned. Revoked in *that* window, the element never fires
+   * anything at all — the gesture is lost after the two-second timeout, with no
+   * error. `main.ts` invalidates on every library event and a build emits
+   * several in a row, so this raced every gesture during a build.
+   */
+  const revoked: string[] = [];
+  (globalThis as Record<string, unknown>)['URL'] = {
+    createObjectURL: (() => {
+      let n = 0;
+      return () => `blob:fake/${(n += 1)}`;
+    })(),
+    revokeObjectURL: (url: string) => revoked.push(url),
+  };
+
+  const { hologram, videos, played } = await rig(['idle', 'nod']);
+  await hologram.setIdle('idle');
+  await settle();
+
+  const back = videos.find((video) => video.hidden)!;
+  back.holdLoad = true;
+  const gesture = hologram.play('nod');
+  await settle();
+  const loading = back.src;
+  assert.ok(loading, 'the element has been given a source and is waiting on it');
+
+  hologram.invalidate();
+  assert.ok(!revoked.includes(loading), 'the URL under an open load survives');
+
+  back.finishLoad();
+  await gesture;
+  await settle();
+  assert.equal(played[played.length - 1], 'nod', 'and the gesture still lands');
+});
+
+test('a clip whose bytes cannot be read fails the start instead of throwing out of it', async () => {
+  // `loadClip` is an IPC call and can reject. `#start` is try/finally, not
+  // try/catch, so the throw went straight through `play` to whoever called it.
+  const { hologram, played } = await rig(['idle', 'nod'], ['nod']);
+  await hologram.setIdle('idle');
+  await settle();
+
+  await hologram.play('nod');
+  await settle();
+  assert.deepEqual(played, ['idle'], 'the loop is undisturbed');
+  assert.equal(hologram.animated, true, 'and she is still moving');
+});
+
+test('barge-in with an unreadable idle clip shows the photograph rather than freezing', async () => {
+  /*
+   * The expensive path for the same throw. `silence()` reaches `#returnToIdle`,
+   * whose fallback — hide the videos, let the still through — is *after* the
+   * `#start` that threw. She was left on the cancelled gesture's last frame,
+   * indefinitely, with `animated` reporting false.
+   */
+  const broken: string[] = [];
+  const { hologram, videos, played } = await rig(['idle', 'nod'], broken);
+  await hologram.setIdle('idle');
+  await settle();
+  await hologram.play('nod');
+  await settle();
+  assert.equal(played[played.length - 1], 'nod');
+
+  broken.push('idle');
+  hologram.invalidate();
+  hologram.silence();
+  await settle();
+
+  assert.equal(onScreen(videos), null, 'the photograph shows through');
+  assert.equal(hologram.animated, false);
 });
 
 test('she is only "animated" when something is actually on screen', async () => {
