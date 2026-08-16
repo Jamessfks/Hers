@@ -287,22 +287,19 @@ the repo rather than quoted as end-to-end.
 ## Not done yet
 
 Stated plainly, because a README that implies otherwise wastes your time. The
-first five were found by a code audit *after* the avatar pivot and are the ones
-most likely to bite, because the code around them reads as though they work.
+first one is the largest open problem in the product and is now measured rather
+than suspected; see
+[the audit](docs/audits/hedra-generation.md#the-drift-cannot-be-cut-around).
 
-- **The seam check never runs.** `seam.ts` measures whether a clip returns to
-  the source photograph, and `hologram.ts` claims that invariant is verified.
-  Nothing calls it outside its own tests, so `verified` is never set and a
-  drifted clip is accepted. The measurement is correct; the wiring is missing.
-- **A crash mid-render re-charges you.** The job handle is never written to the
-  manifest, so `reconcile` cannot tell "still running" from "lost" and requeues.
-  Quitting during a render means paying for that clip twice.
-- **One transient poll error discards a paid, still-running job.** A 429 or a
-  sleeping laptop propagates up and nulls the handle. Comments in two adapters
-  claim the opposite; they are wrong.
-- **Swapping the photograph mid-render mixes libraries.** `adopt()` is not
-  covered by the build lock, so an in-flight clip lands in the new photograph's
-  directory.
+- **The clips do not close, so every gesture ends in a visible jump.** The seam
+  check runs now, and what it found is that none of the three real clips returns
+  to the pose it started from — they leave it in the first second and hold
+  somewhere else, three to six times over threshold. Cutting earlier cannot
+  rescue them either: every frame of every clip was measured, and the frame
+  closest to the source is frame zero. Entering a clip is genuinely seamless;
+  leaving one is not, and on the idle loop it repeats every few seconds. The
+  three options — re-prompt, cross-fade on exit, or accept it — are laid out in
+  the audit. None is chosen.
 - **`stand_up` is generated from the wrong frame.** It is supposed to start from
   the last frame of `sit_down`; the anchor is computed and then dropped, so one
   clip per library is knowingly wrong.
