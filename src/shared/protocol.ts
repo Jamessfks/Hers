@@ -14,6 +14,13 @@
  * (runs in Node), so it must not import from either.
  */
 
+import type { ScreenActivity } from './screen-change.ts';
+
+export type { ScreenActivity };
+
+/** The three words the screen watcher can report. Used to validate the wire. */
+export const SCREEN_ACTIVITIES: readonly ScreenActivity[] = ['still', 'working', 'switched'];
+
 // ---------------------------------------------------------------------------
 // Binary media frames
 // ---------------------------------------------------------------------------
@@ -84,6 +91,16 @@ export type ClientMessage =
    * enough for Anna to tell "sitting here quietly" from "gone".
    */
   | { t: 'presence'; idleSeconds: number; tabVisible: boolean }
+  /**
+   * What the shared screen has been doing.
+   *
+   * Not a duplicate of the frames: the frames go to Gemini and show *what* is on
+   * the screen, and this says whether it has been moving. The arithmetic happens
+   * in the browser — see `shared/screen-change.ts` — because comparing two
+   * frames server-side would mean decoding every JPEG we currently forward
+   * untouched. Sent when the answer changes, not per frame.
+   */
+  | { t: 'screen'; activity: ScreenActivity; stillSeconds: number }
   /** Stop talking, now. Sent when the user starts speaking over her. */
   | { t: 'interrupt' }
   /** Start or restart the conversation. */

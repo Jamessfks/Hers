@@ -104,6 +104,9 @@ const vision = new Vision({
       jpeg,
     );
   },
+  onScreenActivity: (activity, stillSeconds) => {
+    connection.send({ t: 'screen', activity, stillSeconds });
+  },
   onEnded: (source) => {
     const sense: SenseName = source === 'camera' ? 'sight' : 'screen';
     senses[sense] = false;

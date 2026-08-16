@@ -24,7 +24,12 @@
  *     that cannot be bypassed by a client that has been modified or has a bug.
  */
 
-import type { ConnectionState, MoodReadout, SenseName } from '../../shared/protocol.ts';
+import type {
+  ConnectionState,
+  MoodReadout,
+  ScreenActivity,
+  SenseName,
+} from '../../shared/protocol.ts';
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
@@ -304,6 +309,23 @@ export class Companion {
       // reason to look up that a timer running out never was.
       this.#initiative.poke();
     }
+  }
+
+  /**
+   * The browser's read on what the shared screen is doing.
+   *
+   * Note what this deliberately does *not* do: poke the initiative on every
+   * change. Poking re-arms the clock, so treating each window switch as a
+   * conversational event would push her opener further away every time they
+   * alt-tabbed — a person who works quickly would silence her entirely. The one
+   * case where a switch is worth acting on is when she has already given up on
+   * an empty room: somebody moving to something new is proof they are there,
+   * and that is the same reason `notePresence` has for looking up again.
+   */
+  noteScreen(activity: ScreenActivity, stillSeconds: number): void {
+    const known = this.situation.snapshot().screen.at > 0;
+    this.situation.noteScreen(activity, stillSeconds);
+    if (activity === 'switched' && known && this.#initiative.waiting) this.#initiative.poke();
   }
 
   /** The user started speaking over her. */

@@ -53,6 +53,7 @@ function situation(overrides: Partial<SituationSnapshot> = {}): SituationSnapsho
   return {
     senses: { hearing: true, sight: false, screen: false },
     presence: { idleSeconds: 5, tabVisible: true, at: 1 },
+    screen: { activity: 'still', stillSeconds: 0, sinceSwitchMs: Infinity, at: 0 },
     sinceUserSpokeMs: 30_000,
     sinceAnnaSpokeMs: 30_000,
     turns: 4,
@@ -227,6 +228,57 @@ test('the reason is drawn from what is actually true right now', () => {
   assert.match(first, /not spoken/);
 });
 
+test('what the screen is doing is a reason to speak', () => {
+  const watching = { hearing: true, sight: false, screen: true };
+
+  const switched = pickReason(
+    situation({
+      senses: watching,
+      screen: { activity: 'switched', stillSeconds: 0, sinceSwitchMs: 4000, at: 1 },
+    }),
+  );
+  assert.match(switched, /moved to something else/);
+
+  const staring = pickReason(
+    situation({
+      senses: watching,
+      screen: { activity: 'still', stillSeconds: 42 * 60, sinceSwitchMs: Infinity, at: 1 },
+    }),
+  );
+  assert.match(staring, /42 minutes/);
+
+  const working = pickReason(
+    situation({
+      senses: watching,
+      screen: { activity: 'working', stillSeconds: 0, sinceSwitchMs: Infinity, at: 1 },
+    }),
+  );
+  assert.match(working, /keeps changing/);
+});
+
+test('a switch stops being news once it is old', () => {
+  const reason = pickReason(
+    situation({
+      senses: { hearing: true, sight: false, screen: true },
+      screen: { activity: 'still', stillSeconds: 300, sinceSwitchMs: 20 * 60_000, at: 1 },
+    }),
+  );
+  assert.doesNotMatch(reason, /moved to something else/);
+});
+
+test('a screen nobody has reported on is not reasoned about', () => {
+  // Telegram and phone calls have `screen` off and no browser behind them; the
+  // desk has no reading at all for the first second or two.
+  const reason = pickReason(
+    situation({
+      senses: { hearing: true, sight: false, screen: true },
+      screen: { activity: 'still', stillSeconds: 99 * 60, sinceSwitchMs: 1000, at: 0 },
+    }),
+  );
+  assert.doesNotMatch(reason, /moved to something else/);
+  assert.doesNotMatch(reason, /99 minutes/);
+});
+
 test('after two unanswered openers she stops asking', () => {
   const reason = pickReason(situation(), 2);
   assert.match(reason, /not answered/);
@@ -241,6 +293,14 @@ test('no reason is ever a bare greeting instruction', () => {
     situation({ senses: { hearing: true, sight: true, screen: false } }),
     situation({ senses: { hearing: true, sight: false, screen: true } }),
     situation({ presence: { idleSeconds: 3600, tabVisible: true, at: 1 } }),
+    situation({
+      senses: { hearing: true, sight: false, screen: true },
+      screen: { activity: 'switched', stillSeconds: 0, sinceSwitchMs: 2000, at: 1 },
+    }),
+    situation({
+      senses: { hearing: true, sight: false, screen: true },
+      screen: { activity: 'still', stillSeconds: 60 * 60, sinceSwitchMs: Infinity, at: 1 },
+    }),
   ];
   for (const each of cases) {
     const reason = pickReason(each);

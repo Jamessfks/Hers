@@ -258,13 +258,17 @@ test('a new picture is generated from her photograph, never from the last genera
   assert.equal(r.calls[0]?.reference?.mimeType, 'image/png');
 });
 
-test('with no photograph at all the newest picture is still the reference', async () => {
+test('with no photograph there is nothing to generate from, so nothing is generated', async () => {
   const r = recorder();
+  // There are perfectly good pictures in the folder, and the old code used the
+  // newest of them as the reference. That is how the drift started: a picture
+  // generated from a generated picture is a photocopy of a photocopy, and after
+  // a few rounds Telegram was sending a face nobody had uploaded. The uploaded
+  // photograph is the only acceptable input, and its absence is a no.
   const g = await gallery(['older.jpg'], { generator: r.generator });
-  await g.gallery.generate('laughing', { apiKey: 'test-key' });
 
-  assert.equal(r.calls.length, 1);
-  assert.ok(r.calls[0]?.reference, 'some consistency beats none when there is no face to use');
+  assert.equal(await g.gallery.generate('laughing', { apiKey: 'test-key' }), null);
+  assert.equal(r.calls.length, 0, 'no photograph, no request, no money spent');
 });
 
 test('mime types cover what the gallery accepts', () => {

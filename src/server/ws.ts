@@ -25,6 +25,7 @@ import type { WebSocket } from 'ws';
 import {
   CLOSE_SUPERSEDED,
   MediaKind,
+  SCREEN_ACTIVITIES,
   decodeMediaFrame,
   encodeMediaFrame,
   parseClientMessage,
@@ -232,6 +233,14 @@ export class WebBridge {
       case 'presence':
         companion.notePresence(Number(message.idleSeconds) || 0, message.tabVisible !== false);
         return;
+
+      case 'screen': {
+        // Validated rather than trusted: it arrives over a socket, and an
+        // unrecognised word would end up in a prompt.
+        if (!SCREEN_ACTIVITIES.includes(message.activity)) return;
+        companion.noteScreen(message.activity, Number(message.stillSeconds) || 0);
+        return;
+      }
 
       case 'interrupt':
         companion.interrupt();

@@ -252,7 +252,6 @@ export class Gallery {
       description,
       options.apiKey,
       options.appearance ?? '',
-      options.reference,
     );
   }
 
@@ -290,13 +289,15 @@ export class Gallery {
     description: string,
     apiKey: string,
     appearance: string,
-    override?: { data: Buffer; mimeType: string },
   ): Promise<GalleryItem | null> {
     if (this.#generating) return this.#generating;
 
     this.#generating = (async () => {
       try {
-        const reference = override ?? (await this.#reference());
+        const reference = await this.#reference();
+        // Every picture of her starts from the photograph. Without one there
+        // is nothing to be faithful to, and a guess is worse than nothing.
+        if (!reference) return null;
         const generated = await this.#generator({
           apiKey,
           description,
@@ -333,25 +334,24 @@ export class Gallery {
    * The newest gallery image is kept only as the fallback for a profile that
    * has no photograph at all, where some consistency beats none.
    */
+  /**
+   * The photograph, and nothing else.
+   *
+   * There used to be a fallback here: if the photograph could not be read, use
+   * the newest image in the gallery instead. That is where generated pictures
+   * are written, so the fallback quietly recreated the drift loop it was meant
+   * to replace — picture two referencing picture one, picture three
+   * referencing picture two, her face walking away from the photograph one
+   * generation at a time.
+   *
+   * A generation with no photograph behind it is a picture of a stranger. It
+   * is better not to make one.
+   */
   async #reference(): Promise<{ data: Buffer; mimeType: string } | null> {
     const face = this.#face?.();
-    if (face) {
-      try {
-        return { data: await readFile(face.absolutePath), mimeType: face.mimeType };
-      } catch {
-        // A photograph the manifest claims and the disk does not have falls
-        // through to the gallery rather than losing the picture entirely.
-      }
-    }
-
-    const items = await this.list();
-    const newest = items.find((item) => item.kind === 'image');
-    if (!newest) return null;
+    if (!face) return null;
     try {
-      return {
-        data: await readFile(newest.absolutePath),
-        mimeType: mimeFor(path.extname(newest.name)),
-      };
+      return { data: await readFile(face.absolutePath), mimeType: face.mimeType };
     } catch {
       return null;
     }

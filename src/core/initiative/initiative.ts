@@ -52,6 +52,24 @@ const BUSY_RETRY_MS = 4000;
  */
 const GIVE_UP_AFTER = 2;
 
+/**
+ * How long a window change stays worth mentioning.
+ *
+ * She speaks on her own clock, so by the time she opens her mouth the switch
+ * may be minutes old. Past a minute the frames she is looking at are of the new
+ * thing anyway, and "you've moved on to something else" reads as her having
+ * been asleep.
+ */
+const FRESH_SWITCH_MS = 60_000;
+
+/**
+ * Stillness that means something rather than a pause.
+ *
+ * Half an hour on one unchanged window is a person reading, a person stuck, or
+ * a person who left. Under it, it is just how anyone works.
+ */
+const STARING_SECONDS = 30 * 60;
+
 export interface InitiativeOptions {
   /** Hard ceiling on silence. */
   maxSilenceMs?: number;
@@ -198,10 +216,13 @@ export class Initiative {
  * her toward her own memory rather than toward a greeting.
  */
 export function pickReason(situation: SituationSnapshot, unanswered = 0): string {
-  const { presence, senses, hour, turns } = situation;
+  const { presence, screen, senses, hour, turns } = situation;
   const quietMinutes = Math.round(
     Math.min(situation.sinceUserSpokeMs, Number.MAX_SAFE_INTEGER) / 60_000,
   );
+  // Only true once the browser has actually reported. Telegram and phone calls
+  // have no screen at all, and the desk has none for the first second or two.
+  const watchingScreen = senses.screen && screen.at > 0;
 
   if (unanswered >= 2) {
     return (
@@ -221,12 +242,44 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
       : 'You have not spoken to them yet today. Open small.';
   }
 
+  // The most specific thing that can be true of a screen: they were doing one
+  // thing and now they are doing another. Fresh only — a switch from twenty
+  // minutes ago is not news, and "you've moved on to something else" said long
+  // after they moved on is worse than saying nothing.
+  if (watchingScreen && screen.sinceSwitchMs < FRESH_SWITCH_MS) {
+    return (
+      'They have just moved to something else on their screen — you can see what. ' +
+      'If that change is worth one sentence, say it, and be specific about what you ' +
+      'can see. If it is not, let it be the reason you looked up rather than the ' +
+      'thing you talk about.'
+    );
+  }
+
   if (isLateNight(hour)) {
     return `It is ${situation.localTime} and they are still here. Do not tell them to sleep.`;
   }
 
+  // Distinct from the idle rule below: a screen that has not changed in half an
+  // hour is a stronger fact than an untouched keyboard, because it is about the
+  // window they are actually in rather than about this tab.
+  if (watchingScreen && screen.stillSeconds > STARING_SECONDS) {
+    return (
+      `Nothing on their screen has changed in ${Math.round(screen.stillSeconds / 60)} minutes — ` +
+      'the same thing is still up. They are reading it, or stuck on it, or they left. ' +
+      'Say one thing that is not embarrassing in any of those three cases.'
+    );
+  }
+
   if (presence.idleSeconds > 20 * 60) {
     return `They have not touched anything in ${Math.round(presence.idleSeconds / 60)} minutes. They may have walked away, or they may be reading. Do not assume which.`;
+  }
+
+  if (watchingScreen && screen.activity === 'working') {
+    return (
+      'They are working — the screen keeps changing under them. Only speak if ' +
+      'something on it is genuinely worth one sentence; otherwise say one small ' +
+      'unrelated thing and let them get on with it.'
+    );
   }
 
   if (senses.screen && presence.idleSeconds < 30) {

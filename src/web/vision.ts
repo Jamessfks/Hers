@@ -18,6 +18,15 @@
  * frames, and frames are the expensive part.
  */
 
+import {
+  SCREEN_REPORT_INTERVAL_MS,
+  SIGNATURE_HEIGHT,
+  SIGNATURE_WIDTH,
+  ScreenWatcher,
+  signature,
+} from '../shared/screen-change.ts';
+import type { ScreenActivity } from '../shared/screen-change.ts';
+
 const SCREEN_WIDTH = 1024;
 const CAMERA_WIDTH = 640;
 /** Inset size as a fraction of the composited frame's width. */
@@ -28,6 +37,14 @@ export type VisionSource = 'camera' | 'screen';
 
 export interface VisionOptions {
   onFrame(kind: VisionSource, jpeg: ArrayBuffer): void;
+  /**
+   * What the screen has been doing, when it is worth saying.
+   *
+   * Not called per frame: the answer is the same most of the time, and a
+   * control message every two seconds forever to say "still nothing" is a lot
+   * of nothing. Fires when the answer changes and otherwise on a slow tick.
+   */
+  onScreenActivity(activity: ScreenActivity, stillSeconds: number): void;
   /** The user stopped a share from the browser's own UI rather than ours. */
   onEnded(source: VisionSource): void;
 }
@@ -35,6 +52,17 @@ export interface VisionOptions {
 export class Vision {
   readonly #options: VisionOptions;
   readonly #canvas = document.createElement('canvas');
+  /**
+   * A second, tiny canvas, for the change detector alone.
+   *
+   * Deliberately not the composited one. The camera inset is a person moving,
+   * so a screen that had not changed in an hour would still measure as busy the
+   * whole time. Drawing the screen video straight into a 32x18 canvas also lets
+   * the browser's own downscaler do the averaging, which is both better and
+   * cheaper than reading a megapixel of `ImageData` twice a second.
+   */
+  readonly #thumbnail = document.createElement('canvas');
+  readonly #watcher = new ScreenWatcher();
   readonly #camera = createVideoElement();
   readonly #screen = createVideoElement();
   #cameraStream: MediaStream | null = null;
@@ -43,9 +71,13 @@ export class Vision {
   #cameraFps = 1;
   #screenFps = 0.5;
   #busy = false;
+  #reportedActivity: ScreenActivity | null = null;
+  #reportedAt = 0;
 
   constructor(options: VisionOptions) {
     this.#options = options;
+    this.#thumbnail.width = SIGNATURE_WIDTH;
+    this.#thumbnail.height = SIGNATURE_HEIGHT;
   }
 
   setRates(cameraFps: number, screenFps: number): void {
@@ -101,6 +133,12 @@ export class Vision {
     for (const track of this.#screenStream?.getTracks() ?? []) track.stop();
     this.#screenStream = null;
     this.#screen.srcObject = null;
+    // The next share will be of something else entirely, and comparing its
+    // first frame against the last frame of this one would report a switch
+    // nobody made. `observe` treats the frame after a reset as the first one.
+    this.#watcher.reset();
+    this.#reportedActivity = null;
+    this.#reportedAt = 0;
     this.#restartLoop();
   }
 
@@ -146,6 +184,10 @@ export class Vision {
     if (this.#busy) return;
     this.#busy = true;
     try {
+      // Before the composite, and independent of whether it succeeds: watching
+      // the screen is worth doing even in the seconds where a frame fails to
+      // encode, and it costs nothing.
+      if (this.#screenStream) this.#watchScreen();
       const frame = this.#screenStream ? await this.#composite() : await this.#cameraOnly();
       if (frame) this.#options.onFrame(this.#screenStream ? 'screen' : 'camera', frame);
     } catch {
@@ -153,6 +195,44 @@ export class Vision {
     } finally {
       this.#busy = false;
     }
+  }
+
+  /** Measures how much the screen moved, and says so when it is worth saying. */
+  #watchScreen(): void {
+    const screen = this.#screen;
+    if (!ready(screen)) return;
+
+    const context = this.#thumbnail.getContext('2d', { alpha: false, willReadFrequently: true });
+    if (!context) return;
+    context.drawImage(screen, 0, 0, SIGNATURE_WIDTH, SIGNATURE_HEIGHT);
+
+    let pixels: ImageData;
+    try {
+      pixels = context.getImageData(0, 0, SIGNATURE_WIDTH, SIGNATURE_HEIGHT);
+    } catch {
+      // A tainted canvas. Cannot happen with `getDisplayMedia`, but reading
+      // pixels is the one operation with a security failure mode, and losing
+      // the change detector must not cost the frames.
+      return;
+    }
+
+    const now = Date.now();
+    const activity = this.#watcher.observe(
+      signature(pixels.data, SIGNATURE_WIDTH, SIGNATURE_HEIGHT),
+      now,
+    );
+
+    // Every switch is reported, including two in a row — each one is a separate
+    // moment the server timestamps. Everything else waits for the answer to
+    // change or for the slow tick, so a quiet screen costs two messages a
+    // minute rather than thirty.
+    const changed = activity !== this.#reportedActivity;
+    const stale = now - this.#reportedAt >= SCREEN_REPORT_INTERVAL_MS;
+    if (activity !== 'switched' && !changed && !stale) return;
+
+    this.#reportedActivity = activity;
+    this.#reportedAt = now;
+    this.#options.onScreenActivity(activity, this.#watcher.stillSeconds(now));
   }
 
   async #composite(): Promise<ArrayBuffer | null> {

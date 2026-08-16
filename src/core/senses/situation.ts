@@ -13,7 +13,8 @@
  * ones it needs.
  */
 
-import type { SenseName } from '../../shared/protocol.ts';
+import type { ScreenActivity, SenseName } from '../../shared/protocol.ts';
+import { SCREEN_REPORT_INTERVAL_MS } from '../../shared/screen-change.ts';
 
 export interface Presence {
   /** Seconds since the browser last saw a keystroke, click or scroll. */
@@ -24,9 +25,29 @@ export interface Presence {
   at: number;
 }
 
+/**
+ * What their screen has been doing, as far as the browser can tell.
+ *
+ * Distinct from {@link Presence} on purpose. Presence is about the *tab* — the
+ * only thing a web page can honestly report about a person — and this is about
+ * the window they are actually working in. Someone reading a long document with
+ * Anna's tab in the background is idle by one measure and busy by the other,
+ * and those deserve different things said to them.
+ */
+export interface ScreenState {
+  activity: ScreenActivity;
+  /** Seconds the screen has looked unchanged. */
+  stillSeconds: number;
+  /** Milliseconds since they last moved to something else. Infinity if never. */
+  sinceSwitchMs: number;
+  /** When the browser last reported. 0 when it never has. */
+  at: number;
+}
+
 export interface SituationSnapshot {
   senses: Record<SenseName, boolean>;
   presence: Presence;
+  screen: ScreenState;
   /** Milliseconds since the user last said or typed anything. Infinity if never. */
   sinceUserSpokeMs: number;
   /** Milliseconds since Anna last finished a turn. Infinity if never. */
@@ -39,10 +60,17 @@ export interface SituationSnapshot {
   localTime: string;
 }
 
+/** Past this with no report, the browser is not talking to us any more. */
+const SCREEN_STALE_MS = SCREEN_REPORT_INTERVAL_MS * 3;
+
 export class Situation {
   readonly #now: () => number;
   #senses: Record<SenseName, boolean> = { hearing: false, sight: false, screen: false };
   #presence: Presence = { idleSeconds: 0, tabVisible: true, at: 0 };
+  #screenActivity: ScreenActivity = 'still';
+  #screenStillSeconds = 0;
+  #screenAt = 0;
+  #switchedAt = 0;
   #userSpokeAt = 0;
   #annaSpokeAt = 0;
   #turns = 0;
@@ -53,6 +81,14 @@ export class Situation {
 
   setSense(sense: SenseName, on: boolean): void {
     this.#senses[sense] = on;
+    // Nothing is known about a screen nobody is sharing, and "still for forty
+    // minutes" is exactly the reading a stopped share would leave behind.
+    if (sense === 'screen' && !on) {
+      this.#screenActivity = 'still';
+      this.#screenStillSeconds = 0;
+      this.#screenAt = 0;
+      this.#switchedAt = 0;
+    }
   }
 
   get senses(): Record<SenseName, boolean> {
@@ -71,6 +107,23 @@ export class Situation {
     };
   }
 
+  /**
+   * The browser's read on the shared screen.
+   *
+   * `switched` is stamped rather than stored: "they just changed windows" is
+   * only interesting for about a minute, and a flag would still be true an hour
+   * later. Reports are ignored once the screen sense is off, so switching it
+   * off cannot leave a stale reading behind for her to reason about.
+   */
+  noteScreen(activity: ScreenActivity, stillSeconds: number): void {
+    if (!this.#senses.screen) return;
+    const now = this.#now();
+    this.#screenActivity = activity;
+    this.#screenStillSeconds = Number.isFinite(stillSeconds) ? Math.max(0, stillSeconds) : 0;
+    this.#screenAt = now;
+    if (activity === 'switched') this.#switchedAt = now;
+  }
+
   noteUserSpoke(): void {
     this.#userSpokeAt = this.#now();
     this.#turns += 1;
@@ -79,6 +132,23 @@ export class Situation {
   noteAnnaSpoke(): void {
     this.#annaSpokeAt = this.#now();
     this.#turns += 1;
+  }
+
+  /**
+   * Stillness, carried forward between reports.
+   *
+   * The browser only speaks up when the answer changes or every
+   * {@link SCREEN_REPORT_INTERVAL_MS}, so the stored figure is a reading taken
+   * up to that long ago. Left alone it would tick in thirty-second steps, and
+   * "nothing has changed in fifteen minutes" would fire late. Carried forward
+   * only while reports are still arriving: once the browser stops talking to us
+   * we know nothing, and a frozen tab must not read as deep concentration.
+   */
+  #stillSeconds(now: number): number {
+    if (this.#screenAt === 0 || this.#screenActivity !== 'still') return this.#screenStillSeconds;
+    const since = now - this.#screenAt;
+    if (since > SCREEN_STALE_MS) return this.#screenStillSeconds;
+    return this.#screenStillSeconds + Math.round(since / 1000);
   }
 
   /** A new conversation. Turn count resets; presence does not. */
@@ -94,6 +164,12 @@ export class Situation {
     return {
       senses: this.senses,
       presence: { ...this.#presence },
+      screen: {
+        activity: this.#screenActivity,
+        stillSeconds: this.#stillSeconds(now),
+        sinceSwitchMs: this.#switchedAt ? now - this.#switchedAt : Number.POSITIVE_INFINITY,
+        at: this.#screenAt,
+      },
       sinceUserSpokeMs: this.#userSpokeAt ? now - this.#userSpokeAt : Number.POSITIVE_INFINITY,
       sinceAnnaSpokeMs: this.#annaSpokeAt ? now - this.#annaSpokeAt : Number.POSITIVE_INFINITY,
       turns: this.#turns,

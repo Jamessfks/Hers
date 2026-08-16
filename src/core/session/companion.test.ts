@@ -535,3 +535,24 @@ test('memory carries between two conversations', async () => {
   assert.match(f.systemInstructions.at(-1) ?? '', /called you from their phone/);
   await second.sleep();
 });
+
+test('the screen watcher reaches her, and only while she is sharing a screen', async () => {
+  const f = await fixture();
+
+  // The browser can be reporting before the sense is on — the share dialog is
+  // open, the track is live, the switch has not been sent yet. A reading from
+  // a screen she is not being shown must not become something she talks about.
+  f.companion.noteScreen('working', 0);
+  assert.equal(f.companion.situation.snapshot().screen.at, 0);
+
+  f.companion.setSense('screen', true);
+  f.companion.noteScreen('switched', 0);
+
+  const screen = f.companion.situation.snapshot().screen;
+  assert.equal(screen.activity, 'switched');
+  assert.ok(screen.at > 0, 'the reading arrived');
+  assert.ok(screen.sinceSwitchMs < 1000, 'and it was just now');
+
+  f.companion.noteScreen('still', 900);
+  assert.ok(f.companion.situation.snapshot().screen.stillSeconds >= 900);
+});
