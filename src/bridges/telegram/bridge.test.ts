@@ -26,6 +26,7 @@ class FakeTelegram implements TelegramClient {
   readonly sent: Array<{ chatId: number; text: string }> = [];
   readonly photos: Array<{ chatId: number; name: string }> = [];
   readonly actions: number[] = [];
+  readonly voices: Array<{ chatId: number; bytes: number; seconds: number }> = [];
   commands: BotCommand[] = [];
   downloads: Record<string, Buffer | null> = {};
   #queue: TelegramUpdate[][] = [];
@@ -57,6 +58,10 @@ class FakeTelegram implements TelegramClient {
 
   async sendVideo(chatId: number, file: UploadFile): Promise<void> {
     this.photos.push({ chatId, name: file.name });
+  }
+
+  async sendVoice(chatId: number, file: UploadFile, seconds: number): Promise<void> {
+    this.voices.push({ chatId, bytes: file.data.length, seconds });
   }
 
   async download(fileId: string): Promise<Buffer | null> {

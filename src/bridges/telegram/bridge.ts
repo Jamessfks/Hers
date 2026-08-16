@@ -32,6 +32,7 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 
+import { encodeOggOpus, pcmSeconds } from '../../core/speech/ogg-opus.ts';
 import { transcribeMedia } from '../../core/gemini/text.ts';
 import { mimeFor } from '../../core/gallery/gallery.ts';
 import { Companion } from '../../core/session/companion.ts';
@@ -110,6 +111,10 @@ export class TelegramBridge {
    * says so.
    */
   readonly #awaitingFace = new Set<number>();
+  /** Her voice for the turn in progress, kept only until the turn lands. */
+  #speech: Buffer[] = [];
+  /** True when the last thing they sent was spoken rather than typed. */
+  #theySpoke = false;
 
   constructor(options: TelegramBridgeOptions) {
     this.#brain = options.brain;
@@ -294,11 +299,16 @@ export class TelegramBridge {
         await this.#api.sendMessage(chatId, "I couldn't make that out.");
         return;
       }
+      // They spoke, so she answers in kind.
+      this.#theySpoke = Boolean(message.voice ?? message.video_note);
       companion.say(heard);
       return;
     }
 
-    if (text) companion.say(text);
+    if (text) {
+      this.#theySpoke = false;
+      companion.say(text);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -519,12 +529,12 @@ export class TelegramBridge {
       // deliberately not the same thing as a sense being switched on.
       senses: { hearing: false, sight: false, screen: false },
       sink: {
-        // Her voice is generated and discarded: the transcript is what gets
-        // sent. Wasteful in tokens, and still the right trade — one session
-        // type means one set of behaviours to test and one memory to keep.
-        audio: () => undefined,
+        // Kept for the length of a turn so it can be sent as a voice note.
+        audio: (pcm) => {
+          if (this.#speech.length < 400) this.#speech.push(pcm);
+        },
         transcript: (who, text, final) => {
-          if (who === 'anna' && final) void this.#api.sendMessage(chatId, text);
+          if (who === 'anna' && final) void this.#say(chatId, text);
         },
         state: () => undefined,
         mood: () => undefined,
@@ -540,6 +550,46 @@ export class TelegramBridge {
 
     await this.#companion.wake();
     this.#armIdle();
+  }
+
+  /**
+   * Sends a finished line, in her voice or in text.
+   *
+   * She answers in kind: a voice note back to a voice note is what a person
+   * does, and it is the rule that needs no threshold. Beyond that she speaks
+   * occasionally rather than always — a companion who only ever sends audio is
+   * one you cannot read on a train.
+   *
+   * The text goes either way. A voice note nobody can play is a dead end, and
+   * the transcript costs nothing.
+   */
+  async #say(chatId: number, text: string): Promise<void> {
+    const pcm = Buffer.concat(this.#speech);
+    this.#speech = [];
+
+    const worthSpeaking =
+      pcm.length > 0 &&
+      // Long answers are tedious to listen to and easy to read.
+      text.length <= 320 &&
+      (this.#theySpoke || Math.random() < 0.25);
+
+    if (!worthSpeaking) {
+      await this.#api.sendMessage(chatId, text);
+      return;
+    }
+
+    const ogg = encodeOggOpus(pcm);
+    if (!ogg) {
+      await this.#api.sendMessage(chatId, text);
+      return;
+    }
+
+    await this.#api.sendVoice(
+      chatId,
+      { data: ogg, name: 'anna.ogg', mimeType: 'audio/ogg' },
+      pcmSeconds(pcm),
+    );
+    await this.#api.sendMessage(chatId, text);
   }
 
   async #sleep(): Promise<void> {

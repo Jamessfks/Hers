@@ -187,6 +187,20 @@ async function session(
   } = {},
 ): Promise<Session> {
   const root = options.dir ?? (await mkdtemp(path.join(tmpdir(), 'anna-audit-')));
+
+  /*
+   * Nothing this harness creates may land inside the repository.
+   *
+   * A single wrong root — `path.dirname(profileDir)`, which resolves to the
+   * repo itself — silently created a second profile folder beside the real one
+   * and a later `git add -A` committed all eleven files of it. Refusing here is
+   * cheaper than noticing later.
+   */
+  const inside = path.resolve(root).startsWith(path.resolve(process.cwd()) + path.sep);
+  if (inside && !options.profileDir) {
+    throw new Error(`the audit tried to write into the repo at ${root}; use a temp directory`);
+  }
+
   const config = loadConfig({
     ...process.env,
     ANNA_PROFILE: options.profileDir ?? path.join(root, 'profile'),

@@ -105,6 +105,7 @@ export interface TelegramClient {
   sendChatAction(chatId: number, action: 'typing' | 'upload_photo'): Promise<void>;
   sendPhoto(chatId: number, file: UploadFile, caption?: string): Promise<void>;
   sendVideo(chatId: number, file: UploadFile, caption?: string): Promise<void>;
+  sendVoice(chatId: number, file: UploadFile, seconds: number): Promise<void>;
   download(fileId: string): Promise<Buffer | null>;
 }
 
@@ -174,6 +175,20 @@ export class TelegramApi implements TelegramClient {
     await this.#upload('sendVideo', 'video', chatId, file, caption);
   }
 
+  /**
+   * A voice note — the round bubble with a waveform, not a file attachment.
+   *
+   * Telegram accepts `.OGG` with Opus, `.MP3` or `.M4A` here, and only the
+   * first is rendered as a voice message, so that is what `encodeOggOpus`
+   * produces. `duration` is optional but without it the bubble shows no length
+   * until it has been played once.
+   */
+  async sendVoice(chatId: number, file: UploadFile, seconds: number): Promise<void> {
+    await this.#upload('sendVoice', 'voice', chatId, file, undefined, {
+      duration: String(Math.max(1, Math.round(seconds))),
+    });
+  }
+
   /** Resolves a `file_id` and downloads the bytes. Null if it is too big or gone. */
   async download(fileId: string): Promise<Buffer | null> {
     const file = await this.#call<{ file_path?: string; file_size?: number }>('getFile', {
@@ -229,10 +244,12 @@ export class TelegramApi implements TelegramClient {
     chatId: number,
     file: UploadFile,
     caption?: string,
+    extra: Record<string, string> = {},
   ): Promise<void> {
     const form = new FormData();
     form.set('chat_id', String(chatId));
     if (caption) form.set('caption', caption.slice(0, 1024));
+    for (const [key, value] of Object.entries(extra)) form.set(key, value);
     form.set(field, new Blob([new Uint8Array(file.data)], { type: file.mimeType }), file.name);
 
     try {
