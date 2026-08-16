@@ -23,7 +23,7 @@
  * established by measurement; see the long note in {@link verifyClip}.
  */
 
-import { ASSUMED_FPS, extractClipFrames } from './clip-frames.ts';
+import { ASSUMED_FPS, extractClipFrames, type ClipFrames } from './clip-frames.ts';
 import {
   bestCutFrame,
   closesCleanly,
@@ -58,6 +58,30 @@ export interface VerifyDeps {
   report: (slot: string, seam: SeamVerdict) => Promise<unknown>;
   /** Diagnostics, so a failure here is visible without a devtools window. */
   note?: (event: string, detail?: Record<string, unknown>) => void;
+  /**
+   * True once the library this pass was started for is no longer the one on
+   * screen.
+   *
+   * A pass is minutes of decoding and holds nothing but closures, so a
+   * photograph swapped underneath it does not stop it: `loadClip` starts
+   * handing it the *new* library's clips, which it measures against a
+   * reference adopted from the old one and reports as verdicts on the new
+   * one's slots. Verdicts are written to the manifest and clearing a wrong one
+   * means paying to render the slot again, so the pass is abandoned rather
+   * than allowed to finish — between clips, and again before anything is
+   * written.
+   */
+  abandoned?: () => boolean;
+  /**
+   * Decodes a clip. Defaults to the real decoder.
+   *
+   * A seam for the same reason `fetch` is one in the provider registry: every
+   * decision in this module happens *after* the decode, and a decoder that
+   * exists only inside Chromium put all of them out of reach of a test. That
+   * is how a reference came to be adopted on the strength of a single loose
+   * comparison with nothing able to say so.
+   */
+  extract?: (url: string) => Promise<ClipFrames>;
 }
 
 /**
@@ -77,23 +101,39 @@ export class SeamReference {
    * How far a candidate reference may sit from the photograph and still be
    * believed.
    *
-   * The floor is known: a same-size frame of the same moment measures 0.0025,
-   * and a vendor render of the same photograph measures 0.0102 once the 0.6%
-   * resample is included. A frame that failed to decode — black, or half
-   * painted — measures around 0.3 against a lit photograph. 0.1 sits an order
-   * of magnitude above the floor and well below the failure, and only
-   * `meanDelta` is used because it is the one number the resample does not
-   * dominate.
-   *
    * This exists because the reference is no longer a *candidate*. When each
    * clip was measured against the photograph, a first frame that decoded badly
    * made that clip fail and be measured again next launch, which is
    * self-healing. As a reference it would instead make the whole library's
-   * verdicts wrong — and worse, `bestCutFrame` would hunt for whichever frame
-   * best matched a black one and could record a `closesCleanly` with a
-   * nonsense cut point, permanently.
+   * verdicts wrong — every correct clip recorded as not closing against it —
+   * and worse, `bestCutFrame` would hunt for whichever frame best matched it
+   * and could write a `cutAtMs` from a nonsense cut point, permanently.
+   *
+   * The numbers are the measured ones (docs/audits/hedra-generation.md). The
+   * floor is 0.0025 for a same-size frame of the same moment and 0.0102 for a
+   * vendor render of the same photograph, the 0.6% resample included. The
+   * failure this has to catch is a frame that is lit and plausible and *wrong*
+   * — and that failure is measured too, because it is the thing every clip in
+   * this library ends on: a different pose of the same person in the same
+   * scene sits 0.062 to 0.064 from the photograph. So the previous value of
+   * 0.1 was above the failure it was written to catch, not merely loose. 0.03
+   * is 3x the floor and half of the failure.
    */
-  static readonly SANITY_MEAN = 0.1;
+  static readonly SANITY_MEAN = 0.03;
+
+  /**
+   * How much of the frame may have visibly moved.
+   *
+   * `meanDelta` alone is one statistic doing two jobs — seam.ts argues at
+   * length that a frame average hides the failure that matters — and the
+   * obvious second opinion cannot be used here: `worstBlockDelta` scores 0.17
+   * against a 0.09 threshold on a frame that has not moved at all, because the
+   * resample is exactly the small contiguous displacement it is built to find.
+   * `changedFraction` is the one that survives it: 0.064 on that same
+   * unmoved frame against 0.513 for a different pose. 0.25 sits between them
+   * with room on both sides.
+   */
+  static readonly SANITY_CHANGED = 0.25;
 
   /**
    * The reference for this size, adopting `candidate` if there is not one yet.
@@ -111,7 +151,9 @@ export class SeamReference {
     // is the whole point — a reference adopted blind is a wrong answer written
     // to disk, where refusing costs one deferred pass.
     if (!source) return null;
-    if (measureSeam(source, candidate).meanDelta > SeamReference.SANITY_MEAN) return null;
+    const against = measureSeam(source, candidate);
+    if (against.meanDelta > SeamReference.SANITY_MEAN) return null;
+    if (against.changedFraction > SeamReference.SANITY_CHANGED) return null;
 
     this.#bySize.set(key, candidate);
     return candidate;
@@ -125,18 +167,34 @@ export class SeamReference {
  * which is deliberately different from "measured and failed". A clip that
  * cannot be decoded keeps its unverified status and will be tried again; a clip
  * that decodes and drifts is a finding, and is recorded as one.
+ *
+ * `reference` is required rather than defaulted. A default of a fresh
+ * {@link SeamReference} reads as a convenience and is the one mistake this
+ * whole comparison was rewritten to stop making: it silently turns the check
+ * into each clip against its own opening frame, which every clip passes while
+ * every cut between two of them pops.
  */
 export async function verifyClip(
   slot: string,
   deps: VerifyDeps,
-  reference = new SeamReference(),
+  reference: SeamReference,
 ): Promise<SeamVerdict | null> {
-  const bytes = await deps.loadClip(slot);
+  let bytes: Uint8Array | null;
+  try {
+    bytes = await deps.loadClip(slot);
+  } catch (error) {
+    // An IPC call that rejects used to take the whole pass with it, because
+    // this one is outside the try below and `verifyPending` has no catch of its
+    // own. One unreadable clip is not a reason to stop measuring the other
+    // eighteen, and it is not a verdict either.
+    deps.note?.('seam-read-failed', { slot, message: String(error).slice(0, 200) });
+    return null;
+  }
   if (!bytes) return null;
 
   const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'video/mp4' }));
   try {
-    const frames = await extractClipFrames(url);
+    const frames = await (deps.extract ?? extractClipFrames)(url);
 
     /*
      * The comparison is between clips, not against the photograph, and that
@@ -197,11 +255,24 @@ export async function verifyClip(
      * strength of a fractionally better score, and the cut point decides how
      * long every gesture lasts.
      */
+    /*
+     * The first clip of a pass is measured against itself, and the verdict says
+     * so.
+     *
+     * There is no way round it — something has to be the reference — but the
+     * verdict it produces answers a weaker question than every other verdict in
+     * the manifest: that the clip returns to where *it* started, rather than to
+     * where the others start. Written without a mark it is indistinguishable
+     * from a real one, and it is the one verdict that survives the reference
+     * being wrong.
+     */
+    const alone = opening === frames.first ? ' (its own reference)' : '';
+
     const atEnd = measureSeam(opening, frames.last);
     if (closesCleanly(atEnd)) {
       return await record(slot, deps, {
         closesCleanly: true,
-        summary: describeSeam(atEnd),
+        summary: `${describeSeam(atEnd)}${alone}`,
       });
     }
 
@@ -213,14 +284,14 @@ export async function verifyClip(
       const cutAtMs = Math.round((better.index / ASSUMED_FPS) * 1000);
       return await record(slot, deps, {
         closesCleanly: true,
-        summary: `${describeSeam(better.measurement)} (cut early)`,
+        summary: `${describeSeam(better.measurement)} (cut early)${alone}`,
         cutAtMs,
       });
     }
 
     return await record(slot, deps, {
       closesCleanly: false,
-      summary: describeSeam(atEnd),
+      summary: `${describeSeam(atEnd)}${alone}`,
     });
   } catch (error) {
     // A clip that will not decode is not a clip that drifted. Leaving it
@@ -248,14 +319,39 @@ export async function verifyClip(
  * has a fresh library to take its opening from.
  */
 export async function verifyPending(slots: readonly string[], deps: VerifyDeps): Promise<void> {
+  /*
+   * The photograph is asked about once, before anything is decoded.
+   *
+   * Nothing in the pass can be measured until the still has decoded, because
+   * that is what a candidate reference is sanity-checked against — so a pass
+   * that starts first used to decode all nineteen multi-megabyte clips and
+   * refuse all nineteen, on the thread that draws her. The size asked for is
+   * arbitrary and the frame is thrown away: the only question a draw this
+   * small answers is whether there is a decoded image at all, which is exactly
+   * the question.
+   */
+  if (!(await deps.sourceFrame(1, 1))) {
+    deps.note?.('seam-pass-deferred', { slots: slots.length });
+    return;
+  }
+
   const reference = new SeamReference();
   for (const slot of slots) {
+    if (deps.abandoned?.()) {
+      deps.note?.('seam-pass-abandoned', { at: slot });
+      return;
+    }
     await verifyClip(slot, deps, reference);
   }
 }
 
 async function record(slot: string, deps: VerifyDeps, seam: SeamVerdict): Promise<SeamVerdict> {
   deps.note?.('seam-measured', { slot, closes: seam.closesCleanly, summary: seam.summary });
+  // Checked here as well as between clips: this one decode is minutes long on
+  // a bad day, and the verdict is about a library that may have been replaced
+  // while it ran. Returned rather than swallowed — it was measured, it just
+  // must not be written.
+  if (deps.abandoned?.()) return seam;
   await deps.report(slot, seam);
   return seam;
 }
