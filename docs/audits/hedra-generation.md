@@ -413,3 +413,54 @@ Stated rather than glossed:
   checked against exactly one photograph and two vendor renders. A same-size
   frame of the same moment scores 0.0025/0.0072/0.0000 and passes comfortably,
   which is the only evidence that they are not simply too tight.
+
+---
+
+## Open, and stated plainly for whoever picks this up
+
+A critic pass on `renderer/avatar/hologram.ts` finished after work stopped. Its
+findings are unfixed, and the first one matters more than the rest because it
+means a commit message in this branch is wrong.
+
+**`#urlFor` has no single-flight guard, and `ae5e6eb` does not close the bug it
+says it closes.** The cache is read, then awaited, then written, with no
+re-check. Two concurrent `#start`s for the same slot both miss, both
+`createObjectURL`, and the later write overwrites the earlier — leaving a
+multi-megabyte blob in no map and on no element, so `invalidate()`,
+`#sweepStale()` and `dispose()` all miss it.
+
+It is reachable on an ordinary path: `main.ts` subscribes with
+`onLibrary((view) => void applyLibrary(view))`, which is not serialised, and
+while the first idle load is open `#playing` is still null, so a second event's
+`setIdle('idle')` starts a second load of the same slot. The critic reproduced
+both orderings against the real class. When the second fetch resolves *first*,
+the superseded older-library load lands last and installs its URL as the cache
+entry — the previous photograph's clip looping over the new face, which is
+exactly what `ae5e6eb` claims to have fixed.
+
+Also open, in rough severity order:
+
+- `#swapIn`'s `back.src !== url` fast path treats "src is set" as "src has
+  decoded". A superseded start sets `src` and blocks; the winner sees the same
+  `src`, skips the wait, and unhides an element that never fired `loadeddata`.
+  Reproduced via barge-in during the idle load. Needs a `readyState` check.
+- `invalidate()` defers on `slot === #playing`, which is not the predicate its
+  own comment describes. `#sweepStale` twelve lines below uses the right one —
+  "is any element sourced from this URL". Because `#playing` is nulled *before*
+  the replacement start is awaited, an invalidate in that window revokes the URL
+  of a clip that is still on screen.
+- The `try` added in `0cddc63` covers `loadClip` only. `new Blob(...)` and
+  `URL.createObjectURL` sit outside it and `#start` is still `try/finally`, so
+  the comment claiming "every other failure in `#start` returns a code" is
+  false and the throw door is open one line lower.
+- `#urlFor` repopulates `#cache` after `dispose()`.
+- Two of the guards these commits are *named* for are untested: mutation testing
+  showed the whole suite still passes with the counted-Map `#release` reduced to
+  a plain delete, and with the `#loading.has(slot)` guard in `invalidate`
+  removed. No test starts the same slot twice concurrently — one that did would
+  cover both and would fail on the finding above.
+- Several comments describe behaviour the code no longer has; the critic listed
+  them by line.
+
+None of this is speculative except where noted: the first two were reproduced
+against the real class, not reasoned about.
