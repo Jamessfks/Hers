@@ -1,299 +1,195 @@
 # Privacy
 
-Anna watches a person all day. That only works if what she does with it is
-boring, bounded, and checkable, so this document states exactly what she can
-see, exactly what leaves the machine, and exactly what is kept. Every claim here
-has a file next to it.
+Anna can watch your screen, look at you through your camera, and listen to you.
+That only works if what she does with it is boring, bounded, and checkable — so
+this document states exactly what she can see, exactly what leaves the machine,
+and exactly what is kept.
 
-There is no Anna backend. Nothing is hosted by us, there is no account, and
-there is no telemetry — no analytics, no crash reporting, no update ping. The
-complete list of hosts the app ever contacts is the vendors you configured:
+Every claim here is a claim about code in this repository. Where a file settles
+the question, it is named.
 
-```
-api.anthropic.com                     api.cartesia.ai          api.deepgram.com
-api.openai.com                        api.elevenlabs.io        api.hume.ai
-generativelanguage.googleapis.com
+---
 
-api.hedra.com        files.hedra.com     cdn.hedra.com          (video, if chosen)
-api.dev.runwayml.com cdn.runwayml.com                          (video, if chosen)
-```
+## The short version
 
-That list is `grep -rho 'https://[a-z0-9.-]*' src/` minus the signup links that
-open in your browser. If you configure only Anthropic and Cartesia, only those
-two are ever contacted.
+- Anna runs on your machine. There is no Anna service, no account, no telemetry.
+- Nothing leaves except what goes to Gemini as part of the conversation you are
+  having — plus, if you switch them on, Telegram and LiveKit.
+- No sense is on until you turn it on. The browser asks its own permission on
+  top of that.
+- Video and audio are streamed and never written to disk.
+- What is kept on disk is a text folder describing her, and a SQLite file of
+  what you have said to each other.
+
+---
+
+## What she can see, and when
+
+| Sense      | On by default | Where it comes from                            | What it produces                    |
+| ---------- | ------------- | ---------------------------------------------- | ----------------------------------- |
+| Hearing    | No            | `getUserMedia({audio})` in the browser          | 16kHz PCM, streamed continuously    |
+| Sight      | No            | `getUserMedia({video})`                         | One JPEG per second at most         |
+| Screen     | No            | `getDisplayMedia()` — you pick the window       | One JPEG every two seconds by default |
+
+All three are off when the page loads and must be switched on individually. The
+browser then asks its own permission, which Anna cannot bypass and does not try
+to. Switching one off stops the capture at the source: the `MediaStreamTrack`
+is stopped, so the camera light goes out — see `src/web/vision.ts` and
+`src/web/audio/mic.ts`.
+
+If you stop a share from the browser's own UI instead of Anna's, she notices the
+track ending and turns the switch off to match, rather than continuing to show
+a sense as on that is not (`Vision#open`).
+
+**She cannot see anything you have not given her.** There is no screen recording
+API in play, no accessibility permission, and no native code. A browser tab can
+only capture what a browser tab can capture, which is what makes this the same
+on macOS and Windows and also what bounds it.
 
 ---
 
 ## What leaves the machine
 
-| What | When | Goes to | What is kept afterwards |
-| --- | --- | --- | --- |
-| Your words, typed or transcribed | Every turn | Your language provider | Stored verbatim in `turns` |
-| Anna's reply, one clause at a time | Every turn | Your voice provider | Spoken words stored; directives stripped |
-| One recorded utterance, as audio | Only after the local VAD hears speech — and only if you switched hearing to Deepgram or OpenAI | Your transcription provider, or nobody on the default | Nothing. On the default macOS transcribes it here, and the temp file it needs is deleted with its directory as soon as the transcript returns |
-| One 512px JPEG | At most every 15s, 45s by default, camera on only | Your language provider's vision model | Nothing. Only the one-clause description survives |
-| Sensor lines as prose | Every turn, inside the system prompt | Your language provider | Nothing beyond the turn |
-| Fact sentences | On recall and on consolidation | Your embeddings provider — or nowhere, on the lexical fallback | Vector stored in `facts.embedding` |
-| A window of transcript | Every 12 turns | Your language provider | Distilled facts and a rolling summary |
-| **The photograph you chose as her body** | Once per clip you render, and only then | Your video provider (Hedra or Runway) | The vendor's retention applies; Hedra's upload handles expire after an hour, Runway's after 24–48h. A copy is also kept locally — see below |
-| **The generated clips** | Downloaded once, per clip | From your video provider to this machine | Stored on disk indefinitely, until you replace the photograph |
+### To Google (Gemini)
 
-**The photograph deserves its own sentence, because it is a picture of a
-person.** If you choose Hedra or Runway, that image is uploaded to them and a
-video model runs on it. Nothing is uploaded until you press the button that
-renders a clip, and the `Bring your own clips` provider uploads nothing at all —
-but if you use a hosted provider, a face leaves this machine. That is a
-different category from a 512px webcam frame described in one clause and
-discarded, and it is why it is listed separately rather than folded into the
-table above.
+Everything in the conversation, because that is what a conversation with a model
+is:
 
-The fifth row is the one people miss, so it is worth stating without softening:
-**what Anna can see about your screen leaves the machine as text.** It is not
-uploaded as pixels and it is not logged anywhere, but the app name, the window
-title, how long you have been idle, the camera's one-clause read of you, and
-your next calendar entry are written into the system prompt on every turn, in
-the `WHAT YOU CAN SEE` section built by
-[`anna.ts`](../src/core/persona/anna.ts). If you would not paste your window
-titles into a chat with that vendor, turn `senses.screenActivity` off.
-
----
-
-## API keys
-
-Keys go into the macOS Keychain through Electron's `safeStorage`, and the design
-in [`secrets.ts`](../src/main/secrets.ts) is built around one assumption: the
-renderer is the least trustworthy process in the app, because it decodes media
-it did not create — a photograph the user chose, and video that came back from a
-vendor.
-
-- **Keys are never written to `config.json`.** A synced dotfile, a support
-  screenshot or a shared settings export cannot leak one.
-- **Keys never reach the renderer.** The only thing the renderer can ask for is
-  `secrets.status()`, which returns `{ present: boolean, hint: '••••abcd' }` per
-  key — a boolean and the last four characters. There is no IPC channel that
-  returns a key, so a compromised renderer cannot exfiltrate one it was never
-  given.
-- **No plaintext fallback.** If `safeStorage.isEncryptionAvailable()` is false,
-  `set()` throws and tells the user why, rather than quietly writing the key to
-  disk in the clear.
-- **The vault file is `0600`**, and holds base64 ciphertext that is useless on
-  another machine. A ciphertext that fails to decrypt — restored from a backup,
-  or from a reinstalled OS — is **retained and reported**, not dropped. An
-  earlier version deleted it, on the theory that asking for the key again beats
-  an opaque failure; that was wrong, because deleting is destroying a working
-  credential the user pasted once and may not have anywhere else.
-
-Where the boundary is thinner than it looks: `sandbox: false` in
-`webPreferences`, because an ESM preload is illegal with the Chromium sandbox
-on. A renderer compromise is therefore not contained by the sandbox. What it
-still cannot do is read a key, because keys are only ever decrypted in main and
-are never sent across the bridge.
-
----
-
-## The camera
-
-Off by default, and the most constrained sensor in the app. From
-[`renderer/senses/vision.ts`](../src/renderer/senses/vision.ts):
-
-- `senses.camera` is `false` in `DEFAULT_CONFIG`. Nothing starts the stream
-  until you turn it on.
-- Sampling is on a slow timer: `cameraIntervalSeconds` defaults to 45, and
-  `MIN_INTERVAL_SECONDS = 15` is a hard floor that clamps any smaller value.
-  The question being answered is "how are they doing", which does not change
-  frame to frame.
-- Each frame is downscaled to **512px wide** and encoded as **JPEG at quality
-  0.72**. Enough for a model to say "slumped, rubbing their eyes". Not enough to
-  read the screen behind you.
-- **The frame is used and dropped.** It is base64'd, sent over IPC, posted to
-  the vision model, and released. It is never written to disk in the renderer or
-  in main, and it is never stored in the database.
-- What survives is one lowercase clause, capped at 120 characters by
-  `describePerson()` — "slumped forward, rubbing their eyes". That clause goes
-  into the situation, and the situation goes into the prompt.
-- The prompt itself is a privacy control. It instructs the model not to describe
-  the room, clothes, appearance, or anything on screen, and to answer exactly
-  `not in frame` when the frame is empty or too dark. `not in frame` is mapped
-  to `null` and no description is recorded at all.
-- **The green light stays on** for as long as the camera is enabled. Opening and
-  closing the device around each frame would make the indicator blink once a
-  minute, which is technically the same access with a less honest signal.
-- `look()` in main re-checks `settings.senses.camera` before sending anything,
-  so a frame in flight when you switch the camera off is dropped rather than
-  uploaded.
-
----
-
-## The microphone
-
-Off by default, gated locally, and by default transcribed on this machine.
-Always-on transcription ships every sound in your room to a vendor; instead
-[`microphone.ts`](../src/renderer/audio/microphone.ts) runs a **local
-energy-gate VAD**, so recording only starts when someone actually spoke — and
-the default transcriber is macOS's own, which never sends the result anywhere.
-
-- The gate is an RMS level check with hysteresis: it opens above `0.035` and
-  closes below `0.018`. Two thresholds rather than one is what stops it
-  flickering through the natural gaps inside a sentence.
-- An utterance ends after `HANG_MS = 420` of silence.
-- Anything shorter than `MIN_UTTERANCE_MS = 320` is discarded and **never sent**
-  — a cough, a keyboard, a chair.
-- What leaves the renderer is one utterance as a single blob, not a continuous
-  stream. The renderer has no transcription key; it hands the bytes to main over
-  IPC and main does the rest. It also decodes its own recording to WAV first,
-  because the on-device recogniser cannot read the WebM that `MediaRecorder`
-  produces.
-- The barge-in signal is a `user-speech` event with `text: ''` and
-  `final: false`. It carries no content — it exists purely to cut Anna off
-  mid-sentence.
-- Audio is never written to disk, and never stored in the database. Only the
-  transcript is recorded as a turn.
-
----
-
-## The screen
-
-Polled every 20 seconds when `senses.screenActivity` is on, which is the one
-sensor that defaults to **true**. From
-[`main/senses/macos.ts`](../src/main/senses/macos.ts), it is exactly three
-readings:
-
-1. **Frontmost application name** — one `osascript` call into System Events.
-2. **Front window title** — from the same call, and often withheld by the app
-   itself.
-3. **Seconds since the last input** — `HIDIdleTime` out of `ioreg`, which is a
-   single integer and needs no permission at all.
-
-There is no keylogging, no accessibility-tree walk, no screenshot, no clipboard
-access, no browser-history read, and no per-application usage log. Nothing reads
-the *content* of any window.
-
-The window title is not nothing, though: titles routinely contain document
-names, ticket numbers and URLs, and the title is passed into the prompt verbatim
-whenever it differs from the app name. That is the honest cost of Anna knowing
-you have been stuck on the same file for three hours.
-
----
-
-## The calendar
-
-Off by default. `readNextEvent()` runs an AppleScript query with a **four-hour
-horizon**, sorts the results, and returns **only the earliest one** — its
-summary text and how many minutes until it starts. Nothing else about the event
-crosses: no attendees, no location, no notes, no other events. It is polled
-every ten minutes, because the trigger that consumes it fires at twelve minutes
-out.
-
----
-
-## Being seen
-
-Anna is excluded from screen capture by default:
-
-```ts
-window.setContentProtection(process.env['ANNA_ALLOW_CAPTURE'] !== '1');
-```
-
-She will not appear in a screen share, a Zoom window, a QuickTime recording or a
-screenshot. A companion turning up in a shared screen during a work call is a
-betrayal, not a feature. Set `ANNA_ALLOW_CAPTURE=1` when you actually want her
-in a demo or a recording.
-
-Anna never requests Screen Recording permission herself. She reads no pixels
-from your display.
-
----
-
-## What is stored, and where
-
-Everything lives in one directory, `app.getPath('userData')`, which on macOS is:
-
-```
-~/Library/Application Support/Anna/
-├── config.json    settings. Never contains a key
-├── secrets.json   base64 ciphertext, mode 0600, useless off this machine
-├── memory.db      SQLite: turns, facts, summaries
-├── memory.db-wal  write-ahead log (journal_mode = WAL)
-├── memory.db-shm  shared-memory index for the WAL
-└── libraries/
-    └── <first 16 hex of the photo's sha-256>/
-        ├── library.json  which clips exist, what each one cost
-        ├── source.jpg    your photograph, byte-for-byte as you gave it
-        └── clips/        the generated mp4s, a few MB each
-```
-
-The photograph is stored under its own hash, so choosing a different one starts
-a new directory rather than overwriting the old. Deleting `libraries/` removes
-every photograph and every clip.
-
-The database schema is in [`memory/store.ts`](../src/core/memory/store.ts) and
-holds four tables:
-
-| Table | Contents |
+| What | When |
 | --- | --- |
-| `turns` | Every line either of you said, verbatim, with a timestamp and session id |
-| `facts` | Distilled durable sentences about you, plus confidence, recall count, and an embedding vector |
-| `summaries` | The rolling narrative summary, appended on each consolidation |
-| `meta` | One row: the consolidation watermark |
+| Your microphone audio | Continuously, while hearing is on |
+| A frame of your camera and/or screen | Up to once a second, while those are on |
+| Anything you type | When you send it |
+| Her system prompt — the profile folder, your recalled facts, her mood | Once per session, and again on each reconnect |
+| Recent turns, as text | To distil facts, every twelfth turn |
+| A photo you send over Telegram | When you send it |
+| A voice or video note you send over Telegram | To transcribe it |
 
-No audio, no images, and no raw sensor readings are ever stored. Turns hold
-Anna's *spoken* words only — the inline `[lean_in]` directives are stripped by
-`spokenText()` before anything reaches the database, which is asserted in
-[`companion.test.ts`](../src/core/orchestrator/companion.test.ts).
+Google's terms for the Gemini API apply to all of it. If you are on the free
+tier, note that Google's free tier terms allow human review and training on your
+data; the paid tier does not. That is a decision you make when you choose a key,
+not one this app can make for you.
 
-**Deleting everything.** `MemoryStore.wipe()` truncates all four tables in one
-statement, is covered by a test, and is reachable from **Settings → Memory**.
-Deleting `secrets.json` removes every stored key; deleting `libraries/` removes
-every photograph and generated clip.
+### To Telegram — only if you configure it
 
----
+Your messages to the bot and hers to you, as Telegram messages. Telegram sees
+them the way it sees any bot conversation. The bot is long-polling, so it dials
+out; nothing on your machine is reachable from the internet because of it.
 
-## macOS permissions
+The allowlist matters and the app will nag you about it. A bot token is a bearer
+credential on a public endpoint: anyone who finds your bot can message it, and
+what they would be talking to is a companion carrying your memory. Set
+`TELEGRAM_ALLOWED_CHAT_IDS`. Until you do, she pins herself to the first chat
+that speaks to her and ignores everyone else (`TelegramBridge#permitted`).
 
-| Permission | What it buys | What happens if you deny it |
-| --- | --- | --- |
-| **Camera** | One clause about your posture, at most every 15s | `Vision.start()` fails, no `camera-frame` events. Anna loses "how they look" entirely, and the `looks-rough` opener can never fire. Everything else is unaffected |
-| **Microphone** | Talking to her out loud | `Microphone.start()` fails, no utterances, no voice barge-in. You can still type into the composer and she answers normally |
-| **Automation → System Events** | Frontmost app name and front window title | `readFrontmost()` returns `null`, so `readActivity()` returns `null` and *both* the activity and idle-presence events stop. The `stuck` opener dies, and `WHAT YOU CAN SEE` loses its screen lines. She still answers you |
-| **Calendars** | The next event within four hours | `readNextEvent()` returns `null`. The `calendar` opener — the highest-priority one — never fires |
-| **Screen Recording** | Nothing. Never requested | n/a |
-| **Accessibility** | Nothing directly. `HIDIdleTime` comes from `ioreg`, which needs no permission | n/a |
+### To LiveKit — only if you configure it
 
-Every reader fails soft, by construction: each one is wrapped in a `try` that
-returns `null` or `0`. A denied permission makes Anna less observant, never
-broken, and she never nags you about it.
+During a phone call: your phone's audio and video, and her voice back. LiveKit
+carries the media between your phone and your machine. Both ends dial out, so
+again nothing is listening here.
 
-The usage strings shown in those prompts are declared in `build.mac.extendInfo`
-in `package.json`: `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`,
-`NSCalendarsUsageDescription`, `NSSpeechRecognitionUsageDescription`. There is
-no `NSAppleEventsUsageDescription`, which is the string macOS shows when Anna
-asks to control System Events — a known gap in the packaged build rather than a
-behaviour of the sensor.
+The call link contains a room name and a signed token, and they travel in the
+URL **fragment** — the part after `#`. A fragment is never sent to the server
+hosting the page and never appears in its logs, which matters because that page
+is on static hosting nobody here controls. The token expires in fifteen minutes
+and grants access to one room.
 
 ---
 
-## Turning things off
+## What is kept, and where
 
-Everything above is a flag in `~/Library/Application Support/Anna/config.json`:
+| Path | What it is |
+| --- | --- |
+| `anna-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
+| `anna-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
+| `anna-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
+| `data/memory.db` | Every turn of conversation, the facts distilled from them, and the rolling summary. |
 
-```json
-{
-  "senses": {
-    "camera": false,
-    "microphone": false,
-    "screenActivity": true,
-    "calendar": false,
-    "cameraIntervalSeconds": 45
-  },
-  "presence": {
-    "proactive": true,
-    "minMinutesBetweenOpeners": 25,
-    "quietHours": [1, 8]
-  }
-}
+**Video frames and audio are never written to disk.** They are encoded in memory,
+sent, and dropped. There is no frame buffer, no cache, and no debug dump —
+`Companion#see` hands the bytes straight to the live session.
+
+`data/memory.db` is a plain SQLite file. You can open it with any SQLite browser
+and read every row. Deleting it deletes her memory of you completely; deleting
+`anna-profile/` resets her to the shipped default on the next start.
+
+Neither file is encrypted. They are protected by your operating system's file
+permissions and nothing else, in the same way your browser history is. If your
+disk is not encrypted, neither is this.
+
+---
+
+## The API key
+
+`GEMINI_API_KEY` is read from the environment or from `.env`, which is
+gitignored. It is held in memory and used to open the Gemini socket. It is never
+sent to the browser, never written to `data/`, and never logged — the doctor
+command prints its *length* rather than the key.
+
+---
+
+## Things she is told not to do
+
+Some of this is prompt, not code, and prompt is a weaker guarantee than code.
+It is stated here so you can judge it rather than assume it.
+
+**Text on your screen is something she saw, never something she was told.** If a
+webpage or a document in a shared window contains instructions, she is told
+explicitly that this is a webpage talking and not you, and not to follow it
+(`anna-profile/boundaries.md`). This is the prompt-injection surface that comes
+with a screen sense, and it is the reason the screen sense is off by default.
+
+**She is told not to read out passwords, keys, or private messages** that happen
+to be on a screen she is shown.
+
+**She will not claim to be human** if you sincerely ask what she is, will not
+claim to have a body in the world, and will not claim to be able to reach or
+call anyone for you.
+
+**If you are in danger she stops performing.** She is told to drop the character
+entirely, say plainly that she wants you to be safe, and point at 988 in the US
+or findahelpline.com elsewhere. That instruction is in `boundaries.md`, which
+means you can read it, and also means you can delete it. Please do not.
+
+---
+
+## The network boundary
+
+The server binds to `127.0.0.1`. Not as a default to be adjusted — as the
+design. Everything the website does needs a secure context, and `localhost` is
+one without a certificate while any other host is not. Binding wider does not
+get you a working phone client; it gets you an open door. Reaching her from a
+phone is what LiveKit is for, and that dials out.
+
+The WebSocket handshake checks `Origin` and refuses anything the server does not
+itself serve from (`WebBridge`, `verifyClient`). This is not decoration:
+WebSockets are exempt from the same-origin policy, so without that check any
+page in any browser running on your machine could open a socket to Anna and
+start reading her transcripts. It is tested in `src/server/ws.test.ts`.
+
+Static files are served by name from two roots only, and a path that resolves
+outside either is refused. The gallery is served by *listing* rather than by
+path: a file is only sent if the directory scan already found it, so no spelling
+of `../` reaches anything. Also tested.
+
+---
+
+## What this app does not do
+
+- No analytics, no crash reporting, no update check, no phone home.
+- No account, no login, no cloud sync.
+- No access to your files, your email, your calendar, or your browser history.
+- No control of your machine. She cannot click, type, or open anything.
+- No recording. There is no "save this conversation" and no audio archive.
+
+---
+
+## Verifying any of this
+
+```bash
+npm run check     # 148 tests, no key required
+npm run doctor    # reports exactly what is configured and what is not
 ```
 
-Those are the shipped defaults, from
-[`config.ts`](../src/main/config.ts). Three of the four sensors are off until
-you turn them on. `proactive: false` stops Anna speaking first at all, and she
-becomes something you talk to rather than something that talks to you.
+The doctor command prints every path she will read or write and every bridge
+that is switched on, before you ever say anything to her.

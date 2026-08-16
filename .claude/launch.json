@@ -2,11 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "anna-harness",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5199", "--strictPort"],
-      "port": 5199,
-      "url": "http://localhost:5199"
+      "name": "anna",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5175,
+      "url": "http://127.0.0.1:5175"
     }
   ]
 }

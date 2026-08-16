@@ -175,6 +175,9 @@ and two of them alternating reads as one very confusing source.
 
 ## Privacy
 
+`docs/PRIVACY.md` is the long version, naming the file that settles each claim.
+The short one:
+
 - Everything runs on your machine. Her memory is a SQLite file in `data/` and
   her profile is a folder of text; nothing is uploaded anywhere except to
   Gemini, as part of the conversation you are having.
