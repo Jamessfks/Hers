@@ -52,7 +52,28 @@ export interface InlineKeyboard {
 /** Telegram will not serve a file larger than this through `getFile`. */
 export const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
-export class TelegramApi {
+/**
+ * The part of the API the bridge uses.
+ *
+ * Named so the bridge can be handed a fake. Telegram's allowlist is the thing
+ * standing between one person's memory and anyone who finds the bot, and that
+ * is not a rule to leave untested because the only way to exercise it is over
+ * the network.
+ */
+export interface TelegramClient {
+  getUpdates(offset: number, timeoutSeconds?: number): Promise<TelegramUpdate[]>;
+  sendMessage(
+    chatId: number,
+    text: string,
+    replyMarkup?: InlineKeyboard,
+  ): Promise<TelegramMessage | null>;
+  sendChatAction(chatId: number, action: 'typing' | 'upload_photo'): Promise<void>;
+  sendPhoto(chatId: number, file: UploadFile, caption?: string): Promise<void>;
+  sendVideo(chatId: number, file: UploadFile, caption?: string): Promise<void>;
+  download(fileId: string): Promise<Buffer | null>;
+}
+
+export class TelegramApi implements TelegramClient {
   readonly #token: string;
 
   constructor(token: string) {

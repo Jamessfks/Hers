@@ -38,12 +38,25 @@ import { Companion } from '../../core/session/companion.ts';
 import type { Brain } from '../../core/session/brain.ts';
 import type { CallBridge } from '../livekit/bridge.ts';
 import { TelegramApi } from './api.ts';
-import type { TelegramMessage, TelegramUpdate } from './api.ts';
+import type { TelegramClient, TelegramMessage, TelegramUpdate } from './api.ts';
 
 /** Sessions end after this much user silence, which also stops her opening. */
 const IDLE_SLEEP_MS = 10 * 60 * 1000;
 /** Backoff when Telegram is unreachable, so an outage is not a hot loop. */
 const POLL_ERROR_BACKOFF_MS = 5000;
+/**
+ * Below this, a long poll did not long-poll.
+ *
+ * `getUpdates` is asked to hold the connection open for fifty seconds, so an
+ * empty result that comes back instantly did not come from Telegram — it came
+ * from the client swallowing its own error and returning nothing. Without this
+ * check the loop spins as fast as the CPU allows on any outage, and because it
+ * only ever awaits resolved promises it starves the event loop while doing it:
+ * every timer in the process stops, which means the three-minute rule stops too.
+ */
+const REAL_POLL_MS = 1000;
+/** A floor between polls even when updates are genuinely waiting. */
+const POLL_GAP_MS = 200;
 
 export interface TelegramBridgeOptions {
   brain: Brain;
@@ -51,11 +64,13 @@ export interface TelegramBridgeOptions {
   allowedChatIds: number[];
   /** Present when LiveKit is configured. Without it, `/call` says so. */
   calls?: CallBridge | null;
+  /** Injected by tests so the allowlist can be exercised without a network. */
+  api?: TelegramClient;
 }
 
 export class TelegramBridge {
   readonly #brain: Brain;
-  readonly #api: TelegramApi;
+  readonly #api: TelegramClient;
   readonly #allowed: Set<number>;
   readonly #calls: CallBridge | null;
   #pinnedChatId: number | null = null;
@@ -68,7 +83,7 @@ export class TelegramBridge {
 
   constructor(options: TelegramBridgeOptions) {
     this.#brain = options.brain;
-    this.#api = new TelegramApi(options.token);
+    this.#api = options.api ?? new TelegramApi(options.token);
     this.#allowed = new Set(options.allowedChatIds);
     this.#calls = options.calls ?? null;
   }
@@ -90,8 +105,11 @@ export class TelegramBridge {
 
   async #poll(): Promise<void> {
     while (this.#running) {
+      const startedAt = Date.now();
+      let updates: TelegramUpdate[] = [];
+
       try {
-        const updates = await this.#api.getUpdates(this.#offset);
+        updates = await this.#api.getUpdates(this.#offset);
         for (const update of updates) {
           this.#offset = Math.max(this.#offset, update.update_id + 1);
           if (!this.#running) break;
@@ -100,7 +118,13 @@ export class TelegramBridge {
       } catch (error) {
         console.warn(`telegram: ${String(error)}`);
         await delay(POLL_ERROR_BACKOFF_MS);
+        continue;
       }
+
+      if (!this.#running) break;
+      const elapsed = Date.now() - startedAt;
+      if (updates.length > 0) await delay(POLL_GAP_MS);
+      else if (elapsed < REAL_POLL_MS) await delay(POLL_ERROR_BACKOFF_MS);
     }
   }
 
