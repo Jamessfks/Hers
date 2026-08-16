@@ -45,7 +45,7 @@
  *    gone. A rename is one line and removes the case entirely.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -190,14 +190,57 @@ export class ClipLibraryStore {
     return reconcile(library, await this.#clipFiles(sourceHash), now);
   }
 
-  /** Atomic manifest write. See the header for why this is not a plain write. */
+  /**
+   * Saves that are already running, per library. See {@link save}.
+   *
+   * Keyed by source hash rather than one chain for the store, because two
+   * libraries are two files and serialising them against each other would be a
+   * queue with no reason to exist.
+   */
+  readonly #saving = new Map<string, Promise<void>>();
+
+  /**
+   * Atomic manifest write. See the header for why this is not a plain write.
+   *
+   * Serialised per library, and the temporary file is uniquely named, because
+   * "atomic" was only true against *other processes*. Within one process the
+   * temporary path was `${target}.${pid}.tmp` — the same path for every save —
+   * and callers reach this without awaiting: `notePlayed` is fired from an IPC
+   * listener with `void`, and a gesture ending produces two of them in quick
+   * succession (the gesture, then the return to idle). Two overlapping saves
+   * therefore interleaved their writes into one file and then both renamed it,
+   * which can put a truncated manifest over a real one. The manifest is the
+   * index to several dollars of video, so "unlikely" is not the standard.
+   */
   async save(library: ClipLibrary): Promise<void> {
+    const key = library.sourceHash;
+    // A previous save's *failure* must not cancel this one: every save writes
+    // the whole manifest, so a later one supersedes an earlier one whatever
+    // happened to it. The chain is one entry per library and is left in place;
+    // a settled promise costs nothing to hold.
+    const queued = (this.#saving.get(key) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.#writeManifest(library));
+    this.#saving.set(key, queued.catch(() => {}));
+    await queued;
+  }
+
+  async #writeManifest(library: ClipLibrary): Promise<void> {
     const dir = this.dirFor(library.sourceHash);
     await mkdir(join(dir, CLIPS_DIR), { recursive: true });
     const target = join(dir, MANIFEST);
-    const temporary = `${target}.${process.pid}.tmp`;
-    await writeFile(temporary, JSON.stringify(library, null, 2), 'utf8');
-    await rename(temporary, target);
+    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, JSON.stringify(library, null, 2), 'utf8');
+      await rename(temporary, target);
+    } catch (error) {
+      // A temporary left behind would be picked up by nothing — `#clipFiles`
+      // reads the clips directory and the manifest is read by name — but it
+      // would accumulate, and a directory of them is a puzzle for whoever
+      // looks next.
+      await rm(temporary, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   /**

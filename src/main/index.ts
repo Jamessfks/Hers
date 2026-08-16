@@ -11,7 +11,7 @@ import { BrowserWindow, Menu, app, dialog, globalShortcut, ipcMain } from 'elect
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
-import { CLIP_SLOT_NAMES, type ClipSlotName } from '../core/avatar/clips.ts';
+import { CLIP_SLOT_NAMES, IDLE_SLOT, type ClipSlotName } from '../core/avatar/clips.ts';
 import { ClipLibraryStore } from '../core/avatar/library-store.ts';
 import {
   VIDEO_PROVIDER_INFO,
@@ -230,15 +230,33 @@ async function main(): Promise<void> {
    */
   ipcMain.on(IPC.bodyReport, (_event, event: unknown, detail: unknown) => {
     const name = String(event).slice(0, 64);
-    const fields = detail && typeof detail === 'object' ? (detail as Record<string, unknown>) : {};
+    const fields = Diagnostics.summarise(detail);
 
     if (name === 'clip-played') {
       // Validated against the known list for the same reason `clipSeam` is:
       // this is a string from a window reaching a manifest key.
       const slot = String(fields['slot']) as ClipSlotName;
-      if (CLIP_SLOT_NAMES.includes(slot)) void portraits.notePlayed(slot);
+      /*
+       * `idle` is skipped, and not to save a few bytes.
+       *
+       * `notePlayed` writes the whole manifest, `evictionCandidate` never
+       * considers `idle`, and `#returnToIdle` reports one after every single
+       * gesture — so noting it is a disk write per gesture that no decision can
+       * ever read. The `.catch` is not decoration either: this is `on`, not
+       * `handle`, so a rejected promise here has nowhere to go and Node's
+       * default is to bring the process down over a failed bookkeeping write.
+       */
+      if (slot !== IDLE_SLOT && CLIP_SLOT_NAMES.includes(slot)) {
+        void portraits.notePlayed(slot).catch((error: unknown) => {
+          diag.note('note-played-failed', { slot, message: String(error).slice(0, 200) });
+        });
+      }
     }
 
+    // Namespaced so a report cannot claim to be one of main's own events, and
+    // `event`/`t` are re-applied after the spread in `Diagnostics` — the window
+    // must not be able to forge the timestamp or the name of a row in the one
+    // log a human reads when something has gone wrong.
     diag.note(`body:${name}`, fields);
   });
 

@@ -90,6 +90,35 @@ export class Diagnostics {
     this.#write({ event, ...detail });
   }
 
+  /**
+   * A `detail` from somewhere that is not main, made safe to write down.
+   *
+   * The renderer can send anything on `anna:body:report`, and two things about
+   * that reach further than they look. `#write` spreads the row over
+   * `{ t, event }`, so a detail carrying its own `t` or `event` silently
+   * rewrites the timestamp and the name of the row — forged evidence in the one
+   * file someone reads when they are already confused. And the write is
+   * `appendFileSync` on main's event loop, so an unbounded object is an
+   * unbounded synchronous write, at whatever rate the window chooses to send.
+   *
+   * Values are flattened to primitives rather than deep-copied: a diagnostics
+   * row is a handful of scalars by construction, and anything nested is either
+   * a mistake or an attempt to make this expensive.
+   */
+  static summarise(detail: unknown, limit = 16): Record<string, unknown> {
+    if (!detail || typeof detail !== 'object') return {};
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(detail as Record<string, unknown>)) {
+      if (Object.keys(out).length >= limit) break;
+      if (key === 't' || key === 'event') continue;
+      if (typeof value === 'string') out[key] = value.slice(0, 200);
+      else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+        out[key] = value;
+      }
+    }
+    return out;
+  }
+
   #write(row: Record<string, unknown>): void {
     if (!this.enabled) return;
     try {
