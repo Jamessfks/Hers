@@ -279,6 +279,19 @@ export const IPC = {
   libraryStatus: 'anna:library:status',
   /** renderer -> main: the video providers, with what each would cost. */
   videoProviders: 'anna:video:providers',
+  /**
+   * renderer -> main: is the stored video key live, and does it have credit?
+   *
+   * Distinct from `keyValidate`, which takes a key the user has just typed.
+   * This one checks the key already in the Keychain, which the renderer cannot
+   * read and must never be sent. Main does the whole thing and returns a
+   * verdict.
+   *
+   * It costs nothing. For Hedra it is a `GET /balance` — the only question
+   * about that account answerable without submitting a job, and submitting a
+   * job is billed on ingest whatever happens to it afterwards.
+   */
+  videoCheck: 'anna:video:check',
   /** renderer -> main: pick the folder hand-made clips are dropped into. */
   clipFolderPick: 'anna:clip-folder:pick',
   /** renderer -> main: render the next clips. Costs money; count is a ceiling. */

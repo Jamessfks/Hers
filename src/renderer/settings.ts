@@ -669,6 +669,34 @@ function wireBody(): void {
     showTier();
   });
 
+  /*
+   * "Check the connection" answers the only question about a paid renderer that
+   * can be answered for free.
+   *
+   * Everything else on this screen tells you what rendering *would* cost; this
+   * tells you whether it would work at all — key accepted, account funded —
+   * without submitting a job. Worth its own button because the alternative way
+   * to find out is to press the one below it, and that one is billed on ingest
+   * whatever comes back.
+   */
+  const check = document.querySelector<HTMLButtonElement>('#check-video')!;
+  const checkStatus = document.querySelector<HTMLSpanElement>('#video-check-status')!;
+
+  check.addEventListener('click', async () => {
+    check.disabled = true;
+    checkStatus.textContent = 'Asking…';
+    delete checkStatus.dataset['tone'];
+    try {
+      const verdict = await api.checkVideoKey();
+      checkStatus.textContent = verdict.ok
+        ? (verdict.note ?? 'Connected.')
+        : verdict.reason;
+      checkStatus.dataset['tone'] = verdict.ok ? 'good' : 'bad';
+    } finally {
+      check.disabled = false;
+    }
+  });
+
   build.addEventListener('click', async () => {
     build.disabled = true;
     status.textContent = 'Starting…';

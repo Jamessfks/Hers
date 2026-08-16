@@ -157,17 +157,54 @@ Instruction alone is not a control, so the guard is mechanical:
 
 ---
 
+## Verified live, 2026-08-16
+
+The audit above was done entirely against mocks. With the user's explicit
+authorisation and a $1 ceiling, two things were then checked against the real
+service.
+
+**The key and the account, for nothing.** `GET /v3/balance` returned `200` and
+`{"balance":19.25,"spent":null,"currency":"USD"}`. That confirms three things
+the adapter asserts and this audit could not otherwise have checked: the
+`Authorization: Key <key>` scheme is still accepted, the endpoint still exists,
+and the response still carries a numeric `balance` where `validateKey` looks for
+one. This call is not billed, which is why "Check the connection" now exists as
+its own button next to the one that renders.
+
+**One real render, end to end.** `build(1)` against the live service, through
+the app's own path — provider registry, tier gate, `attachJob`, poll loop,
+download, manifest write. It rendered `tilt_head`:
+
+```
+before  ready ["idle","nod"]              spent $0.25
+        queued 0.9% → running 32.9% → …
+after   ready ["idle","nod","tilt_head"]  spent $0.50   failed []
+```
+
+4.6 MB on disk. The balance moved $19.25 → $19.00, so **the clip cost $0.25** —
+which is the first independent confirmation of the figure `HEDRA_COST` declines
+to promise. It remains `verified: false` and that remains correct: one clip at
+one duration is a data point, not a price list, and Hedra still bills by the
+second of driving audio.
+
+So: **the generation path works against the live service.** Submit, poll,
+progress reporting, download and persistence are all real.
+
 ## Not verified, and why
 
 Stated rather than glossed:
 
-- **Nothing here was run against the live Hedra service.** Every claim about
-  request and response *shapes* rests on the adapter's own documentation of the
-  spec it was written from, and on its recorded fixtures — not on a live call
-  made during this audit.
-- **Whether Hedra's live error envelopes still match `failure()`.** The adapter
-  says the shapes were checked against a live key when it was written. This
-  audit did not re-check them, and could not without spending.
-- **Actual per-clip cost.** Hedra bills by the second of driving audio and
-  declines to quote before ingest, so there is no per-clip figure to confirm.
-  `HEDRA_COST.verified` is `false` for this reason and that remains correct.
+- **The failure branches were never reached live.** Auth rejection, 402, 429, a
+  malformed envelope and a dead socket are all covered against mocks, and the one
+  live render *succeeded* — so the real service never exercised `failure()`.
+  Confirming those envelopes would mean deliberately provoking errors on a funded
+  account, which is a separate piece of work with its own budget.
+- **The retry added for finding 1 has not fired against the real service.** It is
+  proven against mocks in both directions. Nothing in the live run was flaky
+  enough to trigger it, which is the good outcome and not evidence.
+- **A per-clip price.** One clip at one duration came to $0.25 and that is a data
+  point, not a rate card — Hedra bills by the second of driving audio and still
+  declines to quote before ingest, so `HEDRA_COST.verified` stays `false`.
+- **The seam of the clips that were rendered.** Finding 3 is still open, so
+  nothing measured whether `tilt_head` returns to the source frame. It plays;
+  whether it loops cleanly is unverified.

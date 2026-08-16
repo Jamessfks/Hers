@@ -108,6 +108,18 @@ const api = {
     return ipcRenderer.invoke(IPC.videoProviders);
   },
 
+  /**
+   * Checks the stored video key, and its balance, without rendering anything.
+   *
+   * Returns a verdict and never the key — this window has no way to read one
+   * and this is not the exception. Free: for Hedra it is a balance lookup, and
+   * the alternative way to find out whether rendering works is to render, which
+   * is billed on ingest whatever the outcome.
+   */
+  checkVideoKey(): Promise<{ ok: true; note?: string } | { ok: false; reason: string }> {
+    return ipcRenderer.invoke(IPC.videoCheck);
+  },
+
   /** Choose the folder hand-made clips are dropped into. Null when cancelled. */
   pickClipFolder(): Promise<{ folder: string } | null> {
     return ipcRenderer.invoke(IPC.clipFolderPick);

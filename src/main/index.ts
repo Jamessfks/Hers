@@ -553,6 +553,39 @@ async function main(): Promise<void> {
    * property of the adapter — Runway publishes a rate card and Hedra refuses to
    * quote — and a settings screen that hardcoded either would go stale silently.
    */
+  /**
+   * Is the stored video key live, and is there anything in the account?
+   *
+   * The whole check happens here because the key is here: the renderer can ask
+   * the question and read the verdict, and at no point does the credential
+   * cross the bridge. Nothing on this path submits a job, so nothing on it can
+   * be billed — which is the entire reason it exists as a separate call rather
+   * than "try a render and see".
+   */
+  ipcMain.handle(IPC.videoCheck, async () => {
+    const id = config.get().avatar.videoProvider;
+    if (id === 'manual') {
+      return { ok: false as const, reason: 'The manual provider has no account to check.' };
+    }
+
+    const key = secrets.get(`video.${id}` as SecretName);
+    if (!key) return { ok: false as const, reason: `No ${id} key is saved yet.` };
+
+    const provider = createVideoClipProvider(id, { apiKey: key });
+    if (!provider.validateKey) {
+      return { ok: false as const, reason: `${id} cannot be checked without rendering.` };
+    }
+
+    try {
+      return await provider.validateKey();
+    } catch (error) {
+      // A thrown check is a check that did not happen, not a bad key — saying
+      // "rejected" here would send someone to regenerate a key that is fine.
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false as const, reason: `Could not reach ${id}: ${message}` };
+    }
+  });
+
   ipcMain.handle(IPC.videoProviders, () =>
     VIDEO_PROVIDER_INFO.map((info): VideoProviderView => {
       const provider = createVideoClipProvider(info.id, { apiKey: 'probe', dropDir: '/' });
