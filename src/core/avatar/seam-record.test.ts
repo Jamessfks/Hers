@@ -148,7 +148,11 @@ test('when the file used goes, so does the verdict about it', () => {
 
   // Evicted for room: the bytes are deleted, so there is nothing measured.
   const evicted = evictClip(measured, 'wave');
-  assert.equal(evicted.clips['wave'].verified, undefined);
+  assert.ok(
+    !('verified' in evicted.clips['wave']),
+    'cleared, not set to undefined: JSON drops an undefined key, so a manifest ' +
+      'holding one stops matching the library it was written from',
+  );
 
   // Rendered again into the same slot: new bytes, and it goes back on the queue
   // rather than inheriting the previous occupant's verdict.
@@ -205,4 +209,56 @@ test('a play reported for a slot that is not in the library is ignored', () => {
   // now crosses a process boundary and is an input rather than a constant.
   const library = withClip();
   assert.equal(notePlayed(library, 'not_a_slot' as never), library);
+});
+
+test('what was played is forgotten along with the clip that was played', () => {
+  /*
+   * `lastPlayedAt` belongs to a file, exactly as `verified` does, and only one
+   * of the two was being cleared. A slot evicted for room kept the timestamp of
+   * its *previous* occupant, so the moment a new clip was rendered into it — a
+   * clip that has just been paid for and never had a chance to play — it ranked
+   * below everything played this session and was the next thing eviction
+   * reached for. Before the manifest carried `lastPlayedAt` across a restart
+   * this reset itself every launch and could not be seen.
+   */
+  const played = notePlayed(withClip(), 'wave', 90);
+  const evicted = evictClip(played, 'wave');
+  assert.ok(!('lastPlayedAt' in evicted.clips['wave']));
+
+  const again = completeClip(startGenerating(evicted, 'wave'), 'wave', {
+    file: 'wave.mp4',
+    durationMs: 4000,
+    costUsd: 0.25,
+  });
+  assert.equal(again.clips['wave'].lastPlayedAt, undefined, 'a fresh render has never played');
+});
+
+test('a manifest round-trips deep-equal after a field has been cleared', () => {
+  // The reason clearing deletes the key rather than writing undefined. Nothing
+  // compares these two today, which is exactly why the difference would sit
+  // there until something did.
+  const cleared = requeueClip(
+    recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' }),
+    'wave',
+  );
+  assert.deepEqual(parseLibrary(JSON.parse(JSON.stringify(cleared))), cleared);
+});
+
+test('a slot committed to being re-rendered forgets its verdict before the bytes land', () => {
+  /*
+   * `writeClip` writes the file and leaves the manifest to the caller, so a
+   * crash in between is meant to cost nothing. Once `verified` became
+   * load-bearing it could: a re-render writes new bytes under the *same* file
+   * name, and `reconcile` comparing names cannot tell the old verdict does not
+   * belong to them. Clearing at submit closes the window without hashing.
+   */
+  const measured = recordSeam(withClip(), 'wave', { closesCleanly: true, summary: 'fine' });
+  const requeued = requeueClip(measured, 'wave');
+  const generating = startGenerating(requeued, 'wave');
+  assert.ok(!('verified' in generating.clips['wave']));
+
+  // And a crash right there leaves a manifest that reconcile cannot mislabel.
+  const recovered = reconcile(generating, new Set(['wave.mp4']));
+  assert.equal(recovered.clips['wave'].status, 'ready');
+  assert.deepEqual(unverifiedClips(recovered), ['wave']);
 });

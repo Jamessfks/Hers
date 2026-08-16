@@ -160,8 +160,21 @@ export interface ClipEntry {
   lastPlayedAt?: number;
 }
 
+/**
+ * The manifest format this build writes.
+ *
+ * Bumped from 1 when the seam check changed what it compares. A version-1
+ * manifest's `verified` flags were produced by measuring each clip against the
+ * source photograph, which had to be resampled to the vendor's frame size — and
+ * that resample, not any drift, is what those verdicts were mostly reporting.
+ * See renderer/avatar/verify.ts. Carrying them forward would condemn clips on
+ * the strength of a measurement this build knows to be wrong, and there is no
+ * way back from a `false` except paying to render the slot again.
+ */
+export const LIBRARY_VERSION = 2;
+
 export interface ClipLibrary {
-  version: 1;
+  version: typeof LIBRARY_VERSION;
   /** Full hex digest of the source photograph. The library's identity. */
   sourceHash: string;
   /** File name of the stored copy of the photograph, inside the library dir. */
@@ -242,7 +255,7 @@ export interface CreateLibraryOptions {
 export function createLibrary(options: CreateLibraryOptions): ClipLibrary {
   const now = options.now ?? Date.now();
   return {
-    version: 1,
+    version: LIBRARY_VERSION,
     sourceHash: options.sourceHash,
     sourceFile: options.sourceFile,
     providerId: options.providerId,
@@ -304,21 +317,37 @@ function withEntry(
   /*
    * `undefined` in a patch clears the field rather than writing the key.
    *
-   * `verified` has three states and the third one is *absent* — see the note on
-   * it — so something has to be able to put a slot back to "never measured".
-   * Spreading `{ verified: undefined }` leaves the key present holding
+   * Both fields here have three states and the third one is *absent* — see the
+   * notes on them — so something has to be able to put a slot back to "nothing
+   * known". Spreading `{ verified: undefined }` leaves the key present holding
    * undefined, which reads the same everywhere in this module and is not the
    * same on disk: `JSON.stringify` drops it, so the library in memory and the
    * library reloaded from the manifest stop being deep-equal. That difference
    * is invisible until something compares them, which is exactly the kind of
    * bug a manifest is not allowed to have.
+   *
+   * Restricted to these two rather than applied to any undefined value in the
+   * patch. `exactOptionalPropertyTypes` is off, so `{ status: undefined }`
+   * typechecks — and it would slip past the transition guard above (undefined
+   * is falsy) and then delete `status`, after which `CLIP_TRANSITIONS[status]`
+   * throws and `libraryProgress` counts NaN. A generic rule here would be a
+   * loaded gun pointed at the next caller.
    */
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) delete (next as unknown as Record<string, unknown>)[key];
+  for (const key of CLEARABLE) {
+    if (key in patch && patch[key] === undefined) delete next[key];
   }
 
   return { ...library, clips: { ...library.clips, [slot]: next } };
 }
+
+/**
+ * The fields a patch may clear by passing `undefined`.
+ *
+ * Both are facts about a particular file rather than about the slot, so both
+ * have to be forgettable when the file changes; everything else in `ClipEntry`
+ * is required and deleting it would produce an entry nothing else can read.
+ */
+const CLEARABLE = ['verified', 'lastPlayedAt'] as const;
 
 /**
  * Record the *intent* to generate, before the request goes out.
@@ -343,7 +372,27 @@ export function startGenerating(
   return withEntry(
     library,
     slot,
-    { status: 'generating', job, attempts: entry.attempts + 1, error: null },
+    {
+      status: 'generating',
+      job,
+      attempts: entry.attempts + 1,
+      error: null,
+      /*
+       * Cleared here, before the bytes exist, and that ordering is the point.
+       *
+       * `writeClip` writes the file and deliberately does not save the
+       * manifest — the caller does, a moment later, so the survivable crash is
+       * the one that costs nothing. Once `verified` became load-bearing that
+       * window grew a cost: a re-render lands new bytes under the *same* file
+       * name, and a crash before `completeClip` leaves a manifest still
+       * claiming a verdict about the file those bytes replaced. `reconcile`
+       * cannot tell — same slot, same name — so it changes nothing and the old
+       * verdict is inherited. Clearing at the moment the slot is committed to
+       * being re-rendered closes that without anyone having to hash a file.
+       */
+      verified: undefined,
+      lastPlayedAt: undefined,
+    },
     now,
   );
 }
@@ -597,11 +646,14 @@ export function evictClip(
       durationMs: 0,
       job: null,
       error: null,
-      // Cleared rather than set false: the file is about to be deleted, so
-      // there is nothing measured any more. `false` would say "measured, and it
-      // drifts" about a clip that no longer exists, and would keep the slot off
-      // the verification queue after it was re-rendered.
+      // Both cleared rather than left behind: the file is about to be deleted,
+      // so there is nothing measured and nothing played any more. `verified:
+      // false` would say "measured, and it drifts" about a clip that no longer
+      // exists; a surviving `lastPlayedAt` would rank the slot's *next*
+      // occupant by how little its predecessor was used, which makes a clip
+      // that has just been paid for the first thing eviction reaches for.
       verified: undefined,
+      lastPlayedAt: undefined,
       // Attempts reset too: this slot is being given up for room, not because
       // anything about it failed, and carrying a strike into its next life
       // would exhaust a perfectly renderable gesture.
@@ -678,12 +730,13 @@ export function requeueClip(
   reason: string | null = null,
   now = Date.now(),
 ): ClipLibrary {
-  // `verified` goes with it: whatever was measured was measured about bytes
-  // this slot is being re-rendered to replace.
+  // Both file-scoped facts go with it: whatever was measured, and whenever it
+  // was last played, were about bytes this slot is being re-rendered to
+  // replace.
   return withEntry(
     library,
     slot,
-    { status: 'pending', job: null, error: reason, verified: undefined },
+    { status: 'pending', job: null, error: reason, verified: undefined, lastPlayedAt: undefined },
     now,
   );
 }
@@ -746,9 +799,9 @@ export function reconcile(
             job: null,
             error: null,
             // A different file name in the slot is different bytes — someone
-            // dropped a `.webm` over our `.mp4` — so the recorded verdict is
-            // about a clip that is no longer there. Same name, same verdict.
-            ...(entry.file !== file ? { verified: undefined } : {}),
+            // dropped a `.webm` over our `.mp4` — so what was recorded is about
+            // a clip that is no longer there. Same name, same record.
+            ...(entry.file !== file ? { verified: undefined, lastPlayedAt: undefined } : {}),
           },
           now,
         );
@@ -895,18 +948,23 @@ export function matchesSource(library: ClipLibrary, sourceHash: string): boolean
  */
 export function parseLibrary(raw: unknown): ClipLibrary | null {
   if (!isRecord(raw)) return null;
-  if (raw.version !== 1) return null;
+  if (raw.version !== 1 && raw.version !== LIBRARY_VERSION) return null;
   if (typeof raw.sourceHash !== 'string' || !raw.sourceHash) return null;
 
   const now = typeof raw.createdAt === 'number' ? raw.createdAt : Date.now();
   const stored = isRecord(raw.clips) ? raw.clips : {};
 
+  // A version-1 manifest is read for everything except its verdicts. See
+  // LIBRARY_VERSION: those were measured against a resampled photograph, and a
+  // wrong `false` cannot be undone without spending money.
+  const trustVerdicts = raw.version === LIBRARY_VERSION;
+
   const clips = Object.fromEntries(
-    CLIP_SLOT_NAMES.map((slot) => [slot, parseEntry(stored[slot], slot, now)]),
+    CLIP_SLOT_NAMES.map((slot) => [slot, parseEntry(stored[slot], slot, now, trustVerdicts)]),
   ) as Record<ClipSlotName, ClipEntry>;
 
   return {
-    version: 1,
+    version: LIBRARY_VERSION,
     sourceHash: raw.sourceHash,
     sourceFile: typeof raw.sourceFile === 'string' ? raw.sourceFile : '',
     providerId: typeof raw.providerId === 'string' ? raw.providerId : 'unknown',
@@ -915,7 +973,12 @@ export function parseLibrary(raw: unknown): ClipLibrary | null {
   };
 }
 
-function parseEntry(raw: unknown, slot: ClipSlotName, now: number): ClipEntry {
+function parseEntry(
+  raw: unknown,
+  slot: ClipSlotName,
+  now: number,
+  trustVerdicts = true,
+): ClipEntry {
   const blank = blankEntry(slot, now);
   if (!isRecord(raw)) return blank;
 
@@ -954,7 +1017,7 @@ function parseEntry(raw: unknown, slot: ClipSlotName, now: number): ClipEntry {
     spentUsd: numberOr(raw.spentUsd, 0),
     updatedAt: numberOr(raw.updatedAt, now),
   };
-  if (typeof raw.verified === 'boolean') entry.verified = raw.verified;
+  if (trustVerdicts && typeof raw.verified === 'boolean') entry.verified = raw.verified;
   if (typeof raw.lastPlayedAt === 'number' && Number.isFinite(raw.lastPlayedAt)) {
     entry.lastPlayedAt = raw.lastPlayedAt;
   }

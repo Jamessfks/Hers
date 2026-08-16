@@ -15,6 +15,7 @@ import {
   BUILD_ORDER,
   CLIP_SLOT_NAMES,
   IDLE_SLOT,
+  LIBRARY_VERSION,
   MAX_ATTEMPTS,
   attachJob,
   clipFileName,
@@ -28,6 +29,7 @@ import {
   pendingWork,
   reconcile,
   requeueClip,
+  unverifiedClips,
   resetAttempts,
   resolvePlayback,
   resumableJobs,
@@ -284,8 +286,35 @@ test('a mangled entry resets that slot and not the library', () => {
 
 test('something that is not a library is refused', () => {
   assert.equal(parseLibrary(null), null);
-  assert.equal(parseLibrary({ version: 2, sourceHash: 'x' }), null);
+  // A version from the future: this build cannot know what it means, and
+  // guessing at a manifest that indexes paid-for clips is worse than refusing.
+  assert.equal(parseLibrary({ version: LIBRARY_VERSION + 1, sourceHash: 'x' }), null);
   assert.equal(parseLibrary({ version: 1 }), null, 'no source hash means no identity');
+});
+
+test('a version-1 manifest keeps its clips and loses its seam verdicts', () => {
+  /*
+   * The verdicts in a version-1 manifest were measured against the source
+   * photograph resampled to the vendor's frame size, and it was mostly the
+   * resample they were reporting. A wrong `true` claims a seam that pops; a
+   * wrong `false` cannot be cleared without paying to render the slot again.
+   * Everything else in the file is still good, and the clips it points at cost
+   * money, so this is a re-measure rather than a rebuild.
+   */
+  const library = parseLibrary({
+    version: 1,
+    sourceHash: 'abc123',
+    clips: {
+      nod: { slot: 'nod', status: 'ready', file: 'nod.mp4', durationMs: 700, verified: false },
+      wave: { slot: 'wave', status: 'ready', file: 'wave.mp4', verified: true, lastPlayedAt: 42 },
+    },
+  });
+  assert.ok(library);
+  assert.equal(library.version, LIBRARY_VERSION, 'and is written back at the current version');
+  assert.equal(library.clips.nod.status, 'ready', 'the clips are kept');
+  assert.equal(library.clips.nod.durationMs, 700);
+  assert.equal(library.clips.wave.lastPlayedAt, 42, 'so is what she has actually used');
+  assert.deepEqual(unverifiedClips(library), ['nod', 'wave'], 'both go back to be measured');
 });
 
 test('a library survives a save and load round trip through JSON', () => {
