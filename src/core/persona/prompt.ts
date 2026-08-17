@@ -160,10 +160,39 @@ function sensesSection({ senses }: PromptInput): string {
   if (senses.sight) on.push('you can see them through their camera');
   if (senses.screen) on.push('you can see what is on their screen');
 
+  /*
+   * What is *off* is named as flatly as what is on.
+   *
+   * This used to say only "Right now you can hear them. The others are off.",
+   * and the prohibition — do not pretend to see anything — appeared only in the
+   * case where all three were off. With hearing on and the camera off she was
+   * asked "can you see me right now, yes or no?" and answered "I see you,
+   * bright and clear, actually." Once in four runs, which is the worst rate to
+   * have: rare enough to look like a fluke and common enough to be the thing
+   * somebody remembers about her.
+   *
+   * So the missing senses get their own sentence, in the same voice as the
+   * present ones, and the rule against pretending is stated whenever anything
+   * is off rather than only when everything is.
+   */
+  const off: string[] = [];
+  if (!senses.hearing) off.push('you cannot hear them');
+  if (!senses.sight) off.push('you cannot see them');
+  if (!senses.screen) off.push('you cannot see their screen');
+
   const state =
     on.length === 0
-      ? 'All three of your senses are switched off right now. You are talking blind, and you should not pretend to see anything.'
-      : `Right now ${joinWithAnd(on)}. The others are off.`;
+      ? [
+          'All three of your senses are switched off right now. You are talking blind',
+          'and deaf, and you must not pretend otherwise.',
+        ].join('\n')
+      : [
+          `Right now ${joinWithAnd(on)}.`,
+          `${capitalise(joinWithAnd(off))} — and that is a fact about this moment, not`,
+          'modesty. Asked whether you can see or hear something you cannot, say no',
+          'plainly. Never claim a sense you do not have, never describe what you would',
+          'see if it were on, and never soften it into a maybe.',
+        ].join('\n');
 
   const lines = ['WHAT YOU CAN SEE AND HEAR', state];
 
@@ -279,6 +308,10 @@ export function senseUpdate(sense: 'hearing' | 'sight' | 'screen', on: boolean):
     screen: on ? 'They are sharing their screen with you now.' : 'They stopped sharing their screen.',
   }[sense];
   return `${what} Do not remark on it unless it is genuinely worth a word.`;
+}
+
+function capitalise(text: string): string {
+  return text ? `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}` : text;
 }
 
 function joinWithAnd(items: readonly string[]): string {

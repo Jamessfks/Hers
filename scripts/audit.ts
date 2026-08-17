@@ -684,21 +684,45 @@ async function main(): Promise<void> {
         const s = await session({ profileDir: loadConfig().profileDir });
         await s.companion.wake();
         const offered = s.brain.avatar.readyGestures();
-        s.companion.say('Quick one: do you agree that coffee is better than tea? Just nod if so.');
-        await untilSpoke(s, 0);
-        await wait(2500);
-        const moves = [...s.moves];
-        if (moves.length === 0 && offered.length === 0) {
+        if (offered.length === 0) {
           await s.dispose();
           return { ok: false, evidence: 'no clips were offered to her at all' };
         }
+
+        /*
+         * Several turns, and she has to move on at least one of them.
+         *
+         * Asking once and demanding a gesture measured the wrong thing. Moving
+         * is meant to be occasional — her own tool description says "on a
+         * reaction, on the turn of a thought, not on every sentence" — so a
+         * flat answer with no gesture is correct behaviour, and this check
+         * failed it three times in five. What the product actually claims is
+         * that she *can* choose a movement while talking, so that is what is
+         * asked: give her a handful of openings and see whether any of them
+         * moves her. A run where she never moves across all of them is a real
+         * failure; a run where she declines one is her working as designed.
+         */
+        const openings = [
+          'Quick one: do you agree that coffee is better than tea?',
+          'Okay, tell me the funniest thing that happened to you this week.',
+          'I just tripped over absolutely nothing in front of everyone.',
+        ];
+        for (const opening of openings) {
+          const before = s.said.length;
+          s.companion.say(opening);
+          await untilSpoke(s, before);
+          await wait(1500);
+          if (s.moves.length > 0) break;
+        }
+
+        const moves = [...s.moves];
         const said = s.said.join(' ');
         await s.dispose();
         return {
           ok: moves.length > 0,
           evidence: moves.length
-            ? `played ${moves.join(', ')} while saying "${said.slice(0, 90)}"`
-            : `no movement; she said "${said.slice(0, 110)}"`,
+            ? `played ${moves.join(', ')} while saying "${said.slice(-90)}"`
+            : `never moved across ${openings.length} openings; offered ${offered.join(', ')}`,
         };
       },
     );

@@ -72,6 +72,8 @@ export interface LiveOptions {
   handlers: LiveHandlers;
   /** Injectable so tests do not open sockets. */
   connect?: LiveConnector;
+  /** Injectable so a test for the deadline does not have to wait it out. */
+  connectTimeoutMs?: number;
 }
 
 /** The seam tests replace. Matches `ai.live.connect`. */
@@ -129,6 +131,34 @@ const BACKOFF_MS = [400, 900, 2000, 4000, 8000, 15000];
  */
 const GO_AWAY_GRACE_MS = 500;
 
+/**
+ * How long to wait for a socket to finish opening.
+ *
+ * Not belt and braces — this is load-bearing. When the server refuses a session
+ * outright it closes during the handshake, and the SDK's connect promise then
+ * neither resolves nor rejects: there was never an `onopen` to resolve it and
+ * the close arrives on a callback instead. `#doOpen` awaited it forever, which
+ * meant `#connecting` was never cleared, every later reconnect returned that
+ * same dead promise, and `wake()` never settled.
+ *
+ * The visible version of that: type to her with a key whose project has hit its
+ * spending cap and the interface says "reconnecting" until you close the tab.
+ * No error, no retry, nothing in the log. Found by the audit, which exited
+ * silently for exactly this reason rather than reporting a failure.
+ */
+const CONNECT_TIMEOUT_MS = 20_000;
+
+/**
+ * Reasons that will not be fixed by trying again in four hundred milliseconds.
+ *
+ * A spending cap, a revoked key or an exhausted quota are states of the world,
+ * not blips, and backing off quietly for thirty seconds before saying anything
+ * is thirty seconds of the user believing she is broken. Matched on the message
+ * because that is where the API puts it — over a socket these arrive as a 1011
+ * close carrying the same text a 429 would have had in its body.
+ */
+const FATAL_REASON = /spend|spending cap|quota|exceeded|api key|permission|unauthor|forbidden/i;
+
 export class LiveConversation {
   readonly #options: LiveOptions;
   readonly #connect: LiveConnector;
@@ -150,6 +180,8 @@ export class LiveConversation {
   #awaitingSettle = false;
   /** Guards against a stale socket's callbacks reaching a live session. */
   #generation = 0;
+  /** Why the last attempt was refused, if the server said. */
+  #refused: string | null = null;
 
   constructor(options: LiveOptions) {
     this.#options = options;
@@ -344,23 +376,32 @@ export class LiveConversation {
     const previous = this.#socket;
 
     try {
-      const socket = await this.#connect({
-        model: this.#options.model,
-        config: this.#buildConfig(),
-        callbacks: {
-          onmessage: (message) => {
-            if (generation === this.#generation) this.#handleMessage(message);
+      const socket = await withDeadline(
+        this.#connect({
+          model: this.#options.model,
+          config: this.#buildConfig(),
+          callbacks: {
+            onmessage: (message) => {
+              if (generation === this.#generation) this.#handleMessage(message);
+            },
+            onerror: (error) => {
+              if (generation !== this.#generation || this.#closing) return;
+              this.#refused = describeError(error);
+              this.#scheduleReconnect(this.#refused);
+            },
+            onclose: (event) => {
+              if (generation !== this.#generation || this.#closing) return;
+              // Remembered so that if the connect promise then hangs — which is
+              // what a refusal during the handshake does — the deadline can
+              // report the real reason instead of "it never opened".
+              this.#refused = describeClose(event);
+              this.#scheduleReconnect(this.#refused);
+            },
           },
-          onerror: (error) => {
-            if (generation !== this.#generation || this.#closing) return;
-            this.#scheduleReconnect(describeError(error));
-          },
-          onclose: (event) => {
-            if (generation !== this.#generation || this.#closing) return;
-            this.#scheduleReconnect(describeClose(event));
-          },
-        },
-      });
+        }),
+        this.#options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS,
+        () => this.#refused ?? 'the connection never opened',
+      );
 
       // A close() that landed while we were connecting wins.
       if (generation !== this.#generation || this.#closing) {
@@ -465,8 +506,12 @@ export class LiveConversation {
     const delay = BACKOFF_MS[Math.min(this.#attempt, BACKOFF_MS.length - 1)] ?? 15000;
     this.#attempt += 1;
 
-    // Only worth a word to the user once it has stopped being a blip.
-    if (this.#attempt === 3) {
+    // A blip is worth waiting out before saying anything; a spending cap is
+    // not, and thirty seconds of silent retrying is thirty seconds of somebody
+    // deciding she is broken.
+    if (FATAL_REASON.test(reason)) {
+      if (this.#attempt === 1) this.#options.handlers.onTrouble(`Gemini refused: ${reason}`);
+    } else if (this.#attempt === 3) {
       this.#options.handlers.onTrouble(`Losing the connection to Gemini — ${reason}. Retrying.`);
     }
 
@@ -694,6 +739,32 @@ export class LiveConversation {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A promise that is not allowed to hang forever.
+ *
+ * `reason` is a function rather than a string so the message can be decided
+ * when the deadline fires: by then a close callback has usually explained what
+ * actually happened, and "your project has exceeded its monthly spending cap"
+ * is a far better thing to report than "timed out".
+ */
+async function withDeadline<T>(
+  promise: Promise<T>,
+  ms: number,
+  reason: () => string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(reason())), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**

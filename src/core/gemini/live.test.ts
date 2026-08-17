@@ -594,3 +594,63 @@ test('she is still allowed to talk about code', async () => {
     assert.equal(f.annaText.at(-1)?.text, line, line);
   }
 });
+
+test('a connect that never settles is a failure, not a hang', async () => {
+  /*
+   * How the Live API refuses a session: it closes during the handshake, so
+   * there is never an `onopen` to resolve the SDK's connect promise and never a
+   * rejection either. Awaiting it forever left `#connecting` set, so every
+   * later reconnect returned that same dead promise and `start()` never
+   * resolved. From outside that was "reconnecting" forever, with no error and
+   * no retry — found when the audit exited silently against a key whose project
+   * had hit its spending cap.
+   */
+  const troubles: string[] = [];
+  // A holder rather than a `let`, because it is only ever assigned inside the
+  // connector and TypeScript would otherwise narrow it to null at the call.
+  const refusal = { fire: () => undefined as void };
+
+  const live = new LiveConversation({
+    apiKey: 'test',
+    model: 'gemini-3.1-flash-live-preview',
+    voice: 'Aoede',
+    systemInstruction: () => 'system',
+    connectTimeoutMs: 200,
+    connect: async ({ callbacks }) => {
+      refusal.fire = () =>
+        callbacks.onclose?.({
+          code: 1011,
+          reason: 'Your project has exceeded its monthly spending cap.',
+        });
+      // Refused mid-handshake: neither resolves nor rejects, ever.
+      return new Promise<LiveSocket>(() => undefined);
+    },
+    handlers: {
+      onAudio: () => undefined,
+      onUserText: () => undefined,
+      onAnnaText: () => undefined,
+      onTurnComplete: () => undefined,
+      onInterrupted: () => undefined,
+      onToolCall: async () => ({}),
+      onState: () => undefined,
+      onTrouble: (message) => troubles.push(message),
+    },
+  });
+
+  const started = live.start();
+  await settle();
+  refusal.fire();
+
+  await Promise.race([
+    started,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('start() hung')), 5000)),
+  ]);
+
+  assert.match(
+    troubles.join(' '),
+    /spending cap/,
+    'a state of the world is told to the user at once, not after thirty seconds of quiet retrying',
+  );
+
+  await live.close();
+});
