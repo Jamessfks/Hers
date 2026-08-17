@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { Brain } from '../../core/session/brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import { TelegramBridge } from './bridge.ts';
+import { Conversation } from '../../core/session/conversation.ts';
 import type {
   BotCommand,
   TelegramClient,
@@ -127,8 +128,9 @@ async function fixture(allowedChatIds: number[] = []) {
 
   const brain = await Brain.open(config, { offline: true });
   const api = new FakeTelegram();
-  const bridge = new TelegramBridge({ brain, token: 'fake', allowedChatIds, api });
-  return { brain, api, bridge };
+  const conversation = new Conversation({ brain });
+  const bridge = new TelegramBridge({ brain, conversation, token: 'fake', allowedChatIds, api });
+  return { brain, api, bridge, conversation };
 }
 
 /**

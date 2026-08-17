@@ -106,6 +106,8 @@ export class Companion {
   #faceSentAt = 0;
   /** Guards the once-a-conversation credit for her having heard them. */
   #heardToday = false;
+  /** In flight while a session is opening, so two callers share one. */
+  #waking: Promise<void> | null = null;
   /** True between a `⟦director⟧` cue and the turn it produces. */
   #openerInFlight = false;
   #speaking = false;
@@ -144,7 +146,28 @@ export class Companion {
   // Lifecycle
   // -------------------------------------------------------------------------
 
+  /**
+   * Opens the session, once, however many callers ask at the same moment.
+   *
+   * The guard used to be `if (this.#live) return`, which is not a guard: there
+   * are awaits between it and the assignment — recalling memories is a network
+   * call — so two callers arriving together both got past it and both built a
+   * session. Two Gemini sockets, two initiative timers, two openers for one
+   * thought. A browser opening while the Telegram bot is already running is
+   * exactly that pair of callers.
+   *
+   * The in-flight promise is the guard. It is shared, so the second caller waits
+   * for the first one's session rather than starting another.
+   */
   async wake(): Promise<void> {
+    if (this.#live) return;
+    this.#waking ??= this.#doWake().finally(() => {
+      this.#waking = null;
+    });
+    return this.#waking;
+  }
+
+  async #doWake(): Promise<void> {
     if (this.#live) return;
     this.#closed = false;
 
@@ -231,6 +254,7 @@ export class Companion {
 
   async sleep(): Promise<void> {
     this.#closed = true;
+    this.#waking = null;
     this.#initiative.stop();
     const live = this.#live;
     this.#live = null;

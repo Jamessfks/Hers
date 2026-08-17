@@ -31,7 +31,7 @@ import {
   parseClientMessage,
 } from '../shared/protocol.ts';
 import type { ClientMessage, SenseName, ServerMessage } from '../shared/protocol.ts';
-import { Companion } from '../core/session/companion.ts';
+import type { Conversation, Origin } from '../core/session/conversation.ts';
 import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
@@ -55,6 +55,8 @@ const ORPHAN_GRACE_MS = 90_000;
 
 export interface WebBridgeOptions {
   brain: Brain;
+  /** The one conversation, shared with every other surface. */
+  conversation: Conversation;
   server: Server;
   /** Origins the handshake will accept. */
   allowedOrigins: Set<string>;
@@ -65,7 +67,7 @@ export class WebBridge {
   readonly #options: WebBridgeOptions;
   readonly #wss: WebSocketServer;
   #socket: WebSocket | null = null;
-  #companion: Companion | null = null;
+  #attached = false;
   #orphanTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: WebBridgeOptions) {
@@ -97,8 +99,9 @@ export class WebBridge {
 
   async close(): Promise<void> {
     this.#cancelOrphanTimer();
-    await this.#companion?.sleep();
-    this.#companion = null;
+    this.#options.conversation.detach('web');
+    this.#attached = false;
+    await this.#options.conversation.sleep();
     for (const client of this.#wss.clients) client.close(1001, 'Anna is shutting down');
     await new Promise<void>((resolve) => this.#wss.close(() => resolve()));
   }
@@ -123,9 +126,9 @@ export class WebBridge {
       previous.close(CLOSE_SUPERSEDED, 'superseded');
     }
 
-    const companion = this.#ensureCompanion();
+    this.#attach();
     this.#sendOpening(socket);
-    if (companion.live) sendJson(socket, { t: 'state', state: 'listening' });
+    if (this.#options.conversation.live) sendJson(socket, { t: 'state', state: 'listening' });
 
     socket.on('message', (data, isBinary) => {
       void this.#onMessage(socket, data as Buffer, isBinary);
@@ -149,29 +152,36 @@ export class WebBridge {
    * reset the page is still open and still talking, and the tab going silent
    * until somebody reloads it is not a way to meet someone new.
    */
-  #ensureCompanion(): Companion {
-    if (this.#companion) return this.#companion;
-    this.#companion = new Companion({
-      brain: this.#options.brain,
-      channel: 'desktop',
-      sink: {
-        audio: (pcm) => this.#sendMedia(MediaKind.ANNA_PCM24, pcm),
-        transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
-        state: (state) => this.#send({ t: 'state', state }),
-        mood: (mood) => this.#send({ t: 'mood', mood }),
-        interrupted: () => this.#send({ t: 'interrupted' }),
-        show: (item) =>
-          this.#send({
-            t: 'show',
-            url: `/gallery/${encodeURIComponent(item.name)}`,
-            kind: item.kind,
-            caption: item.label,
-          }),
-        move: (gesture) => this.#send({ t: 'move', gesture }),
-        trouble: (message) => this.#send({ t: 'trouble', message }),
-      },
+  /**
+   * Registers the browser as a surface on the one conversation.
+   *
+   * Everything reaches it, whatever channel it came from. That is the whole
+   * point of the tab: OpenClaw's dashboard attaches to the agent's main session
+   * so it "lets you see cross-channel context for that agent in one place", and
+   * a browser that showed only its own half of the conversation would be the
+   * thing this refactor exists to remove. So `origin` is read and ignored here —
+   * deliberately, and only here.
+   */
+  #attach(): void {
+    if (this.#attached) return;
+    this.#attached = true;
+    this.#options.conversation.attach({
+      name: 'web',
+      audio: (pcm) => this.#sendMedia(MediaKind.ANNA_PCM24, pcm),
+      transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
+      state: (state) => this.#send({ t: 'state', state }),
+      mood: (mood) => this.#send({ t: 'mood', mood }),
+      interrupted: () => this.#send({ t: 'interrupted' }),
+      show: (item) =>
+        this.#send({
+          t: 'show',
+          url: `/gallery/${encodeURIComponent(item.name)}`,
+          kind: item.kind,
+          caption: item.label,
+        }),
+      move: (gesture) => this.#send({ t: 'move', gesture }),
+      trouble: (message) => this.#send({ t: 'trouble', message }),
     });
-    return this.#companion;
   }
 
   /**
@@ -205,7 +215,7 @@ export class WebBridge {
       version: this.#options.version,
       model: brain.config.model,
       voice: brain.profile.voice.voice,
-      senses: this.#companion?.situation.senses ?? {
+      senses: this.#options.conversation.situation?.senses ?? {
         hearing: false,
         sight: false,
         screen: false,
@@ -231,14 +241,15 @@ export class WebBridge {
   }
 
   async #onMessage(socket: WebSocket, data: Buffer, isBinary: boolean): Promise<void> {
-    const companion = this.#ensureCompanion();
+    this.#attach();
+    const companion = this.#options.conversation;
 
     if (isBinary) {
       const { kind, payload } = decodeMediaFrame(data);
       const frame = Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
-      if (kind === MediaKind.MIC_PCM16) companion.hear(frame);
-      else if (kind === MediaKind.CAMERA_JPEG) companion.see(frame, 'camera');
-      else if (kind === MediaKind.SCREEN_JPEG) companion.see(frame, 'screen');
+      if (kind === MediaKind.MIC_PCM16) companion.hear(frame, 'web');
+      else if (kind === MediaKind.CAMERA_JPEG) companion.see(frame, 'camera', 'web');
+      else if (kind === MediaKind.SCREEN_JPEG) companion.see(frame, 'screen', 'web');
       return;
     }
 
@@ -249,7 +260,7 @@ export class WebBridge {
 
   async #onControl(
     socket: WebSocket,
-    companion: Companion,
+    companion: Conversation,
     message: ClientMessage,
   ): Promise<void> {
     switch (message.t) {
@@ -277,7 +288,7 @@ export class WebBridge {
          * no-op when a session already exists.
          */
         if (!companion.live) await companion.wake();
-        companion.say(message.text.slice(0, 4000));
+        companion.say(message.text.slice(0, 4000), 'web');
         return;
 
       case 'sense': {
@@ -417,9 +428,7 @@ export class WebBridge {
    */
   async endSession(): Promise<void> {
     this.#cancelOrphanTimer();
-    const companion = this.#companion;
-    this.#companion = null;
-    await companion?.sleep();
+    await this.#options.conversation.sleep();
   }
 
   /**
@@ -434,10 +443,13 @@ export class WebBridge {
   refresh(): void {
     const socket = this.#socket;
     if (!socket || socket.readyState !== socket.OPEN) return;
-    this.#ensureCompanion();
+    this.#attach();
     this.#sendOpening(socket);
     sendJson(socket, this.#memory());
-    sendJson(socket, { t: 'state', state: this.#companion?.live ? 'listening' : 'asleep' });
+    sendJson(socket, {
+      t: 'state',
+      state: this.#options.conversation.live ? 'listening' : 'asleep',
+    });
   }
 
   /**
@@ -473,9 +485,17 @@ export class WebBridge {
     this.#orphanTimer = setTimeout(() => {
       this.#orphanTimer = null;
       if (this.#socket) return;
-      const companion = this.#companion;
-      this.#companion = null;
-      void companion?.sleep();
+      /*
+       * The tab is gone, so the browser stops being a surface — but the
+       * conversation only ends if nothing else is attached. With Telegram
+       * connected she is still reachable, and closing the session because
+       * somebody shut a browser tab would drop the thread on the phone too.
+       */
+      this.#options.conversation.detach('web');
+      this.#attached = false;
+      if (this.#options.conversation.attached.length === 0) {
+        void this.#options.conversation.sleep();
+      }
     }, ORPHAN_GRACE_MS);
     this.#orphanTimer.unref?.();
   }

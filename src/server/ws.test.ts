@@ -12,6 +12,7 @@ import { WebSocket } from 'ws';
 import { Brain } from '../core/session/brain.ts';
 import { loadConfig } from './config.ts';
 import { WebBridge } from './ws.ts';
+import { Conversation } from '../core/session/conversation.ts';
 import { CLOSE_SUPERSEDED, MediaKind, decodeMediaFrame } from '../shared/protocol.ts';
 import type { ServerMessage } from '../shared/protocol.ts';
 
@@ -39,6 +40,7 @@ async function bridge() {
 
   const web = new WebBridge({
     brain,
+    conversation: new Conversation({ brain }),
     server,
     version: 'test',
     allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]),

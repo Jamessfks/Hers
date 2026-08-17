@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Brain } from '../core/session/brain.ts';
+import { Conversation } from '../core/session/conversation.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 import { applyGeminiKey, checkGeminiKey, maskKey } from './setup.ts';
@@ -46,6 +47,7 @@ export async function main(): Promise<void> {
   // announce itself to whoever is connected, and a reset has to end every
   // conversation on every transport before the memory under them is deleted.
   // The closures only run once a request arrives, long after these are set.
+  const conversation = new Conversation({ brain });
   let web: WebBridge;
   let telegram: TelegramBridge | null = null;
   let calls: CallBridge | null = null;
@@ -145,6 +147,7 @@ export async function main(): Promise<void> {
 
   web = new WebBridge({
     brain,
+    conversation,
     server,
     version: VERSION,
     allowedOrigins: allowedOrigins(config.host, config.port),
@@ -154,6 +157,7 @@ export async function main(): Promise<void> {
   telegram = config.telegram
     ? new TelegramBridge({
         brain,
+        conversation,
         token: config.telegram.token,
         allowedChatIds: config.telegram.allowedChatIds,
         calls,

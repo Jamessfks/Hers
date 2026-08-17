@@ -35,7 +35,7 @@ import { readFile } from 'node:fs/promises';
 import { encodeOggOpus, pcmSeconds } from '../../core/speech/ogg-opus.ts';
 import { transcribeMedia } from '../../core/gemini/text.ts';
 import { mimeFor } from '../../core/gallery/gallery.ts';
-import { Companion } from '../../core/session/companion.ts';
+import type { Conversation, Origin } from '../../core/session/conversation.ts';
 import type { Brain } from '../../core/session/brain.ts';
 import type { CallBridge } from '../livekit/bridge.ts';
 import { AvatarError, GESTURE_NAMES, isGesture } from '../../core/avatar/studio.ts';
@@ -82,6 +82,8 @@ const POLL_GAP_MS = 200;
 
 export interface TelegramBridgeOptions {
   brain: Brain;
+  /** The one conversation, shared with the website. */
+  conversation: Conversation;
   token: string;
   allowedChatIds: number[];
   /** Present when LiveKit is configured. Without it, `/call` says so. */
@@ -99,7 +101,8 @@ export class TelegramBridge {
   #offset = 0;
   #running = false;
   #loop: Promise<void> | null = null;
-  #companion: Companion | null = null;
+  readonly #conversation: Conversation;
+  #attached = false;
   #chatId: number | null = null;
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -118,6 +121,7 @@ export class TelegramBridge {
 
   constructor(options: TelegramBridgeOptions) {
     this.#brain = options.brain;
+    this.#conversation = options.conversation;
     this.#api = options.api ?? new TelegramApi(options.token);
     this.#allowed = new Set(options.allowedChatIds);
     this.#calls = options.calls ?? null;
@@ -270,16 +274,15 @@ export class TelegramBridge {
   }
 
   async #deliver(chatId: number, message: TelegramMessage, text: string): Promise<void> {
-    const companion = this.#companion;
-    if (!companion) return;
+    const companion = this.#conversation;
 
     // A photo goes in as a picture, because she can actually see it.
     const photo = message.photo ? largestPhoto(message.photo) : null;
     if (photo) {
       const bytes = await this.#api.download(photo.file_id);
       if (bytes) {
-        companion.look(bytes, 'image/jpeg');
-        companion.say(message.caption?.trim() || 'Sent you a photo.');
+        companion.look(bytes, 'image/jpeg', 'telegram');
+        companion.say(message.caption?.trim() || 'Sent you a photo.', 'telegram');
         return;
       }
     }
@@ -301,13 +304,13 @@ export class TelegramBridge {
       }
       // They spoke, so she answers in kind.
       this.#theySpoke = Boolean(message.voice ?? message.video_note);
-      companion.say(heard);
+      companion.say(heard, 'telegram');
       return;
     }
 
     if (text) {
       this.#theySpoke = false;
-      companion.say(text);
+      companion.say(text, 'telegram');
     }
   }
 
@@ -518,37 +521,49 @@ export class TelegramBridge {
   // -------------------------------------------------------------------------
 
   async #ensureAwake(chatId: number): Promise<void> {
-    if (this.#companion && this.#chatId === chatId) return;
+    if (this.#attached && this.#chatId === chatId) return;
     await this.#sleep();
     this.#chatId = chatId;
 
-    this.#companion = new Companion({
-      brain: this.#brain,
-      channel: 'telegram',
-      // Nothing streams here. What she sees arrives as a message, and that is
-      // deliberately not the same thing as a sense being switched on.
-      senses: { hearing: false, sight: false, screen: false },
-      sink: {
-        // Kept for the length of a turn so it can be sent as a voice note.
-        audio: (pcm) => {
+    /*
+     * Telegram becomes a surface on the one conversation rather than opening its
+     * own. Two sessions meant two initiative timers and two openers for one
+     * thought; one session means the browser and the phone are the same
+     * conversation, seen from two places.
+     */
+    this.#chatId = chatId;
+    if (!this.#attached) {
+      this.#attached = true;
+      this.#conversation.attach({
+        name: 'telegram',
+        /*
+         * Delivered only when this is her answer to Telegram, or when she
+         * started it herself.
+         *
+         * `origin === null` is an opener: she decided to speak, so it reaches
+         * every surface she is reachable from — which is the whole point of the
+         * shared session. `origin === 'web'` is somebody typing at their desk,
+         * and a phone that buzzes for that conversation is a phone nobody wants.
+         * OpenClaw draws the same line: replies go "back to the channel where a
+         * message came from".
+         */
+        transcript: (who, text, final, origin) => {
+          if (who !== 'anna' || !final || !this.#mine(origin)) return;
+          void this.#say(chatId, text);
+        },
+        audio: (pcm, origin) => {
+          if (!this.#mine(origin)) return;
+          // Kept for the length of a turn so it can be sent as a voice note.
           if (this.#speech.length < 400) this.#speech.push(pcm);
         },
-        transcript: (who, text, final) => {
-          if (who === 'anna' && final) void this.#say(chatId, text);
+        show: (item, origin) => {
+          if (!this.#mine(origin)) return;
+          void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label);
         },
-        state: () => undefined,
-        mood: () => undefined,
-        interrupted: () => undefined,
-        show: (item) =>
-          void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label),
-        // Gesture clips are for the web interface. Sending a two-second silent
-        // video after every other message would be noise, not presence.
-        move: () => undefined,
         trouble: (message) => console.warn(`telegram: ${message}`),
-      },
-    });
-
-    await this.#companion.wake();
+      });
+    }
+    await this.#conversation.wake();
     this.#armIdle();
   }
 
@@ -604,12 +619,19 @@ export class TelegramBridge {
     await this.#sleep();
   }
 
+  /** True when what she just said belongs on this phone. */
+  #mine(origin: Origin): boolean {
+    return origin === 'telegram' || origin === null;
+  }
+
   async #sleep(): Promise<void> {
     this.#clearIdle();
-    const companion = this.#companion;
-    this.#companion = null;
     this.#chatId = null;
-    await companion?.sleep();
+    this.#conversation.detach('telegram');
+    this.#attached = false;
+    // Only ends the conversation if nothing else is holding it. A browser tab
+    // open at the desk is still a place she is reachable from.
+    if (this.#conversation.attached.length === 0) await this.#conversation.sleep();
   }
 
   #armIdle(): void {
