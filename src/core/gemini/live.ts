@@ -178,6 +178,8 @@ export class LiveConversation {
   #turnEnded = false;
   /** True between a completion signal and the settle it scheduled. */
   #awaitingSettle = false;
+  /** Where the first completion flag fell in `#annaBuffer`. -1 when none has. */
+  #boundary = -1;
   /** Guards against a stale socket's callbacks reaching a live session. */
   #generation = 0;
   /** Why the last attempt was refused, if the server said. */
@@ -551,18 +553,23 @@ export class LiveConversation {
     if (!content) return;
 
     /*
-     * A second completion signal is a hard boundary.
+     * A second completion signal splits the buffer; it does not flush it whole.
      *
-     * Trailing transcription and the opening words of the next turn look
+     * Trailing transcription and the opening words of the next utterance look
      * identical — both are text arriving after a completion flag — so the
-     * settle window cannot tell them apart on its own. What it can tell apart
-     * is another *flag*: if one turn has already ended and a new one is ending
-     * too, whatever is buffered belonged to the first. Flushing here keeps two
-     * turns from merging into "firstsecond" while still letting a few
-     * milliseconds of trailing text land where it belongs.
+     * settle window cannot tell them apart by timing. What it *can* use is
+     * where the first flag fell. Text before it belongs to the utterance that
+     * ended; text after it, once a second flag says another utterance has ended
+     * too, was that second utterance.
+     *
+     * This used to flush everything as one line, on the reasoning that
+     * "whatever is buffered belonged to the first". That is only true when
+     * nothing arrived in between. When something did, the two were welded
+     * together and the seam ate the space: a real Telegram message read
+     * "artist Maybe a little punk adjacent? You tell me."
      */
     if (this.#awaitingSettle && (content.generationComplete || content.turnComplete)) {
-      this.#settle();
+      this.#settle({ split: true });
     }
 
     if (content.interrupted) {
@@ -614,6 +621,9 @@ export class LiveConversation {
      */
     if (content.turnComplete) this.#turnEnded = true;
     if (content.generationComplete || content.turnComplete) {
+      // Where this utterance ended. Anything after it is either its own tail or
+      // the start of the next one, and only a second flag can say which.
+      if (!this.#awaitingSettle) this.#boundary = this.#annaBuffer.length;
       this.#awaitingSettle = true;
       this.#scheduleSettle();
     }
@@ -634,7 +644,7 @@ export class LiveConversation {
     this.#settleTimer.unref?.();
   }
 
-  #settle(): void {
+  #settle(options: { split?: boolean } = {}): void {
     if (this.#settleTimer) clearTimeout(this.#settleTimer);
     this.#settleTimer = null;
     this.#awaitingSettle = false;
@@ -647,11 +657,19 @@ export class LiveConversation {
     }
     this.#userBuffer = '';
 
-    const said = spoken(this.#annaBuffer);
-    if (said.trim()) {
-      this.#options.handlers.onAnnaText(said, true);
-    }
+    const whole = this.#annaBuffer;
+    const boundary = this.#boundary;
     this.#annaBuffer = '';
+    this.#boundary = -1;
+
+    const parts =
+      options.split && boundary > 0 && boundary < whole.length
+        ? [whole.slice(0, boundary), whole.slice(boundary)]
+        : [whole];
+    for (const part of parts) {
+      const said = spoken(part);
+      if (said.trim()) this.#options.handlers.onAnnaText(said, true);
+    }
 
     if (this.#turnEnded) {
       this.#turnEnded = false;
@@ -677,6 +695,7 @@ export class LiveConversation {
     this.#settleTimer = null;
     this.#userBuffer = '';
     this.#annaBuffer = '';
+    this.#boundary = -1;
     this.#turnEnded = false;
     this.#awaitingSettle = false;
   }

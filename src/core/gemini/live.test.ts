@@ -654,3 +654,57 @@ test('a connect that never settles is a failure, not a hang', async () => {
 
   await live.close();
 });
+
+test('two utterances that arrive back to back stay two lines', async () => {
+  /*
+   * Verbatim from a real Telegram message: "artist Maybe a little punk
+   * adjacent? You tell me." Two things she said, welded at the seam, with the
+   * space eaten. The settle window cannot separate them by timing — trailing
+   * transcription and the next utterance's opening words look identical — but
+   * the flag that ended the first one marks exactly where the join is.
+   */
+  const f = fixture();
+  await f.live.start();
+  const socket = f.latest();
+
+  socket.emit({
+    serverContent: { outputTranscription: { text: "I'd say kind of an artist" } },
+  } as unknown as LiveServerMessage);
+  socket.emit({
+    serverContent: { generationComplete: true },
+  } as unknown as LiveServerMessage);
+  // The next utterance starts inside the settle window, which is what merged them.
+  socket.emit({
+    serverContent: { outputTranscription: { text: 'Maybe a little punk adjacent?' } },
+  } as unknown as LiveServerMessage);
+  socket.emit({
+    serverContent: { generationComplete: true, turnComplete: true },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  const lines = f.annaText.filter((line) => line.final).map((line) => line.text);
+  assert.deepEqual(lines, ["I'd say kind of an artist", 'Maybe a little punk adjacent?']);
+});
+
+test('a tail that arrives after the flag still belongs to the line it trails', async () => {
+  // The case the settle window exists for, and it must not be broken by the
+  // split: no second flag means nothing new started, so the late words are the
+  // end of the same sentence rather than a line of their own.
+  const f = fixture();
+  await f.live.start();
+  const socket = f.latest();
+
+  socket.emit({
+    serverContent: {
+      outputTranscription: { text: 'Thought you might still be buried under that ' },
+      turnComplete: true,
+    },
+  } as unknown as LiveServerMessage);
+  socket.emit({
+    serverContent: { outputTranscription: { text: 'presentation.' } },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  const lines = f.annaText.filter((line) => line.final).map((line) => line.text);
+  assert.deepEqual(lines, ['Thought you might still be buried under that presentation.']);
+});
