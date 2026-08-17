@@ -238,6 +238,7 @@ async function session(
     moves: [] as string[],
     shows: [] as GalleryItem[],
     troubles: [] as string[],
+    names: [] as string[],
     turns: 0,
     audioBytes: 0,
   };
@@ -252,6 +253,7 @@ async function session(
     },
     state: () => undefined,
     mood: () => undefined,
+    named: (name) => state.names.push(name),
     interrupted: () => undefined,
     show: (item) => state.shows.push(item),
     move: (gesture) => state.moves.push(gesture),

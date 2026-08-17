@@ -34,6 +34,14 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"],
+  /*
+   * `scripts/` is in here, and learning that cost a green build. The audit
+   * builds a `CompanionSink` under a real type annotation, so a method added to
+   * that interface is a compile error in this file — except nothing compiled it,
+   * and `npm run check` passed while `npm run audit` failed ten checks with
+   * "this[#sink].named is not a function". Anything that imports from `src` has
+   * to be typechecked with `src`.
+   */
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/web"]
 }

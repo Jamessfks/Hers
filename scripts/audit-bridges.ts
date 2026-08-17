@@ -134,7 +134,10 @@ async function main(): Promise<void> {
         })();
       });
 
-      await caller.connect(config.livekit!.url, callerToken, { autoSubscribe: true });
+      await caller.connect(config.livekit!.url, callerToken, {
+        autoSubscribe: true,
+        dynacast: true,
+      });
 
       // Publish a camera and a microphone, the way a phone would.
       const mic = new AudioSource(16000, 1);
