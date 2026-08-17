@@ -194,6 +194,37 @@
         </section>
 
         <section class="setup-block">
+          <h3>Reach her on Telegram</h3>
+          <p class="settings-note">
+            The same companion, on your phone — one memory, one mood. Make a bot with
+            <a href="https://t.me/botfather" target="_blank" rel="noreferrer noopener"
+              >@BotFather</a
+            >, send it <code>/newbot</code>, and paste the token it gives you. It is
+            checked with Telegram before it is saved, then written to
+            <code>.env</code> and kept on this machine.
+          </p>
+          <div class="setup-row">
+            <input
+              id="bot-input"
+              type="password"
+              placeholder="123456789:AA…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Telegram bot token"
+            />
+            <button class="primary" id="bot-save" type="button">Save</button>
+          </div>
+          <p class="setup-status" id="bot-status"></p>
+          <p class="settings-note" id="bot-next" hidden>
+            One step left, and only you can do it: open
+            <a id="bot-link" href="#" target="_blank" rel="noreferrer noopener">the chat</a>
+            and press <strong>Start</strong>. A bot is not allowed to message first, and
+            nothing in Telegram tells it which chat is yours — so the first chat to speak
+            is the one she is locked to, and it is written down for good.
+          </p>
+        </section>
+
+        <section class="setup-block">
           <h3>Let her read your files</h3>
           <p class="settings-note">
             She can read the folders you tick, once, so she knows who she is talking to

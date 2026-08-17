@@ -22,9 +22,18 @@ import { Brain } from '../core/session/brain.ts';
 import { Conversation } from '../core/session/conversation.ts';
 import { loadConfig, loadDotEnv, migrateProfileDir } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
-import { applyGeminiKey, checkGeminiKey, maskKey } from './setup.ts';
+import {
+  applyBotToken,
+  applyGeminiKey,
+  botLink,
+  checkBotToken,
+  checkGeminiKey,
+  maskKey,
+  rememberChatId,
+} from './setup.ts';
 import { knowledgeState, runScan, suggestedFolders } from './knowledge.ts';
 import { WebBridge } from './ws.ts';
+import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
 
@@ -102,6 +111,47 @@ export async function main(): Promise<void> {
         }
       },
 
+      /**
+       * A bot token pasted into the website.
+       *
+       * Checked with `getMe` before anything is written, for the same reason the
+       * Gemini key is: a wrong token should be a sentence on the page, not a bot
+       * that never answers. The bridge is then brought up on it without a
+       * restart, and the reply carries the link the user has to open — because
+       * this is the one setup step that cannot be finished from a desk. Nothing
+       * in the Bot API tells a bot which chat belongs to its owner, so a human
+       * has to speak to it first.
+       */
+      setBotToken: async (token) => {
+        const check = await checkBotToken(token);
+        if (!check.ok) return { ok: false, ...(check.reason ? { error: check.reason } : {}) };
+        try {
+          config = await applyBotToken(token);
+          botUsername = check.username ?? '';
+          startTelegram();
+
+  // A token that was already in `.env` has a username the page will want, and
+  // `getMe` is the only way to learn it. Off the critical path and forgiving: a
+  // failure here costs the link, not the bot.
+  if (config.telegram) {
+    void checkBotToken(config.telegram.token).then((check) => {
+      if (!check.ok || !check.username) return;
+      botUsername = check.username;
+      web.announceTelegram(telegramView());
+    });
+  }
+          web.refresh();
+          web.announceTelegram(telegramView());
+          console.log(`  telegram  on, as @${botUsername || 'the bot'}`);
+          return {
+            ok: true,
+            ...(botUsername ? { username: botUsername, link: botLink(botUsername) } : {}),
+          };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+
       /** What she has been allowed to read, and where it makes sense to offer. */
       knowledge: async () => ({
         ...(await knowledgeState(brain)),
@@ -159,18 +209,61 @@ export async function main(): Promise<void> {
     server,
     version: VERSION,
     allowedOrigins: allowedOrigins(config.host, config.port),
+    telegram: () => telegramView(),
   });
 
   calls = config.livekit ? new CallBridge({ brain, livekit: config.livekit }) : null;
-  telegram = config.telegram
-    ? new TelegramBridge({
-        brain,
-        conversation,
-        token: config.telegram.token,
-        allowedChatIds: config.telegram.allowedChatIds,
-        calls,
-      })
-    : null;
+
+  /**
+   * Brings the bot up, or back up on a new token, without a restart.
+   *
+   * Exactly one bridge exists at a time and the old one is stopped first, which
+   * is not tidiness: the Bot API hands `getUpdates` to the newest caller and
+   * terminates the other, so two bridges on one token is two halves of a
+   * conversation.
+   *
+   * The chat id arrives here rather than being polled for, because the bridge
+   * owns the only `getUpdates` loop and nothing in the Bot API reveals a chat id
+   * any other way. Persisting it is what turns "pinned for this run, here is the
+   * line to paste" into setup that finished.
+   */
+  // Learned from `getMe` the first time a token is seen, so the page can show the
+  // link without another round trip. Empty until then, which the view handles.
+  let botUsername = '';
+
+  const startTelegram = (): void => {
+    telegram?.stop();
+    telegram = null;
+    if (!config.telegram) return;
+
+    telegram = new TelegramBridge({
+      brain,
+      conversation,
+      token: config.telegram.token,
+      allowedChatIds: config.telegram.allowedChatIds,
+      calls,
+      onChatPinned: (chatId) => {
+        void (async () => {
+          try {
+            config = await rememberChatId(chatId);
+            web.announceTelegram(telegramView());
+          } catch (error) {
+            console.warn(`! could not write the chat id down: ${String(error)}`);
+          }
+        })();
+      },
+    });
+    telegram.start();
+  };
+
+  /** What the browser is told about the bot. Never the token. */
+  const telegramView = (): TelegramView => ({
+    configured: Boolean(config.telegram),
+    ...(botUsername ? { username: botUsername, link: botLink(botUsername) } : {}),
+    ...(config.telegram?.allowedChatIds[0] !== undefined
+      ? { chatId: config.telegram.allowedChatIds[0] }
+      : {}),
+  });
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', (error: NodeJS.ErrnoException) => {
@@ -194,10 +287,21 @@ export async function main(): Promise<void> {
   console.log(`  memory    ${path.join(config.dataDir, 'memory.db')}`);
   console.log(`  model     ${config.model}`);
   console.log(`  avatar    ${config.hedra ? `on, budget $${config.hedra.budgetUsd.toFixed(2)}` : 'still only (no HEDRA_API_KEY)'}`);
-  console.log(`  telegram  ${telegram ? 'on' : 'off'}`);
-  console.log(`  calls     ${calls ? 'on' : 'off'}\n`);
+  console.log(`  telegram  ${config.telegram ? 'on' : 'off'}`);
+  console.log(`  calls     ${config.livekit ? 'on' : 'off'}\n`);
 
-  telegram?.start();
+  startTelegram();
+
+  // A token that was already in `.env` has a username the page will want, and
+  // `getMe` is the only way to learn it. Off the critical path and forgiving: a
+  // failure here costs the link, not the bot.
+  if (config.telegram) {
+    void checkBotToken(config.telegram.token).then((check) => {
+      if (!check.ok || !check.username) return;
+      botUsername = check.username;
+      web.announceTelegram(telegramView());
+    });
+  }
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

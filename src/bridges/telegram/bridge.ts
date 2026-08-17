@@ -90,6 +90,16 @@ export interface TelegramBridgeOptions {
   calls?: CallBridge | null;
   /** Injected by tests so the allowlist can be exercised without a network. */
   api?: TelegramClient;
+  /**
+   * Called once, with the first chat to speak, when there was no allowlist.
+   *
+   * The bridge reports rather than persists, because it is the wrong place to
+   * write a file — and because it is the *only* place that can know: nothing in
+   * the Bot API reveals a chat id except an update arriving from it, and the
+   * bridge holds the single `getUpdates` loop. A second poller looking for the
+   * same thing would be handed the updates and this one would be terminated.
+   */
+  onChatPinned?: (chatId: number) => void;
 }
 
 export class TelegramBridge {
@@ -97,6 +107,7 @@ export class TelegramBridge {
   readonly #api: TelegramClient;
   readonly #allowed: Set<number>;
   readonly #calls: CallBridge | null;
+  readonly #onChatPinned: ((chatId: number) => void) | undefined;
   #pinnedChatId: number | null = null;
   #offset = 0;
   #running = false;
@@ -124,6 +135,7 @@ export class TelegramBridge {
     this.#conversation = options.conversation;
     this.#api = options.api ?? new TelegramApi(options.token);
     this.#allowed = new Set(options.allowedChatIds);
+    this.#onChatPinned = options.onChatPinned;
     this.#calls = options.calls ?? null;
   }
 
@@ -217,9 +229,8 @@ export class TelegramBridge {
     if (this.#allowed.size > 0) return this.#allowed.has(chatId);
     if (this.#pinnedChatId === null) {
       this.#pinnedChatId = chatId;
-      console.warn(
-        `! Telegram is pinned to chat ${chatId} for this run. Set TELEGRAM_ALLOWED_CHAT_IDS=${chatId} to make it permanent.`,
-      );
+      console.log(`  telegram  linked to chat ${chatId}`);
+      this.#onChatPinned?.(chatId);
       return true;
     }
     return this.#pinnedChatId === chatId;

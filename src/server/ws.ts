@@ -30,7 +30,12 @@ import {
   encodeMediaFrame,
   parseClientMessage,
 } from '../shared/protocol.ts';
-import type { ClientMessage, SenseName, ServerMessage } from '../shared/protocol.ts';
+import type {
+  ClientMessage,
+  SenseName,
+  ServerMessage,
+  TelegramView,
+} from '../shared/protocol.ts';
 import type { Conversation, Origin } from '../core/session/conversation.ts';
 import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
@@ -61,6 +66,14 @@ export interface WebBridgeOptions {
   /** Origins the handshake will accept. */
   allowedOrigins: Set<string>;
   version: string;
+  /**
+   * The bot as the page may know it.
+   *
+   * A function rather than a value: the bot can be set up while the page is
+   * open, and a page that connects afterwards has to be told the current answer
+   * rather than the one that was true when this bridge was built.
+   */
+  telegram?: () => TelegramView;
 }
 
 export class WebBridge {
@@ -231,6 +244,8 @@ export class WebBridge {
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
     sendJson(socket, this.#intimacy());
+    const telegram = this.#options.telegram?.();
+    if (telegram) sendJson(socket, { t: 'telegram', telegram });
     sendJson(socket, { t: 'avatar', avatar: brain.avatar.state() });
     sendJson(socket, {
       t: 'history',
@@ -418,6 +433,17 @@ export class WebBridge {
   /** Tells whoever is connected that the photograph or the clips changed. */
   announceAvatar(): void {
     this.#send({ t: 'avatar', avatar: this.#options.brain.avatar.state() });
+  }
+
+  /**
+   * Tells every open page about the bot.
+   *
+   * Pushed rather than polled because the interesting half of Telegram setup
+   * finishes outside the browser: somebody opens the link on a phone and presses
+   * Start, and the page they left open at their desk should say so by itself.
+   */
+  announceTelegram(view: TelegramView): void {
+    this.#send({ t: 'telegram', telegram: view });
   }
 
   /**

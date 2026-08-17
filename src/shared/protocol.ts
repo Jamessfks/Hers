@@ -164,6 +164,23 @@ export interface MoodVector {
   interest: number;
 }
 
+/**
+ * What the page is told about the Telegram bot.
+ *
+ * The token is not here and never will be: it is a bearer credential for a
+ * public endpoint, so the browser gets the bot's public username and the chat it
+ * is linked to, both of which are already visible to anybody in that chat.
+ */
+export interface TelegramView {
+  configured: boolean;
+  /** Without the @. Absent until a token has been checked. */
+  username?: string;
+  /** The `t.me` link that gets somebody into the chat and past Start. */
+  link?: string;
+  /** The chat she is allowed to talk to. Absent until somebody has spoken. */
+  chatId?: number;
+}
+
 export type ServerMessage =
   /** First message on every connection. */
   | {
@@ -220,6 +237,8 @@ export type ServerMessage =
    * the placeholder in its header while she introduces herself as something
    * else.
    */
+  /** Server -> browser. The bot, as far as the page is allowed to know. */
+  | { t: 'telegram'; telegram: TelegramView }
   | { t: 'name'; name: string }
   | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
   /** Her audio was cut off. Drop whatever is still queued for playback. */

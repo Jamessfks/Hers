@@ -15,6 +15,7 @@ import type {
   RememberedFact,
   SenseName,
   ServerMessage,
+  TelegramView,
 } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
 
@@ -40,6 +41,14 @@ export interface UiHandlers {
   onAddMemory(text: string): void;
   /** A pasted Gemini key. Resolves to null on success, or to why not. */
   onSaveKey(key: string): Promise<string | null>;
+  /**
+   * A bot token. Resolves to the bot on success, or to why not.
+   *
+   * The username comes back because the next step is a link built from it, and
+   * the page cannot build that itself — it never sees the token, and the username
+   * is not in it.
+   */
+  onSaveBotToken(token: string): Promise<{ error?: string; username?: string; link?: string }>;
   /** Delete everything. Resolves to null on success, or to why not. */
   onReset(confirm: string): Promise<string | null>;
   /** Put closeness where the user wants it, 0-1. */
@@ -108,6 +117,11 @@ export class Ui {
   readonly #keyInput = need<HTMLInputElement>('key-input');
   readonly #keySave = need<HTMLButtonElement>('key-save');
   readonly #keyStatus = need('key-status');
+  readonly #botInput = need<HTMLInputElement>('bot-input');
+  readonly #botSave = need<HTMLButtonElement>('bot-save');
+  readonly #botStatus = need('bot-status');
+  readonly #botNext = need('bot-next');
+  readonly #botLink = need<HTMLAnchorElement>('bot-link');
   readonly #resetConfirm = need<HTMLInputElement>('reset-confirm');
   readonly #resetGo = need<HTMLButtonElement>('reset-go');
   readonly #resetStatus = need('reset-status');
@@ -201,6 +215,10 @@ export class Ui {
     this.#scanGo.addEventListener('click', () => void this.#scan());
 
     this.#keySave.addEventListener('click', () => void this.#saveKey());
+    this.#botSave.addEventListener('click', () => void this.#saveBotToken());
+    this.#botInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') void this.#saveBotToken();
+    });
     this.#keyInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') void this.#saveKey();
     });
@@ -294,6 +312,10 @@ export class Ui {
 
       case 'name':
         this.#setName(message.name);
+        return;
+
+      case 'telegram':
+        this.setTelegram(message.telegram);
         return;
 
       case 'transcript':
@@ -661,6 +683,69 @@ export class Ui {
     }
     this.#keyInput.value = '';
     this.#status(this.#keyStatus, 'Saved. Wake her.', 'good');
+  }
+
+  /**
+   * Saves a bot token and then says the part only a human can finish.
+   *
+   * The token being right is not the end of setup, which is the unusual thing
+   * about this panel: a bot may not open a conversation, and nothing in the Bot
+   * API tells it which chat belongs to whoever set it up. So a successful save
+   * ends by showing the link rather than saying "done", and the page waits — the
+   * server pushes a `telegram` message when the chat finally speaks.
+   */
+  async #saveBotToken(): Promise<void> {
+    const token = this.#botInput.value.trim();
+    if (!token) return;
+
+    this.#botSave.disabled = true;
+    this.#status(this.#botStatus, 'Checking it with Telegram…', 'working');
+    const outcome = await this.#handlers.onSaveBotToken(token);
+    this.#botSave.disabled = false;
+
+    if (outcome.error) {
+      // Left in the box on purpose: a rejected token is usually one bad
+      // character, and clearing it means pasting it again to find out which.
+      this.#status(this.#botStatus, outcome.error, 'bad');
+      return;
+    }
+
+    this.#botInput.value = '';
+    this.setTelegram({
+      configured: true,
+      ...(outcome.username ? { username: outcome.username } : {}),
+      ...(outcome.link ? { link: outcome.link } : {}),
+    });
+  }
+
+  /**
+   * Shows where Telegram setup has actually got to.
+   *
+   * Three states, and the middle one is the point of this: a token that works but
+   * a chat that has not spoken yet is *not* finished, and saying "connected"
+   * there would be a lie the user discovers by messaging into silence.
+   */
+  setTelegram(view: TelegramView): void {
+    if (!view.configured) {
+      this.#botNext.hidden = true;
+      return;
+    }
+
+    const who = view.username ? `@${view.username}` : 'the bot';
+    if (view.chatId !== undefined) {
+      this.#botNext.hidden = true;
+      this.#status(this.#botStatus, `${who} is talking to you. Nobody else can.`, 'good');
+      return;
+    }
+
+    if (view.link) {
+      this.#botLink.href = view.link;
+      this.#botLink.textContent = who;
+      this.#botNext.hidden = false;
+    }
+    // The instruction lives in `#botNext`, which is right below this line. Saying
+    // it twice reads like the page is not sure whether it happened.
+    this.#status(this.#botStatus, `${who} is connected, and waiting for you.`, 'working');
   }
 
   async #reset(): Promise<void> {

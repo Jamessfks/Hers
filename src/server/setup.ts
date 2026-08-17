@@ -1,5 +1,5 @@
 /**
- * Setting her up from the website: the key, and starting over.
+ * Setting her up from the website: the keys, the bot, and starting over.
  *
  * Both of these used to be things you did in a text editor and a terminal, and
  * both are things a person should be able to do from the page they are already
@@ -94,6 +94,133 @@ export async function applyGeminiKey(
   const config = loadConfig();
   await brain.reload(config);
   return config;
+}
+
+// ---------------------------------------------------------------------------
+// Telegram
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the Telegram half of setup needs, from the Bot API's own docs.
+ *
+ * `getMe` "requires no parameters" and returns a User for the bot itself,
+ * carrying `is_bot`, `first_name` and an optional `username`. Every method lives
+ * under `https://api.telegram.org/bot<token>/METHOD_NAME`, and every reply is a
+ * JSON object with a boolean `ok` plus an optional `description` — which is what
+ * a person should be shown when a token is wrong, because Telegram's own wording
+ * is already better than anything invented here.
+ */
+const TELEGRAM_API = 'https://api.telegram.org';
+
+/**
+ * The documented deep-link payload.
+ *
+ * `https://t.me/<bot_username>?start=<payload>` is the documented form for a
+ * private chat; the payload may be up to 64 characters of `A-Z a-z 0-9 _ -`, and
+ * opening it delivers `/start hers` to the bot. It is used here purely to get the
+ * user into the chat and past the Start button in one tap — the bot cannot learn
+ * a chat id any other way, because nothing in the Bot API reveals one except an
+ * update that arrives from it.
+ */
+const START_PAYLOAD = 'hers';
+
+export interface BotCheck {
+  ok: boolean;
+  /** Without the @. Absent on a bot that has somehow not got one. */
+  username?: string;
+  /** The bot's display name, for confirming it is the one they meant. */
+  name?: string;
+  reason?: string;
+}
+
+/**
+ * Asks Telegram whether this bot token works, before writing it down.
+ *
+ * `getMe` is the cheapest call in the API and it answers the three things that
+ * matter: that the token is real, which bot it belongs to, and what its username
+ * is — which is needed to build the link that gets the user into the chat.
+ *
+ * The token is never logged or echoed. A bot token is a bearer credential for a
+ * public endpoint, so it is treated exactly like the Gemini key: it goes to
+ * `.env` and the browser is told the bot's name, never the token.
+ */
+export async function checkBotToken(token: string): Promise<BotCheck> {
+  const trimmed = token.trim();
+  if (!trimmed) return { ok: false, reason: 'No token.' };
+
+  try {
+    const response = await fetch(`${TELEGRAM_API}/bot${encodeURIComponent(trimmed)}/getMe`, {
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { ok?: boolean; description?: string; result?: { is_bot?: boolean; username?: string; first_name?: string } }
+      | null;
+
+    if (!body?.ok || !body.result) {
+      const said = body?.description?.trim();
+      return {
+        ok: false,
+        // "Unauthorized" is what a wrong token gets, and it is not obvious what
+        // that means about a string you just pasted.
+        reason: said
+          ? `Telegram says: ${said}${/unauthorized/i.test(said) ? ' — that usually means the token is wrong.' : ''}`
+          : `Telegram refused the token (HTTP ${response.status}).`,
+      };
+    }
+
+    if (!body.result.is_bot) {
+      return { ok: false, reason: 'That token belongs to a person, not a bot. Make one with @BotFather.' };
+    }
+
+    return { ok: true, username: body.result.username, name: body.result.first_name };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : '';
+    return {
+      ok: false,
+      reason:
+        name === 'TimeoutError'
+          ? 'Telegram did not answer in time. Check the connection and try again.'
+          : `Could not reach Telegram: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/** The link that puts somebody in the chat with one tap. */
+export function botLink(username: string): string {
+  return `https://t.me/${username}?start=${START_PAYLOAD}`;
+}
+
+/**
+ * Stores a checked bot token. Same three steps, same order, as the Gemini key.
+ *
+ * The bridge is not started here — that is the caller's job, because only the
+ * caller knows whether one is already polling. Two pollers on one token is the
+ * one thing that must not happen: the Bot API hands `getUpdates` to the newest
+ * caller and terminates the other.
+ */
+export async function applyBotToken(token: string, envFile = '.env'): Promise<Config> {
+  const trimmed = token.trim();
+  await setEnvValue(envFile, 'TELEGRAM_BOT_TOKEN', trimmed);
+  process.env.TELEGRAM_BOT_TOKEN = trimmed;
+  return loadConfig();
+}
+
+/**
+ * Writes down the chat she is allowed to talk to.
+ *
+ * Nothing in the Bot API tells a bot which chat belongs to its owner, so the
+ * first chat that speaks is the only candidate there has ever been — the bridge
+ * has always trusted it for the length of a run and printed the line to paste to
+ * keep it. This makes it durable instead of asking somebody to edit a file, and
+ * says so on the page rather than in a log nobody is reading.
+ *
+ * Only ever widens from empty. An allowlist that already names somebody is a
+ * decision already taken, and a second chat messaging the bot must not join it.
+ */
+export async function rememberChatId(chatId: number, envFile = '.env'): Promise<Config> {
+  await setEnvValue(envFile, 'TELEGRAM_ALLOWED_CHAT_IDS', String(chatId));
+  process.env.TELEGRAM_ALLOWED_CHAT_IDS = String(chatId);
+  return loadConfig();
 }
 
 /**

@@ -78,6 +78,25 @@ const ui = new Ui({
     }
   },
   onSaveKey: (key) => post('/api/key', { key }),
+  onSaveBotToken: async (token) => {
+    // Unlike the other setup posts, the interesting part of the answer is the
+    // body: the page needs the bot's username to build the link the user opens.
+    const response = await fetch('/api/telegram', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    }).catch(() => null);
+
+    if (!response) return { error: 'Could not reach the server.' };
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string; username?: string; link?: string }
+      | null;
+    if (!response.ok) return { error: body?.error ?? `The server said no (HTTP ${response.status}).` };
+    return {
+      ...(body?.username ? { username: body.username } : {}),
+      ...(body?.link ? { link: body.link } : {}),
+    };
+  },
   onReset: async (confirm) => {
     // Whatever is playing is about to belong to somebody who no longer exists.
     player.flush();

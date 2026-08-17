@@ -72,6 +72,19 @@ export interface StaticOptions {
   status: () => unknown;
   /** Takes a pasted Gemini key. Rejects it with something worth reading. */
   setKey?: (key: string) => Promise<{ ok: boolean; error?: string; keyHint?: string }>;
+  /**
+   * Takes a pasted Telegram bot token and brings the bridge up on it.
+   *
+   * Answers with the bot's username and the link that gets somebody into the
+   * chat, because the token alone is not enough to finish: nothing in the Bot
+   * API tells a bot which chat is its owner's, so a human has to speak first.
+   */
+  setBotToken?: (token: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    username?: string;
+    link?: string;
+  }>;
   /** Forgets everything and starts again. */
   reset?: () => Promise<{ ok: boolean; error?: string }>;
   /** What she has been allowed to read, and where it would be sensible to look. */
@@ -100,6 +113,11 @@ export function createRequestHandler(options: StaticOptions) {
 
     if (request.method === 'POST' && pathname === '/api/key') {
       await setKey(options, request, response);
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === '/api/telegram') {
+      await setBotToken(options, request, response);
       return;
     }
 
@@ -261,6 +279,36 @@ async function uploadAvatar(
  * Google's guidance on the subject. The reply says which key is in force by its
  * last four characters and nothing more.
  */
+async function setBotToken(
+  options: StaticOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (!options.setBotToken) {
+    send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'Not available.' }));
+    return;
+  }
+
+  const body = await readJson(request, response);
+  if (!body) return;
+
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  if (!token) {
+    send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'No token was sent.' }));
+    return;
+  }
+
+  const result = await options.setBotToken(token);
+  send(
+    response,
+    result.ok ? 200 : 422,
+    TYPES['.json']!,
+    JSON.stringify(
+      result.ok ? { ok: true, username: result.username, link: result.link } : { error: result.error },
+    ),
+  );
+}
+
 async function setKey(
   options: StaticOptions,
   request: IncomingMessage,

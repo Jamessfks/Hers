@@ -369,3 +369,50 @@ test('an unlisted chat gets nothing at all, not even an error', async () => {
   assert.equal(f.api.sent.length, 0);
   assert.equal(f.api.actions.length, 0, 'even a typing indicator confirms the bot is live');
 });
+
+test('the first chat to speak is reported, once, so setup can finish itself', async () => {
+  /*
+   * The only moment a bot can learn its owner's chat id: nothing in the Bot API
+   * reveals one, so an update arriving is the whole mechanism. The bridge holds
+   * the single `getUpdates` loop, which is why it reports rather than anyone else
+   * polling — a second poller would be handed the updates and terminate this one.
+   */
+  const f = await fixture([]);
+  const seen: number[] = [];
+  const bridge = new TelegramBridge({
+    brain: f.brain,
+    conversation: f.conversation,
+    token: 'test',
+    allowedChatIds: [],
+    api: f.api,
+    onChatPinned: (chatId) => seen.push(chatId),
+  });
+
+  f.api.queue([textMessage(4242, 'hey', 1), textMessage(4242, 'still me', 2)]);
+  await pump(bridge);
+  assert.deepEqual(seen, [4242], 'reported on the first message and not again on the second');
+
+  // A different chat afterwards is not a second candidate.
+  f.api.queue([textMessage(9999, 'let me in', 3)]);
+  await pump(bridge);
+  assert.deepEqual(seen, [4242]);
+});
+
+test('a bridge with an allowlist never reports a chat', async () => {
+  // The question has already been answered. Reporting here would let a stranger
+  // messaging the bot overwrite the answer.
+  const f = await fixture([100]);
+  const seen: number[] = [];
+  const bridge = new TelegramBridge({
+    brain: f.brain,
+    conversation: f.conversation,
+    token: 'test',
+    allowedChatIds: [100],
+    api: f.api,
+    onChatPinned: (chatId) => seen.push(chatId),
+  });
+
+  f.api.queue([textMessage(4242, 'hello?', 1), textMessage(100, 'hi', 2)]);
+  await pump(bridge);
+  assert.deepEqual(seen, []);
+});
