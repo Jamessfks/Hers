@@ -87,12 +87,14 @@ fact she holds, under **Memory**.
 **She has the face you gave her.** Upload any photograph and it becomes her. It
 is the fixed point every generated picture and every movement starts from.
 
-**She sends pictures when there is a reason to.** Anything in
-`anna-profile/gallery/` is hers to send when it fits what you are talking about,
-and she can make new ones. Two ways one arrives, and no others: she reaches for
-it herself, or you ask — in conversation, or with `/me` for the photograph you
-uploaded and `/photo` for a new one. She does not open a conversation with an
-unasked-for portrait.
+**She sends pictures when there is a reason to.** Two ways one arrives, and no
+others. Ask her — in conversation, or `/me` on Telegram — and you get the
+photograph you uploaded, unaltered. Or she decides a moment calls for a picture
+that does not exist yet, describes it, and one is made of her in that scene, from
+your photograph. That second one is hers to choose; she is told to use it
+sometimes rather than never, and no more than six a day so a long conversation
+cannot become a bill. She does not open a conversation with an unasked-for
+portrait.
 
 ---
 

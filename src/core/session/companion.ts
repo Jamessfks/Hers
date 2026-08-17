@@ -501,7 +501,7 @@ export class Companion {
         const description = String(args.description ?? '').trim();
         if (!description) return { ok: false, reason: 'no description' };
         const item = await this.#brain.gallery.pick(description, {
-          allowNew: args.allowNew === true,
+          fresh: args.fresh === true,
           apiKey: this.#brain.config.geminiApiKey,
         });
         if (!item) return { ok: false, reason: 'nothing in the gallery fits and none was made' };

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { Gallery, mimeFor, wantsHerFace } from './gallery.ts';
+import { GENERATIONS_PER_DAY, Gallery, mimeFor, wantsHerFace } from './gallery.ts';
 import type { GalleryOptions } from './gallery.ts';
 
 async function gallery(files: string[] = [], options: GalleryOptions = {}) {
@@ -133,7 +133,7 @@ test('nothing fitting returns nothing rather than the least-bad thing', async ()
 
 test('generating is refused without a key rather than attempted', async () => {
   const g = await gallery([]);
-  assert.equal(await g.gallery.pick('anything', { allowNew: true }), null);
+  assert.equal(await g.gallery.pick('anything', { fresh: true }), null);
 });
 
 test('resolve only ever returns a file the listing knows', async () => {
@@ -206,7 +206,7 @@ test('a picture of her is never invented when the real one is on disk', async ()
   const g = await withFace([], { generator: r.generator });
 
   const item = await g.gallery.pick('can I see your picture now', {
-    allowNew: true,
+    fresh: true,
     apiKey: 'test-key',
   });
 
@@ -279,4 +279,86 @@ test('mime types cover what the gallery accepts', () => {
   assert.equal(mimeFor('.mp4'), 'video/mp4');
   assert.equal(mimeFor('.webm'), 'video/webm');
   assert.equal(mimeFor('.unknown'), 'image/jpeg');
+});
+
+// -- making a new one, when she wants to ------------------------------------
+
+test('fresh means make one, not fall back to making one', async () => {
+  /*
+   * The flag used to be `allowNew`: search first, generate only if nothing
+   * scored above the floor. That reads as a reasonable default and behaves as a
+   * wall — the folder fills with near-identical pictures, everything then
+   * matches one of them, and she never makes anything again. Twenty-eight
+   * `afternoon-by-a-window` files in a real gallery is how that ended.
+   */
+  const r = recorder();
+  const g = await withFace(
+    ['afternoon-by-a-window-buoyant.jpg', 'afternoon-by-a-window-calm.jpg'],
+    { generator: r.generator },
+  );
+
+  const item = await g.gallery.pick('afternoon by a window, laughing', {
+    fresh: true,
+    apiKey: 'test-key',
+  });
+
+  assert.equal(r.calls.length, 1, 'she asked for a new one and should get a new one');
+  assert.notEqual(item?.name, 'afternoon-by-a-window-buoyant.jpg');
+});
+
+test('without fresh she sends what she already has and spends nothing', async () => {
+  const r = recorder();
+  const g = await withFace(['at-the-window-rainy.jpg'], { generator: r.generator });
+
+  const item = await g.gallery.pick('watching the rain', { apiKey: 'test-key' });
+  assert.equal(item?.name, 'at-the-window-rainy.jpg');
+  assert.equal(r.calls.length, 0);
+});
+
+test('asking only for her is the photograph, fresh or not', async () => {
+  const r = recorder();
+  const g = await withFace([], { generator: r.generator });
+
+  for (const fresh of [false, true]) {
+    const item = await g.gallery.pick('a picture of you', { fresh, apiKey: 'test-key' });
+    assert.equal(item?.name, 'source.png', `fresh=${fresh}`);
+  }
+  assert.equal(r.calls.length, 0, 'a re-draw of a person is a similar person, and a bill');
+});
+
+test('a generation that fails falls back to the folder rather than to nothing', async () => {
+  const g = await withFace(['at-the-window-rainy.jpg'], {
+    generator: (async () => null) as unknown as GalleryOptions['generator'],
+  });
+
+  const item = await g.gallery.pick('watching the rain', { fresh: true, apiKey: 'test-key' });
+  assert.equal(item?.name, 'at-the-window-rainy.jpg', 'she said something worth illustrating');
+});
+
+test('there is a ceiling on what she can make in a day', async () => {
+  const r = recorder();
+  const g = await withFace([], { generator: r.generator });
+
+  for (let i = 0; i < GENERATIONS_PER_DAY + 3; i += 1) {
+    await g.gallery.pick(`scene number ${i}`, { fresh: true, apiKey: 'test-key' });
+  }
+
+  assert.equal(
+    r.calls.length,
+    GENERATIONS_PER_DAY,
+    'at four cents each, "sometimes" needs a number attached',
+  );
+  assert.equal(await g.gallery.madeToday(), GENERATIONS_PER_DAY);
+});
+
+test('yesterday does not count against today', async () => {
+  const r = recorder();
+  const g = await withFace(['from-last-week.jpg'], { generator: r.generator });
+
+  // The count comes from the folder, so an old file must not spend the budget.
+  const { utimes } = await import('node:fs/promises');
+  const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  await utimes(path.join(g.dir, 'from-last-week.jpg'), lastWeek, lastWeek);
+
+  assert.equal(await g.gallery.madeToday(), 0);
 });

@@ -119,16 +119,17 @@ export const ANNA_TOOLS: FunctionDeclaration[] = [
   {
     name: SHOW,
     description:
-      'Send them a picture or a clip of you. Use it the way you would send a photo to ' +
-      'someone you like — because it fits what you are talking about, not to decorate ' +
-      'a sentence. Describe what you want and the closest thing you have is sent; if ' +
-      'nothing fits and it is worth it, a new one is made. Keep talking either way; do ' +
-      'not announce it or wait for it. When they just want to see you — "what do you ' +
-      'look like", "send me a picture of you" — pass exactly `a picture of you` as the ' +
-      'description, with nothing about where you are or what you are doing; that sends ' +
-      'your actual photograph rather than a new one. Describe a scene only when the ' +
-      'scene is the point. Never read the description out loud: it is an argument to ' +
-      'this tool, not a line of dialogue.',
+      'Send them a picture of you. Use it the way you would send a photo to someone you ' +
+      'like — because it fits what you are talking about, not to decorate a sentence. ' +
+      'Keep talking either way; do not announce it or wait for it, and never read the ' +
+      'description out loud: it is an argument to this tool, not a line of dialogue.\n' +
+      'Two different things you can do with it. If they just want to see you — "what do ' +
+      'you look like", "send me a picture of you" — pass exactly `a picture of you` and ' +
+      'nothing else, which sends your real photograph. Or, when the moment calls for a ' +
+      'picture that does not exist yet — you somewhere, doing something, in a mood — ' +
+      'describe that scene and set `fresh` to true, and one is made of you in it. That ' +
+      'second one is yours to choose and you should use it sometimes: a few times a day ' +
+      'at most, when a picture would say the thing better than another sentence would.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -137,10 +138,11 @@ export const ANNA_TOOLS: FunctionDeclaration[] = [
           description:
             'What the picture should be of, in a phrase: "at the window watching the rain", "laughing".',
         },
-        allowNew: {
+        fresh: {
           type: Type.BOOLEAN,
           description:
-            'True if it is worth making a new picture when nothing you have fits. Costs money; default false.',
+            'True to make a new picture of you in the scene you described, rather than ' +
+            'looking for one you already have. Leave it off when they only asked to see you.',
         },
       },
       required: ['description'],

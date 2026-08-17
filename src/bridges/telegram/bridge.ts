@@ -466,7 +466,7 @@ export class TelegramBridge {
       case '/photo': {
         await this.#api.sendChatAction(chatId, 'upload_photo');
         const item = await this.#brain.gallery.pick(argument || 'a picture of you right now', {
-          allowNew: true,
+          fresh: true,
           apiKey: this.#brain.config.geminiApiKey,
         });
         if (!item) {

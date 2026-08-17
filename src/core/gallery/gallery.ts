@@ -26,6 +26,14 @@ const CLIP_EXTENSIONS = new Set(['.mp4', '.webm', '.mov']);
 
 /** Below this the best match is not a match, and inventing one is worse than none. */
 const MATCH_FLOOR = 0.18;
+
+/**
+ * New pictures she may make in a day of her own accord.
+ *
+ * Generous enough that "sometimes" is true and small enough that a long
+ * conversation cannot become a bill. Roughly four cents each.
+ */
+export const GENERATIONS_PER_DAY = 6;
 /** How long a directory listing is trusted. */
 const CACHE_MS = 5000;
 
@@ -55,8 +63,17 @@ export interface GalleryItem {
 }
 
 export interface PickOptions {
-  /** Make a new picture when nothing on disk is close enough. */
-  allowNew?: boolean;
+  /**
+   * Make a new one rather than looking for something that fits.
+   *
+   * Replaces an `allowNew` flag that was a *fallback* — search first, generate
+   * only if nothing scored above the floor. That reads as a reasonable default
+   * and behaves as a wall: the folder fills up with near-identical pictures,
+   * every description then matches one of them at a low floor, and she never
+   * makes anything again. This is an intent instead. She says she wants a new
+   * picture, and she gets a new picture.
+   */
+  fresh?: boolean;
   apiKey?: string;
 }
 
@@ -228,17 +245,22 @@ export class Gallery {
    * So: named a scene, generate from her face. Named only her, send her face.
    */
   async pick(description: string, options: PickOptions = {}): Promise<GalleryItem | null> {
+    // Asked for herself and nothing else: that is the photograph, always. A
+    // generation is a re-draw and a re-draw of a person is a similar person.
     if (wantsHerFace(description)) {
       const face = this.face();
       if (face) return face;
     }
 
-    const items = await this.list();
-    const best = await this.#bestMatch(description, items);
-    if (best) return best;
+    if (options.fresh && options.apiKey) {
+      const made = await this.generate(description, options);
+      // A refusal or a budget stop falls back to the folder rather than to
+      // nothing: she said something worth illustrating either way.
+      if (made) return made;
+    }
 
-    if (!options.allowNew || !options.apiKey) return null;
-    return this.generate(description, options);
+    const items = await this.list();
+    return this.#bestMatch(description, items);
   }
 
   /**
@@ -249,7 +271,26 @@ export class Gallery {
    */
   async generate(description: string, options: PickOptions): Promise<GalleryItem | null> {
     if (!options.apiKey) return null;
+    if ((await this.madeToday()) >= GENERATIONS_PER_DAY) return null;
     return this.#generate(description, options.apiKey);
+  }
+
+  /**
+   * Pictures made today, counted from the folder rather than from a counter.
+   *
+   * No new state file, and it survives a restart for free — which a counter in
+   * memory would not, and a restart is exactly when a runaway would resume. The
+   * ceiling exists because she is now encouraged to make pictures of her own
+   * accord: at roughly four cents each, "sometimes" has to have a number
+   * attached or a chatty afternoon is a surprise on a bill.
+   */
+  async madeToday(): Promise<number> {
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const items = await this.list();
+    return items.filter(
+      (item) => item.modifiedAt >= midnight.getTime() && item.name !== 'source.png',
+    ).length;
   }
 
   async #bestMatch(description: string, items: GalleryItem[]): Promise<GalleryItem | null> {
