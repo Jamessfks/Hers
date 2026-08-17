@@ -21,14 +21,13 @@ const reference = { data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), mimeType: 'imag
  * behaviour. Asserting on the unwrapped text keeps these tests about what the
  * model is told rather than about the shape of the source file.
  */
-function prompt(request: { description: string; appearance: string; reference?: typeof reference }) {
+function prompt(request: { description: string; reference: typeof reference }) {
   return portraitPrompt(request).replace(/\s+/g, ' ');
 }
 
 test('the prompt asks for a photograph and never for an illustration', () => {
   const built = prompt({
     description: 'laughing in the kitchen',
-    appearance: '24-year-old Chinese-American woman',
     reference,
   });
 
@@ -45,7 +44,6 @@ test('the prompt asks for a photograph and never for an illustration', () => {
 test('the prompt says outright that her face may not change', () => {
   const built = prompt({
     description: 'at the window watching the rain',
-    appearance: 'dark brown eyes',
     reference,
   });
 
@@ -57,7 +55,6 @@ test('the prompt says outright that her face may not change', () => {
 test('what the picture should show survives into the prompt', () => {
   const built = prompt({
     description: 'at the window watching the rain',
-    appearance: 'dark brown eyes',
     reference,
   });
 
@@ -65,42 +62,22 @@ test('what the picture should show survives into the prompt', () => {
 });
 
 /**
- * Measured, and it cost an image to find. The profile calls her hair a
- * chin-length black bob; the uploaded photograph is a woman with long fair
- * hair. Sending both gave back the right face under the written hair — the
- * model has no way to know which of two contradicting sources is the real one,
- * so it is given one.
+ * Measured, and it cost an image to find. Her profile used to describe her hair
+ * as a chin-length black bob while the uploaded photograph was a woman with
+ * long fair hair, and sending both gave back the right face under the written
+ * hair — the model had no way to know which of two contradicting sources was
+ * the real one. The written description is gone entirely now; this asserts the
+ * instruction that replaced it.
  */
-test('the written appearance is left out when there is a photograph to copy', () => {
-  const built = prompt({
-    description: 'laughing in the kitchen',
-    appearance: 'chin-length bob, blunt cut, in black',
-    reference,
-  });
+test('the photograph is the whole description, and it may not be restyled', () => {
+  const built = prompt({ description: 'laughing in the kitchen', reference });
 
-  assert.doesNotMatch(
-    built,
-    /chin-length bob/,
-    'a written description that contradicts the photograph restyles her',
-  );
   assert.match(built, /do not restyle her/i);
   assert.match(built, /hair colour, hair length/i, 'the drift was in the hair specifically');
 });
 
-test('with no photograph it still asks for a real woman rather than a drawing', () => {
-  const built = prompt({
-    description: 'reading on the sofa',
-    appearance: '24-year-old Chinese-American woman',
-  });
-
-  assert.match(built, /photorealistic/i);
-  assert.match(built, /real woman/i);
-  assert.doesNotMatch(built, /reference image/i, 'there is no reference to point at');
-  assert.match(built, /24-year-old Chinese-American woman/, 'words are all it has to go on');
-});
-
 test('the photographic language the docs ask for is present', () => {
-  const built = prompt({ description: 'smiling', appearance: '', reference });
+  const built = prompt({ description: 'smiling', reference });
 
   // The documented template is "A photorealistic [type of shot] of a [subject]
   // in a [setting]. [Description of the light]. Shot from a [camera angle] with

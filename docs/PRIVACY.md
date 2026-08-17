@@ -141,8 +141,21 @@ disk is not encrypted, neither is this.
 
 `GEMINI_API_KEY` is read from the environment or from `.env`, which is
 gitignored. It is held in memory and used to open the Gemini socket. It is never
-sent to the browser, never written to `data/`, and never logged — the doctor
-command prints its *length* rather than the key.
+written to `data/` and never logged — the doctor command prints its *length*
+rather than the key.
+
+It can also be pasted into the website, under **Setup**. That path is one
+direction only: the browser can *send* a key, and can be told the **last four
+characters** of the one currently in force so you can tell two keys apart. The
+key itself never travels back. Google's own guidance is that keys must not live
+in anything client-side, and a page served from localhost is still client-side.
+
+Before anything is written, the key is checked with a metadata call to Google —
+which is also the only request Anna makes with a key you have not confirmed yet.
+It is then written to `.env` with owner-only permissions, and every other line
+in that file is left exactly as it was.
+
+**Starting over does not delete your keys.** They are yours, not hers.
 
 ---
 
@@ -159,6 +172,13 @@ with a screen sense, and it is the reason the screen sense is off by default.
 
 **She is told not to read out passwords, keys, or private messages** that happen
 to be on a screen she is shown.
+
+**Whether your screen has changed is measured in the browser, not sent.** She
+watches for movement so she can tell "reading for half an hour" from "just
+switched to something else", and the arithmetic runs on a 32x18 greyscale
+thumbnail inside the tab (`src/shared/screen-change.ts`). What leaves the
+browser is one of three words — still, working, switched — and a number of
+seconds. The pixels it was computed from never go anywhere.
 
 **She will not claim to be human** if you sincerely ask what she is, will not
 claim to have a body in the world, and will not claim to be able to reach or
@@ -200,12 +220,17 @@ of `../` reaches anything. Also tested.
 - No control of your machine. She cannot click, type, or open anything.
 - No recording. There is no "save this conversation" and no audio archive.
 
+And one thing it does do, which belongs on this page: **Setup → Start over**
+deletes every trace of her — memory, transcripts on every surface, mood,
+profile, gallery, photograph and rendered clips — by removing the two
+directories they live in. Nothing is kept back, and nothing is recoverable.
+
 ---
 
 ## Verifying any of this
 
 ```bash
-npm run check     # 148 tests, no key required
+npm run check     # 283 tests, no key required
 npm run doctor    # reports exactly what is configured and what is not
 ```
 

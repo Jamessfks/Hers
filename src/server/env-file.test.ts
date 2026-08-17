@@ -4,7 +4,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { EnvFileError, readEnvValue, setEnvValue } from './env-file.ts';
+import { EnvFileError, setEnvValue } from './env-file.ts';
+
+/** What `process.loadEnvFile` would see for one name. */
+async function valueOf(file: string, name: string): Promise<string | null> {
+  const contents = await readFile(file, 'utf8');
+  let found: string | null = null;
+  for (const line of contents.split(/\r?\n/)) {
+    if (!new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`).test(line)) continue;
+    // The last assignment wins, which is what a reader does.
+    found = line.slice(line.indexOf('=') + 1).trim().replace(/^(['"`])(.*)\1$/s, '$2');
+  }
+  return found;
+}
 
 async function envFile(contents?: string): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'anna-env-'));
@@ -16,7 +28,7 @@ async function envFile(contents?: string): Promise<string> {
 test('a missing file is written from nothing', async () => {
   const file = await envFile();
   await setEnvValue(file, 'GEMINI_API_KEY', 'AIzaOne');
-  assert.equal(await readEnvValue(file, 'GEMINI_API_KEY'), 'AIzaOne');
+  assert.equal(await valueOf(file, 'GEMINI_API_KEY'), 'AIzaOne');
 });
 
 test('everything else in the file survives, comments and order included', async () => {
@@ -52,7 +64,7 @@ test('a variable set twice is set twice again, not left half stale', async () =>
 test('an exported or indented assignment is still that assignment', async () => {
   const file = await envFile('  export GEMINI_API_KEY=old\n');
   await setEnvValue(file, 'GEMINI_API_KEY', 'new');
-  assert.equal(await readEnvValue(file, 'GEMINI_API_KEY'), 'new');
+  assert.equal(await valueOf(file, 'GEMINI_API_KEY'), 'new');
   assert.doesNotMatch(await readFile(file, 'utf8'), /old/);
 });
 
@@ -62,7 +74,7 @@ test('a commented-out line is a comment, not the value', async () => {
 
   const contents = await readFile(file, 'utf8');
   assert.match(contents, /# GEMINI_API_KEY=notthis/, 'their note is theirs');
-  assert.equal(await readEnvValue(file, 'GEMINI_API_KEY'), 'AIzaReal');
+  assert.equal(await valueOf(file, 'GEMINI_API_KEY'), 'AIzaReal');
 });
 
 test('a file with no trailing newline still gets its own line', async () => {
@@ -73,7 +85,7 @@ test('a file with no trailing newline still gets its own line', async () => {
 
 test('a quoted value is read back without its quotes', async () => {
   const file = await envFile('GEMINI_API_KEY="AIzaQuoted"\n');
-  assert.equal(await readEnvValue(file, 'GEMINI_API_KEY'), 'AIzaQuoted');
+  assert.equal(await valueOf(file, 'GEMINI_API_KEY'), 'AIzaQuoted');
 });
 
 test('a value that would need quoting is refused rather than mangled', async () => {
@@ -91,17 +103,25 @@ test('a value that would need quoting is refused rather than mangled', async () 
 test('the keys this program actually stores are all acceptable', async () => {
   const file = await envFile();
   for (const [name, value] of [
-    ['GEMINI_API_KEY', 'AIzaSyD-abc_DEF123'],
-    ['HEDRA_API_KEY', 'k_live_Abc-1:sk_Xyz_2'],
-    ['LIVEKIT_URL', 'wss://anna.livekit.cloud'],
-    ['TELEGRAM_BOT_TOKEN', '1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+    // Shapes, not credentials. A "realistic" example in a public repository is
+    // a real key one careless edit later.
+    ['GEMINI_API_KEY', 'AIzaEXAMPLE_example-EXAMPLE'],
+    ['HEDRA_API_KEY', 'k_live_example:sk_example'],
+    ['LIVEKIT_URL', 'wss://example.livekit.cloud'],
+    ['TELEGRAM_BOT_TOKEN', '1000000000:EXAMPLE-example_EXAMPLE'],
   ] as const) {
     await setEnvValue(file, name, value);
-    assert.equal(await readEnvValue(file, name), value, name);
+    assert.equal(await valueOf(file, name), value, name);
   }
 });
 
-test('reading a value that is not there is null, not a throw', async () => {
-  assert.equal(await readEnvValue(await envFile('ANNA_PORT=1\n'), 'GEMINI_API_KEY'), null);
-  assert.equal(await readEnvValue(path.join(tmpdir(), 'anna-nope', '.env'), 'ANYTHING'), null);
+test('a name that is not a variable name is refused', async () => {
+  // The name goes into a regular expression that decides which line to
+  // overwrite. Anything outside this shape is either a mistake or a way to
+  // rewrite a line nobody meant to touch.
+  const file = await envFile('ANNA_PORT=5175\n');
+  for (const bad of ['gemini_api_key', '1KEY', 'A B', 'KEY.*', '']) {
+    await assert.rejects(() => setEnvValue(file, bad, 'value'), EnvFileError, JSON.stringify(bad));
+  }
+  assert.equal(await readFile(file, 'utf8'), 'ANNA_PORT=5175\n');
 });

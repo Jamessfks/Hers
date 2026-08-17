@@ -46,8 +46,6 @@ const MAX_DECAY_MS = 12 * 60 * 60 * 1000;
 const AXES = ['valence', 'energy', 'warmth', 'interest'] as const;
 type Axis = (typeof AXES)[number];
 
-export const ZERO: MoodVector = { valence: 0, energy: 0, warmth: 0, interest: 0 };
-
 /**
  * The mechanical events. Deltas are pre-volatility and pre-clamp.
  *

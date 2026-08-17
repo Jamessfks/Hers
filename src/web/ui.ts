@@ -15,7 +15,7 @@ import type {
   SenseName,
   ServerMessage,
 } from '../shared/protocol.ts';
-import { PROFILE_ORDER } from './profile-order.ts';
+import { PROFILE_FILES } from '../shared/profile-files.ts';
 
 function need<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -690,7 +690,7 @@ export class Ui {
     this.#saving = false;
     this.#tabs.replaceChildren();
 
-    const names: string[] = PROFILE_ORDER.filter((name) => name in files);
+    const names: string[] = PROFILE_FILES.filter((name) => name in files);
     if (!names.includes(this.#openFile)) this.#openFile = names[0] ?? '';
 
     for (const name of names) {

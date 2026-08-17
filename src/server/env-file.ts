@@ -62,22 +62,6 @@ export async function setEnvValue(file: string, name: string, value: string): Pr
   }
 }
 
-/** Reads one value back, without touching `process.env`. */
-export async function readEnvValue(file: string, name: string): Promise<string | null> {
-  try {
-    const contents = await readFile(file, 'utf8');
-    for (const line of contents.split(/\r?\n/)) {
-      if (!lineSets(line, name)) continue;
-      const value = line.slice(line.indexOf('=') + 1).trim();
-      // Unwrap a quoted value on the way out, since we may not have written it.
-      return value.replace(/^(['"`])(.*)\1$/s, '$2');
-    }
-  } catch {
-    // No file, or no permission to read it. Either way, no value.
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 
 function replaceOrAppend(contents: string, name: string, value: string): string {

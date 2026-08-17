@@ -1,8 +1,17 @@
 /**
- * The static half of the server: the website, and Anna's gallery.
+ * Everything the server answers over plain HTTP: the website, her gallery, her
+ * photograph, and the two requests that set her up.
  *
- * Small on purpose. There is no framework here because there are four routes,
+ * Small on purpose. There is no framework here because there are eight routes,
  * and a router would be more code than the routes.
+ *
+ *   POST /api/avatar   the photograph, as raw bytes
+ *   POST /api/key      a pasted Gemini key
+ *   POST /api/reset    delete everything and start over
+ *   GET  /api/status   what is configured, for a person or a health check
+ *   GET  /avatar/source, /avatar/clips/<gesture>
+ *   GET  /gallery/<name>
+ *   GET  anything else the built site, with a single-page fallback
  *
  * Two security properties this file is responsible for, both of which matter
  * more than they look for something bound to localhost:

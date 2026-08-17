@@ -1,4 +1,5 @@
-# CI runs the four things that can be checked without a display or an API key.
+# CI runs everything that can be checked without a display or an API key:
+# typecheck, tests, a production build, and the server actually coming up.
 #
 # Windows is here because "works on Mac and Windows" is a promise this project
 # makes, and the only way that promise stays true is if it is checked. The
@@ -20,7 +21,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'v1-*', 'pivot/**']
+    branches: [main]
   pull_request:
 
 jobs:

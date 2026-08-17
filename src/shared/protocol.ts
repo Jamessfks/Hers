@@ -1,7 +1,7 @@
 /**
  * The wire between the browser and the local Anna server.
  *
- * Twoframe kinds, on purpose:
+ * Two frame kinds, on purpose:
  *
  *   binary  media, and only media. One leading byte says what it is, the rest
  *           is the payload verbatim. Audio arrives every 20-40ms for as long as

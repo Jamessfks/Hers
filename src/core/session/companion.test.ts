@@ -400,9 +400,9 @@ test('the first thing said opens with a freshly generated picture', async () => 
   // A real generation is a network call and a bill, so the gallery's generator
   // is replaced — what is under test is *when* it fires and *what it is asked
   // for*, not Nano Banana.
-  const asked: Array<{ description: string; hasReference: boolean }> = [];
-  f.brain.gallery.generate = async (description, options) => {
-    asked.push({ description, hasReference: Boolean(options.reference) });
+  const asked: string[] = [];
+  f.brain.gallery.generate = async (description) => {
+    asked.push(description);
     return {
       name: 'greeting.jpg',
       absolutePath: '/tmp/greeting.jpg',
@@ -418,7 +418,7 @@ test('the first thing said opens with a freshly generated picture', async () => 
   await new Promise((resolve) => setTimeout(resolve, 200));
 
   assert.equal(asked.length, 1, 'one picture per conversation, not one per message');
-  assert.match(asked[0]?.description ?? '', /looking at the camera/);
+  assert.match(asked[0] ?? '', /looking at the camera/);
   assert.equal(f.shown.at(0)?.name, 'greeting.jpg');
   await f.companion.sleep();
 });

@@ -111,22 +111,18 @@ export interface PortraitRequest {
   /** What the picture should show, in Anna's own words. */
   description: string;
   /**
-   * Her appearance, verbatim from the profile.
-   *
-   * Only used when there is no {@link reference} — see `portraitPrompt` for
-   * why a photograph and a written description must not both be sent.
-   */
-  appearance: string;
-  /**
-   * The photograph of her that the new picture must be of.
+   * The photograph of her that the new picture must be of. Not optional.
    *
    * This is the whole trick to consistency. Describing a face in words gets you
    * a different person every time; handing the model her photograph and asking
    * for the same person somewhere else gets you the same person. It has to be a
    * *fixed* image to work — referencing the last generated picture instead
    * walks her face away from the original one generation at a time.
+   *
+   * Required rather than defaulted, because the alternative is not a worse
+   * picture of her, it is a good picture of somebody else.
    */
-  reference?: { data: Buffer; mimeType: string };
+  reference: { data: Buffer; mimeType: string };
   model?: string;
 }
 
@@ -144,23 +140,20 @@ export interface GeneratedImage {
  */
 export async function generatePortrait(request: PortraitRequest): Promise<GeneratedImage | null> {
   const ai = new GoogleGenAI({ apiKey: request.apiKey });
-  const parts: Array<Record<string, unknown>> = [];
-
-  if (request.reference) {
-    parts.push({
+  const parts: Array<Record<string, unknown>> = [
+    {
       inlineData: {
         data: request.reference.data.toString('base64'),
         mimeType: request.reference.mimeType,
       },
-    });
-  }
-
-  parts.push({ text: portraitPrompt(request) });
+    },
+    { text: portraitPrompt(request) },
+  ];
 
   // The output ratio is set rather than assumed. The documentation gives no
   // rule that an edit inherits the input image's shape, and a portrait
   // photograph returned as a square is a crop through her face.
-  const aspectRatio = request.reference ? aspectRatioOf(request.reference.data) : null;
+  const aspectRatio = aspectRatioOf(request.reference.data);
 
   try {
     const response = await ai.models.generateContent({
@@ -204,34 +197,28 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
  *     face and features remain completely unchanged" — rather than a hope that
  *     supplying a reference is enough.
  *
- * ## The written appearance is not sent when there is a photograph
+ * ## The photograph is the only description of her there is
  *
- * Measured, not assumed. The profile describes her hair as a chin-length black
- * bob; the photograph that was uploaded is a woman with long fair hair. Sending
- * both produced a photorealistic picture of the right face under the *written*
- * hair — the model resolved the contradiction, and it had no way to know which
- * side was authoritative.
+ * There was once a written appearance in her profile as well, and sending both
+ * was measured rather than reasoned about: the profile described a chin-length
+ * black bob, the uploaded photograph was a woman with long fair hair, and what
+ * came back was the right face under the *written* hair. The model resolved the
+ * contradiction, and nothing in the request told it which side was
+ * authoritative.
  *
- * So when there is a photograph, the photograph is the whole answer to what she
- * looks like. The words are what is left when there is no photograph at all,
- * and then they are the only thing holding her together between generations.
+ * So the words went, and this prompt now only has one shape. There is no branch
+ * for "no photograph" because there is no such case — the gallery declines to
+ * generate at all without one, on the grounds that the alternative is not a
+ * worse picture of her but a good picture of a stranger.
  */
-export function portraitPrompt(
-  request: Pick<PortraitRequest, 'description' | 'appearance' | 'reference'>,
-): string {
-  const lines: string[] = [];
-
-  if (request.reference) {
-    lines.push(
-      'A photorealistic candid photograph of the exact woman in the reference image.',
-      'This is the same real person, photographed again on a different day. Her face,',
-      'bone structure, hair, hair colour, hair length and build must remain',
-      'completely unchanged. Copy her appearance from the reference image and do',
-      'not restyle her.',
-    );
-  } else {
-    lines.push('A photorealistic candid photograph of a real woman.', '', request.appearance);
-  }
+export function portraitPrompt(request: Pick<PortraitRequest, 'description' | 'reference'>): string {
+  const lines: string[] = [
+    'A photorealistic candid photograph of the exact woman in the reference image.',
+    'This is the same real person, photographed again on a different day. Her face,',
+    'bone structure, hair, hair colour, hair length and build must remain',
+    'completely unchanged. Copy her appearance from the reference image and do',
+    'not restyle her.',
+  ];
 
   lines.push(
     '',

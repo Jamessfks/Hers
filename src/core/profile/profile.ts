@@ -10,16 +10,13 @@
  */
 
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { MoodVector } from '../../shared/protocol.ts';
 import { DEFAULT_PROFILE_FILES, GALLERY_README } from './defaults.ts';
 import { PREBUILT_VOICES, PROFILE_FILES } from './types.ts';
 import type { Profile, ProfileFile } from './types.ts';
-
-/** Files the app owns and the loader must never treat as prose. */
-const MACHINE_FILES = new Set(['mood.state.json']);
 
 // ---------------------------------------------------------------------------
 // Frontmatter
@@ -167,21 +164,6 @@ export async function readProfileFiles(dir: string): Promise<Record<string, stri
   const out: Record<string, string> = {};
   for (const name of PROFILE_FILES) out[name] = await readOrDefault(dir, `${name}.md`);
   return out;
-}
-
-/** Everything in the folder that is neither a profile file nor app state. */
-export async function listExtraFiles(dir: string): Promise<string[]> {
-  const known = new Set(PROFILE_FILES.map((name) => `${name}.md`));
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name)
-      .filter((name) => !known.has(name) && !MACHINE_FILES.has(name) && name.endsWith('.md'))
-      .sort();
-  } catch {
-    return [];
-  }
 }
 
 // ---------------------------------------------------------------------------

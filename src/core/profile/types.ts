@@ -82,23 +82,11 @@ export const PREBUILT_VOICES = [
   'Sulafat',
 ] as const;
 
-/**
- * The files the loader reads, in the order they reach the model.
- *
- * There is no `appearance` here, deliberately. What she looks like is the
- * photograph the user uploaded — the same one the interface shows and gesture
- * clips render from — and a written description beside it is a second answer to
- * a question that already has one. When the two disagreed, they disagreed
- * visibly: generated pictures kept the face from the photograph and the hair
- * from the prose.
+/*
+ * The list of profile files lives in `shared/`, because the browser draws a tab
+ * per file and cannot import anything from here — this module is compiled
+ * against Node's types. Re-exported so server-side callers have one obvious
+ * place to look.
  */
-export const PROFILE_FILES = [
-  'personality',
-  'identity',
-  'voice',
-  'mood',
-  'relationship',
-  'boundaries',
-] as const;
-
-export type ProfileFileName = (typeof PROFILE_FILES)[number];
+export { PROFILE_FILES } from '../../shared/profile-files.ts';
+export type { ProfileFileName } from '../../shared/profile-files.ts';

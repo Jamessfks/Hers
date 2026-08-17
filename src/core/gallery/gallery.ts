@@ -57,19 +57,20 @@ export interface GalleryItem {
 export interface PickOptions {
   /** Make a new picture when nothing on disk is close enough. */
   allowNew?: boolean;
-  /** Her appearance, verbatim from the profile. Only used when generating. */
-  appearance?: string;
   apiKey?: string;
-  /**
-   * Generate from this picture instead of from her avatar photograph.
-   *
-   * Almost nothing should pass this. The default is the photograph the user
-   * uploaded, which is the only image that is reliably *her*; an override
-   * exists so a caller with a better reference in hand can say so, and so tests
-   * can generate without a face on disk.
-   */
-  reference?: { data: Buffer; mimeType: string };
 }
+
+/*
+ * There is deliberately no way to say what a new picture should be generated
+ * *from*.
+ *
+ * Both of the fields that used to be here — a written appearance and a
+ * reference-image override — were ways for a caller to answer "what does she
+ * look like" differently from the photograph on disk, and every time the two
+ * answers differed the difference was visible. What she looks like is one fact
+ * with one source, and the way to keep it that way is to give callers no
+ * opportunity to have an opinion.
+ */
 
 /**
  * Where her actual face lives, if it has been uploaded.
@@ -248,11 +249,7 @@ export class Gallery {
    */
   async generate(description: string, options: PickOptions): Promise<GalleryItem | null> {
     if (!options.apiKey) return null;
-    return this.#generate(
-      description,
-      options.apiKey,
-      options.appearance ?? '',
-    );
+    return this.#generate(description, options.apiKey);
   }
 
   async #bestMatch(description: string, items: GalleryItem[]): Promise<GalleryItem | null> {
@@ -285,11 +282,7 @@ export class Gallery {
    * illustrate three sentences in a row should produce one picture, not three
    * simultaneous bills.
    */
-  async #generate(
-    description: string,
-    apiKey: string,
-    appearance: string,
-  ): Promise<GalleryItem | null> {
+  async #generate(description: string, apiKey: string): Promise<GalleryItem | null> {
     if (this.#generating) return this.#generating;
 
     this.#generating = (async () => {
@@ -298,12 +291,7 @@ export class Gallery {
         // Every picture of her starts from the photograph. Without one there
         // is nothing to be faithful to, and a guess is worse than nothing.
         if (!reference) return null;
-        const generated = await this.#generator({
-          apiKey,
-          description,
-          appearance,
-          ...(reference ? { reference } : {}),
-        });
+        const generated = await this.#generator({ apiKey, description, reference });
         if (!generated) return null;
 
         const name = `${slug(description)}-${Date.now()}${extensionFor(generated.mimeType)}`;

@@ -13,8 +13,6 @@
  * and that is all it ever learns.
  */
 
-import path from 'node:path';
-
 import type { Brain } from '../core/session/brain.ts';
 import { setEnvValue } from './env-file.ts';
 import { loadConfig } from './config.ts';
@@ -108,14 +106,4 @@ export function maskKey(key: string): string {
   const trimmed = key.trim();
   if (!trimmed) return '';
   return trimmed.length <= 4 ? '••••' : `••••${trimmed.slice(-4)}`;
-}
-
-/** What the reset is about to remove, in the words the confirmation uses. */
-export function whatResetRemoves(config: Config): string[] {
-  return [
-    `everything she remembers — ${path.join(config.dataDir, 'memory.db')}`,
-    `her profile, mood and gallery — ${config.profileDir}`,
-    'her photograph and every rendered clip',
-    'the conversation, on the web and on Telegram alike',
-  ];
 }
