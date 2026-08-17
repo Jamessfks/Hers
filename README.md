@@ -2,7 +2,7 @@
 
 # Hers
 
-**An AI companion who lives on your computer. Not on someone's server.**
+**An Ambient Embodied AI companion who lives on your computer. Not on someone's server.**
 
 She can see your screen, see you through your camera, and hear you. She has a
 mood that moves, a memory that carries between conversations, a face you give
