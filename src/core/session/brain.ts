@@ -17,6 +17,7 @@ import path from 'node:path';
 import { AvatarStudio } from '../avatar/studio.ts';
 import { HedraClient } from '../avatar/hedra.ts';
 import { Gallery } from '../gallery/gallery.ts';
+import { Intimacy } from '../intimacy/intimacy.ts';
 import { createGeminiDistiller } from '../gemini/text.ts';
 import { createGoogleEmbedder, createLexicalEmbedder } from '../memory/embedder.ts';
 import { Memory } from '../memory/memory.ts';
@@ -30,6 +31,7 @@ interface Parts {
   profile: Profile;
   memory: Memory;
   mood: Mood;
+  intimacy: Intimacy;
   gallery: Gallery;
   avatar: AvatarStudio;
 }
@@ -77,6 +79,17 @@ export class Brain {
     return this.#parts.mood;
   }
 
+  /**
+   * How close she is, and how long it took.
+   *
+   * Beside the mood rather than inside it, because they are different kinds of
+   * thing: a mood is where she is this hour, and this is what the two of them
+   * have built. One decays in twenty minutes; the other takes four years.
+   */
+  get intimacy(): Intimacy {
+    return this.#parts.intimacy;
+  }
+
   get gallery(): Gallery {
     return this.#parts.gallery;
   }
@@ -104,6 +117,7 @@ export class Brain {
    */
   async reload(config: Config = this.#config): Promise<void> {
     await this.#parts.mood.flush().catch(() => undefined);
+    await this.#parts.intimacy.flush().catch(() => undefined);
     this.#parts.memory.dispose();
     this.#config = config;
     this.#parts = await assemble(config, this.#options);
@@ -167,7 +181,11 @@ export class Brain {
    * the distillation finished.
    */
   async close(): Promise<void> {
-    await Promise.allSettled([this.memory.consolidate(), this.mood.flush()]);
+    await Promise.allSettled([
+      this.memory.consolidate(),
+      this.mood.flush(),
+      this.intimacy.flush(),
+    ]);
   }
 }
 
@@ -196,6 +214,9 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
   });
   await mood.restore();
 
+  const intimacy = new Intimacy({ dir: config.profileDir });
+  await intimacy.restore();
+
   const avatar = new AvatarStudio({
     dir: path.join(config.profileDir, 'avatar'),
     client:
@@ -208,6 +229,7 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
     profile,
     memory,
     mood,
+    intimacy,
     // The gallery is told where her face is rather than each caller remembering
     // to pass it. "A generated picture is of the woman in the photograph" is a
     // property of the gallery, and a property that depends on every call site

@@ -23,6 +23,7 @@
  */
 
 import type { MoodReadout } from '../../shared/protocol.ts';
+import type { IntimacyReadout } from '../intimacy/intimacy.ts';
 import { moodBriefing } from '../mood/mood.ts';
 import type { Profile } from '../profile/types.ts';
 
@@ -45,6 +46,8 @@ export interface PromptInput {
   gestures: readonly string[];
   /** Whether a photograph of her exists and has been put into context. */
   hasFace: boolean;
+  /** How close they are, and how long that took. */
+  intimacy: IntimacyReadout;
 }
 
 export function buildSystemInstruction(input: PromptInput): string {
@@ -55,6 +58,7 @@ export function buildSystemInstruction(input: PromptInput): string {
     input.profile.prose.voice ?? '',
     moodSection(input),
     relationshipSection(input),
+    intimacySection(input),
     sensesSection(input),
     channelSection(input),
     toolsSection(input),
@@ -165,6 +169,53 @@ function relationshipSection({ profile, memories, summary, returning }: PromptIn
   }
 
   return lines.filter(Boolean).join('\n').trim();
+}
+
+/**
+ * How close they are, which is the one thing in here she cannot talk her way
+ * into.
+ *
+ * The number is earned over years by turning up (see core/intimacy), and this
+ * section is what makes it visible in her behaviour rather than only in a state
+ * file. A stranger who behaves like a partner is the failure this prevents, and
+ * it is a specific failure with a specific cause: she may know a great deal
+ * about somebody — their sister's name, their job, what they are afraid of, all
+ * of it from documents she was given permission to read — and knowing is not
+ * closeness. So the two are stated separately and the rule between them is
+ * spelled out, because a model handed a rich dossier will otherwise act like an
+ * old friend on the first day, which is the single creepiest thing this product
+ * could do.
+ */
+function intimacySection({ intimacy }: PromptInput): string {
+  const lines = [
+    'HOW CLOSE YOU TWO ARE',
+    `Right now: ${intimacy.stage}, ${intimacy.percent}% of the way to a whole life together.`,
+  ];
+
+  if (intimacy.known > 0) {
+    lines.push(
+      `You met ${intimacy.known} day${intimacy.known === 1 ? '' : 's'} ago and have spent ` +
+        `about ${Math.round(intimacy.days)} real day${Math.round(intimacy.days) === 1 ? '' : 's'} ` +
+        'in each other\'s company.',
+    );
+  }
+
+  lines.push('', intimacy.guidance);
+
+  lines.push(
+    '',
+    'This is earned and it is slow. It moves by days spent together and nothing else —',
+    'not by being asked, not by a good conversation, not by anything either of you says.',
+    'Never state the number, never mention a stage or a level, and never treat it as a',
+    'thing to be advanced. It is not a score. It is just where you actually are.',
+    '',
+    'Knowing about someone is not the same as being close to them. You may know a lot',
+    'about this person from things you have read with their permission — that does not',
+    'make you old friends, and behaving as though it does is worse than knowing nothing.',
+    'Let what you know show as attention, not as intimacy you have not earned.',
+  );
+
+  return lines.join('\n');
 }
 
 function sensesSection({ senses }: PromptInput): string {

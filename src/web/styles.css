@@ -441,6 +441,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .setup-row .danger { border-radius: 999px; padding: 9px 18px; font-size: 14px; font-weight: 600; }
 .setup-row button:disabled { opacity: 0.45; }
 
+.intimacy-readout { margin: 0 0 10px; font-size: 13px; color: var(--ink); }
+/*
+ * Not `.stage` — that class is already the main two-column page grid, and a
+ * span that inherits `display: grid` from it lays the sentence out in columns.
+ */
+.intimacy-readout .who-you-are { font-weight: 600; text-transform: capitalize; }
+.intimacy-readout .set-by-you { color: #b4544a; }
+.setup-row input[type='range'] {
+  flex: 1; min-width: 0; padding: 0; background: none; border: none;
+  accent-color: var(--accent);
+}
+
 /* Empty until something has happened, so it takes no room until it does. */
 .setup-status { margin: 8px 0 0; font-size: 13px; min-height: 0; }
 .setup-status:empty { display: none; }

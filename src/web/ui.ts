@@ -10,6 +10,7 @@
 
 import type {
   AvatarView,
+  IntimacyView,
   MoodReadout,
   RememberedFact,
   SenseName,
@@ -41,6 +42,10 @@ export interface UiHandlers {
   onSaveKey(key: string): Promise<string | null>;
   /** Delete everything. Resolves to null on success, or to why not. */
   onReset(confirm: string): Promise<string | null>;
+  /** Put closeness where the user wants it, 0-1. */
+  onPinIntimacy(score: number): void;
+  /** Hand closeness back to time and contact. */
+  onAutoIntimacy(): void;
 }
 
 /** What has to be typed before the delete button will do anything. */
@@ -84,6 +89,9 @@ export class Ui {
   readonly #resetConfirm = need<HTMLInputElement>('reset-confirm');
   readonly #resetGo = need<HTMLButtonElement>('reset-go');
   readonly #resetStatus = need('reset-status');
+  readonly #intimacyReadout = need('intimacy-readout');
+  readonly #intimacyRange = need<HTMLInputElement>('intimacy-range');
+  readonly #intimacyAuto = need<HTMLButtonElement>('intimacy-auto');
   readonly #memory = need<HTMLDialogElement>('memory');
   readonly #memoryList = need('memory-list');
   readonly #memorySummary = need('memory-summary');
@@ -173,6 +181,17 @@ export class Ui {
     };
     this.#resetConfirm.addEventListener('input', armReset);
     this.#resetGo.addEventListener('click', () => void this.#reset());
+
+    /*
+     * Committed on release rather than on input.
+     *
+     * Dragging a slider fires continuously, and each step would be a message,
+     * a disk write and a repaint. What the user means is where they let go.
+     */
+    this.#intimacyRange.addEventListener('change', () => {
+      this.#handlers.onPinIntimacy(Number(this.#intimacyRange.value) / 100);
+    });
+    this.#intimacyAuto.addEventListener('click', () => this.#handlers.onAutoIntimacy());
 
     need('takeover-claim').addEventListener('click', () => {
       this.#takeover.hidden = true;
@@ -267,6 +286,10 @@ export class Ui {
 
       case 'memory':
         this.setMemory(message.facts, message.summary);
+        return;
+
+      case 'intimacy':
+        this.setIntimacy(message.intimacy);
         return;
 
       case 'history':
@@ -518,6 +541,40 @@ export class Ui {
 
     this.#memorySummary.hidden = !summary;
     this.#memorySummary.textContent = summary;
+  }
+
+  /**
+   * How close she is, in a sentence rather than a progress bar.
+   *
+   * No bar, no XP, no "next level in 12 days" as the headline — the whole design
+   * of this number is that it is not a score, and an interface that renders it
+   * as one invites exactly the farming the engine refuses to reward. The stage
+   * is the thing; the percentage is a detail, and the days are there so the
+   * slowness is honest rather than mysterious.
+   */
+  setIntimacy(intimacy: IntimacyView): void {
+    const parts = [
+      `<span class="who-you-are">${intimacy.stage}</span> · ${intimacy.percent}%`,
+    ];
+
+    if (intimacy.pinned) {
+      parts.push('<span class="set-by-you">set by you</span>');
+    } else if (intimacy.known > 0) {
+      const days = Math.round(intimacy.days);
+      parts.push(`${intimacy.known} days since you met, ${days} of them together`);
+      if (intimacy.nextStage) {
+        parts.push(`${intimacy.toNextStage} more before ${intimacy.nextStage}`);
+      }
+    } else {
+      parts.push('you have not spoken yet');
+    }
+
+    this.#intimacyReadout.innerHTML = parts.join(' · ');
+    // Not while they are dragging it, or the value fights the thumb.
+    if (document.activeElement !== this.#intimacyRange) {
+      this.#intimacyRange.value = String(intimacy.percent);
+    }
+    this.#intimacyAuto.hidden = !intimacy.pinned;
   }
 
   /** Another tab has her, and this one has stopped trying. */

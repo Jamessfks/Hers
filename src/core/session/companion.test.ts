@@ -724,3 +724,71 @@ test('a different picture is still sent while the photograph is fresh', async ()
   assert.equal(f.shown[1]?.name, 'at-the-window-rainy.jpg');
   await f.companion.sleep();
 });
+
+// -- how close they are -----------------------------------------------------
+
+test('she starts as a stranger and is told to behave like one', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  const prompt = f.systemInstructions[0] ?? '';
+  assert.match(prompt, /HOW CLOSE YOU TWO ARE/);
+  assert.match(prompt, /stranger, 1%/, 'day one is 1%, as specified');
+  assert.match(prompt, /have not earned/i);
+  assert.match(prompt, /Never state the number/i, 'it is not a score to be shown off');
+  await f.companion.sleep();
+});
+
+test('knowing things about someone is stated as not being close to them', async () => {
+  /*
+   * The creepiest thing this product could do: read a person's documents, learn
+   * their sister's name and their fears, and then behave like an old friend on
+   * the first day. Facts and closeness are separate systems, and the prompt has
+   * to say so — a model handed a rich dossier will otherwise act on it.
+   */
+  const f = await fixture();
+  await f.brain.memory.remember('identity', 'their sister is called Mei', { confidence: 0.9 });
+  await f.companion.wake();
+
+  const prompt = f.systemInstructions[0] ?? '';
+  assert.match(prompt, /Knowing about someone is not the same as being close/i);
+  assert.match(prompt, /worse than knowing nothing/i);
+  assert.match(prompt, /stranger/, 'a dossier must not promote her');
+  await f.companion.sleep();
+});
+
+test('talking to her counts toward the relationship, once per turn', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+  const before = f.brain.intimacy.state.turnsToday;
+
+  f.companion.say('hey');
+  f.companion.say('how was your day');
+  await settle();
+
+  assert.equal(f.brain.intimacy.state.turnsToday, before + 2);
+  await f.companion.sleep();
+});
+
+test('being heard counts once, not once per audio chunk', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  for (let i = 0; i < 50; i += 1) f.companion.hear(Buffer.alloc(640));
+  assert.equal(f.brain.intimacy.state.sensesToday, true);
+
+  // Fifty chunks is a second of speech. It must not be fifty writes.
+  assert.equal(f.brain.intimacy.read().percent, 1, 'a second of audio is not a relationship');
+  await f.companion.sleep();
+});
+
+test('a pinned closeness is what reaches the prompt', async () => {
+  const f = await fixture();
+  f.brain.intimacy.pin(0.7);
+  await f.companion.wake();
+
+  const prompt = f.systemInstructions[0] ?? '';
+  assert.match(prompt, /partner, 70%/);
+  assert.match(prompt, /shared life/i);
+  await f.companion.sleep();
+});

@@ -52,6 +52,8 @@ const ui = new Ui({
     connection.send({ t: 'avatar.render', gesture });
     ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);
   },
+  onPinIntimacy: (score) => connection.send({ t: 'intimacy.pin', score }),
+  onAutoIntimacy: () => connection.send({ t: 'intimacy.auto' }),
   onSaveKey: (key) => post('/api/key', { key }),
   onReset: async (confirm) => {
     // Whatever is playing is about to belong to somebody who no longer exists.

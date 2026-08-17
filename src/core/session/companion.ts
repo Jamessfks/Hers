@@ -104,6 +104,8 @@ export class Companion {
   #lastFrame: { bytes: Buffer; kind: 'camera' | 'screen'; at: number } | null = null;
   /** When the photograph was last sent because they asked for it. */
   #faceSentAt = 0;
+  /** Guards the once-a-conversation credit for her having heard them. */
+  #heardToday = false;
   /** True between a `⟦director⟧` cue and the turn it produces. */
   #openerInFlight = false;
   #speaking = false;
@@ -246,7 +248,19 @@ export class Companion {
   /** Microphone audio: PCM signed 16-bit little-endian, 16kHz mono. */
   hear(pcm: Buffer): void {
     if (!this.situation.senses.hearing) return;
+    this.#heardToday ||= this.#noteHeard();
     this.#live?.sendAudio(pcm);
+  }
+
+  /**
+   * Being heard counts once a day, not once per twenty milliseconds.
+   *
+   * Audio arrives in chunks at fifty a second. Crediting each one would be a
+   * write per chunk for a fact that changes once.
+   */
+  #noteHeard(): boolean {
+    this.#brain.intimacy.noteSense();
+    return true;
   }
 
   /**
@@ -266,6 +280,8 @@ export class Companion {
     this.#lastFrameAt = now;
     this.#lastFrame = { bytes: jpeg, kind, at: now };
     this.situation.noteFrame(kind);
+    // A day she could see them counts for a little more than a day of typing.
+    this.#brain.intimacy.noteSense();
     this.#live?.sendImage(jpeg);
   }
 
@@ -288,6 +304,7 @@ export class Companion {
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', trimmed);
     this.#brain.mood.feel('exchange');
+    this.#brain.intimacy.noteTurn();
     this.#initiative.poke();
     this.#live?.sendText(trimmed);
     this.#showFaceIfAsked(trimmed);
@@ -378,6 +395,7 @@ export class Companion {
     this.#userTalking = false;
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', text);
+    this.#brain.intimacy.noteTurn();
     this.#emitMood(false, () => this.#brain.mood.feel('exchange'));
     this.#initiative.poke();
     this.#showFaceIfAsked(text);
@@ -595,6 +613,7 @@ export class Companion {
       // to put one, and offering her a movement nobody can see is noise.
       gestures: this.#channel === 'desktop' ? this.#brain.avatar.readyGestures() : [],
       hasFace: this.#brain.avatar.face() !== null,
+      intimacy: this.#brain.intimacy.read(),
     });
   }
 

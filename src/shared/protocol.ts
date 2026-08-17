@@ -122,7 +122,13 @@ export type ClientMessage =
   /** Make her forget one thing. */
   | { t: 'memory.forget'; id: number }
   /** Tell her something to keep. */
-  | { t: 'memory.add'; text: string };
+  | { t: 'memory.add'; text: string }
+  /** Ask how close she is. */
+  | { t: 'intimacy.load' }
+  /** Set closeness by hand, 0-1. It stays there until released. */
+  | { t: 'intimacy.pin'; score: number }
+  /** Hand closeness back to time and contact. */
+  | { t: 'intimacy.auto' };
 
 // ---------------------------------------------------------------------------
 // Control messages: server -> browser
@@ -217,6 +223,14 @@ export type ServerMessage =
   | { t: 'move'; gesture: string }
   | { t: 'memory'; facts: RememberedFact[]; summary: string }
   /**
+   * How close she is, for the one control that shows it.
+   *
+   * Sent on connect and after any change. Deliberately a readout rather than a
+   * raw number: the stage and the days are what a person understands, and the
+   * percentage on its own reads as a score to be farmed.
+   */
+  | { t: 'intimacy'; intimacy: IntimacyView }
+  /**
    * The conversation so far, whichever surface it happened on.
    *
    * Sent once on connect. Memory is already shared between Telegram and the
@@ -225,6 +239,22 @@ export type ServerMessage =
    * talking on your phone looked like she had forgotten the whole thing.
    */
   | { t: 'history'; turns: PastTurn[] };
+
+/** Closeness, as the interface needs to draw it. */
+export interface IntimacyView {
+  /** 0-100. */
+  percent: number;
+  stage: string;
+  /** Accumulated days of real contact. */
+  days: number;
+  /** Calendar days since they met. 0 when they have not. */
+  known: number;
+  /** True when the user has set it by hand. */
+  pinned: boolean;
+  /** Days of contact still needed to reach the next stage. 0 at the top. */
+  toNextStage: number;
+  nextStage: string;
+}
 
 export interface PastTurn {
   speaker: 'user' | 'anna';

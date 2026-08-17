@@ -33,6 +33,7 @@ import {
 import type { ClientMessage, SenseName, ServerMessage } from '../shared/protocol.ts';
 import { Companion } from '../core/session/companion.ts';
 import { maskKey } from './setup.ts';
+import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
 import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
 import { AvatarError, isGesture } from '../core/avatar/studio.ts';
@@ -173,6 +174,29 @@ export class WebBridge {
     return this.#companion;
   }
 
+  /**
+   * How close she is, shaped for the one control that shows it.
+   *
+   * The days-to-next-stage is computed here rather than in the browser because
+   * it is the inverse of the curve, and the curve has exactly one home.
+   */
+  #intimacy(): ServerMessage {
+    const readout = this.#options.brain.intimacy.read();
+    const next = nextStageAfter(readout.score);
+    return {
+      t: 'intimacy',
+      intimacy: {
+        percent: readout.percent,
+        stage: readout.stage,
+        days: readout.days,
+        known: readout.known,
+        pinned: readout.pinned,
+        toNextStage: next ? Math.max(0, Math.ceil(daysFor(next.from) - readout.days)) : 0,
+        nextStage: next?.name ?? '',
+      },
+    };
+  }
+
   /** Who she is, what she looks like, and what has been said so far. */
   #sendOpening(socket: WebSocket): void {
     const brain = this.#options.brain;
@@ -194,6 +218,7 @@ export class WebBridge {
       screenFps: brain.config.screenFps,
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
+    sendJson(socket, this.#intimacy());
     sendJson(socket, { t: 'avatar', avatar: brain.avatar.state() });
     sendJson(socket, {
       t: 'history',
@@ -281,6 +306,23 @@ export class WebBridge {
 
       case 'memory.load':
         sendJson(socket, this.#memory());
+        return;
+
+      case 'intimacy.load':
+        sendJson(socket, this.#intimacy());
+        return;
+
+      case 'intimacy.pin': {
+        const score = Number(message.score);
+        if (!Number.isFinite(score)) return;
+        this.#options.brain.intimacy.pin(score);
+        this.#send(this.#intimacy());
+        return;
+      }
+
+      case 'intimacy.auto':
+        this.#options.brain.intimacy.release();
+        this.#send(this.#intimacy());
         return;
 
       case 'memory.edit':
