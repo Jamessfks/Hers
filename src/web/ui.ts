@@ -137,6 +137,8 @@ export class Ui {
   #avatar: AvatarView | null = null;
   /** So a reconnect on an unconfigured server does not reopen the dialog. */
   #offeredSetup = false;
+  /** Whatever she calls herself. The markup ships with a placeholder. */
+  #herName = 'Anna';
   /** Queued so two gestures in quick succession play in order, not on top. */
   #moving = false;
 
@@ -275,7 +277,7 @@ export class Ui {
   apply(message: ServerMessage): void {
     switch (message.t) {
       case 'ready':
-        this.#name.textContent = 'Anna';
+        this.#setName(message.name);
         for (const [sense, on] of Object.entries(message.senses)) {
           this.setSense(sense as SenseName, on);
         }
@@ -771,6 +773,29 @@ export class Ui {
     this.#status(this.#scanStatus, parts.join(' · '), outcome.denied?.length ? 'bad' : 'good');
   }
 
+  /**
+   * Puts her name everywhere it appears, including on turns already on screen.
+   *
+   * She chooses it during the first wake, so the first `ready` of a fresh install
+   * carries a different name from the one in the markup — and by then there may
+   * already be lines in the transcript labelled with the placeholder.
+   */
+  #setName(name: string): void {
+    const chosen = name.trim();
+    if (!chosen || chosen === this.#herName) {
+      this.#name.textContent = this.#herName;
+      return;
+    }
+
+    this.#herName = chosen;
+    this.#name.textContent = chosen;
+    document.title = chosen;
+    this.#still.alt = chosen;
+    for (const label of this.#transcript.querySelectorAll('.line[data-who="anna"] .who')) {
+      label.textContent = chosen;
+    }
+  }
+
   #status(element: HTMLElement, message: string, kind: 'working' | 'good' | 'bad'): void {
     element.textContent = message;
     element.dataset.kind = kind;
@@ -821,7 +846,7 @@ export class Ui {
     element.dataset.same = String(previous?.dataset?.who === who);
     element.innerHTML = '<span class="who"></span><p class="said"></p>';
     const label = element.querySelector('.who');
-    if (label) label.textContent = who === 'anna' ? 'Anna' : 'You';
+    if (label) label.textContent = who === 'anna' ? this.#herName : 'You';
     this.#transcript.append(element);
     return element;
   }

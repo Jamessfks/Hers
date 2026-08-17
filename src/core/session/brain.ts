@@ -23,7 +23,8 @@ import { createGoogleEmbedder, createLexicalEmbedder } from '../memory/embedder.
 import { Memory } from '../memory/memory.ts';
 import { MemoryStore } from '../memory/store.ts';
 import { Mood } from '../mood/mood.ts';
-import { ensureProfile, loadProfile, loadVolatility } from '../profile/profile.ts';
+import { ensureProfile, loadProfile, loadVolatility, writeChosenName } from '../profile/profile.ts';
+import { PLACEHOLDER_NAME, chooseName } from '../profile/naming.ts';
 import type { Profile } from '../profile/types.ts';
 import type { Config } from '../../server/config.ts';
 
@@ -162,6 +163,54 @@ export class Brain {
   async reloadProfile(): Promise<Profile> {
     this.#parts.profile = await loadProfile(this.#config.profileDir);
     return this.#parts.profile;
+  }
+
+  /**
+   * Makes sure she has a name of her own before she says anything.
+   *
+   * Runs at most once in the life of a profile. The condition is deliberately
+   * two things and not one: no `named` marker *and* the name still being the
+   * placeholder the project ships with. Either alone would be wrong — a user who
+   * typed their own choice into `identity.md` must not have it overwritten, and a
+   * marker alone would let a re-roll happen if the file were ever hand-edited.
+   *
+   * Awaited before the first system instruction is built, because a companion who
+   * introduces herself as Anna and is called something else a minute later has
+   * not chosen a name, she has had two.
+   *
+   * Failure is silent and repeatable. No key, a refusal, a timeout: the
+   * placeholder stays and the next conversation asks again, which is a far
+   * smaller problem than committing a bad name for good.
+   */
+  async ensureNamed(): Promise<string | null> {
+    const identity = this.#parts.profile.identity;
+    if (identity.named === 'self') return null;
+    if (identity.name !== PLACEHOLDER_NAME) return null;
+    if (!this.#config.geminiApiKey || this.#options.offline) return null;
+
+    const chosen = await chooseName(this.#config.geminiApiKey, {
+      age: identity.age,
+      gender: identity.gender,
+      ethnicity: identity.ethnicity,
+      from: identity.from,
+      personality: this.#parts.profile.prose.personality ?? '',
+    });
+    if (!chosen) return null;
+
+    try {
+      await writeChosenName(this.#config.profileDir, chosen.name, chosen.why);
+      // Re-read rather than patch in place, so the name reaching the prompt is
+      // the one that is actually on disk. If the write half-failed, she keeps
+      // the placeholder rather than believing a name nobody recorded.
+      this.#parts.profile = await loadProfile(this.#config.profileDir);
+    } catch (error) {
+      // A read-only profile folder, a full disk. Worth saying out loud, because
+      // unlike a refusal this one will happen again every conversation — but not
+      // worth losing the conversation over. This runs inside `wake()`.
+      console.warn('  could not record her chosen name:', error);
+      return null;
+    }
+    return this.#parts.profile.identity.name === chosen.name ? chosen.name : null;
   }
 
   /** True when the store already holds a conversation from before today. */

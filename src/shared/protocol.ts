@@ -170,6 +170,15 @@ export type ServerMessage =
       t: 'ready';
       version: string;
       model: string;
+      /**
+       * What she calls herself.
+       *
+       * On the wire because the browser cannot know it: she chooses it on the
+       * first conversation and it is then a fact in her profile folder. The page
+       * ships saying "Anna", which is a placeholder, and a companion whose name
+       * in the interface disagrees with the name she answers to is two people.
+       */
+      name: string;
       voice: string;
       senses: Record<SenseName, boolean>;
       /** False when the server has no Gemini key; the UI shows setup instead. */

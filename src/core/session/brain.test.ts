@@ -7,6 +7,8 @@ import { test } from 'node:test';
 
 import { Brain, safeToDelete } from './brain.ts';
 import { loadConfig } from '../../server/config.ts';
+import { writeChosenName } from '../profile/profile.ts';
+import { PLACEHOLDER_NAME } from '../profile/naming.ts';
 
 async function fixture(env: Record<string, string> = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'anna-brain-'));
@@ -161,4 +163,65 @@ test('a borrowed profile is a copy, so nothing a test does reaches the real one'
   const reread = await Brain.open(original.config, { offline: true });
   assert.equal(reread.intimacy.read().pinned, false, 'the real relationship is untouched');
   assert.equal(reread.intimacy.read().percent, 1);
+});
+
+// -- she names herself, once ------------------------------------------------
+
+test('a name she chose is never chosen again', async () => {
+  /*
+   * The criterion is "permanent", and permanence is the whole feature — a name
+   * that could be re-rolled is a handle. The condition is two things on purpose:
+   * no marker *and* the shipped placeholder still in place.
+   */
+  const f = await fixture();
+  await writeChosenName(f.config.profileDir, 'Mira', 'it fits');
+  await f.brain.reload();
+
+  assert.equal(f.brain.profile.identity.name, 'Mira');
+  assert.equal(
+    await f.brain.ensureNamed(),
+    null,
+    'she has a name, so there is nothing to decide',
+  );
+  assert.equal(f.brain.profile.identity.name, 'Mira', 'and it did not move');
+});
+
+test('a name the user typed is theirs, not hers to replace', async () => {
+  const f = await fixture();
+  const file = path.join(f.config.profileDir, 'identity.md');
+  const { readFile } = await import('node:fs/promises');
+  await writeFile(file, (await readFile(file, 'utf8')).replace('name: Anna', 'name: Ines'), 'utf8');
+  await f.brain.reload();
+
+  // No marker, but the name is not the placeholder — somebody decided already.
+  assert.equal(f.brain.profile.identity.named, undefined);
+  assert.equal(await f.brain.ensureNamed(), null);
+  assert.equal(f.brain.profile.identity.name, 'Ines');
+});
+
+test('with no key she stays a placeholder rather than being named badly', async () => {
+  const f = await fixture({ GEMINI_API_KEY: '' });
+  assert.equal(await f.brain.ensureNamed(), null);
+  assert.equal(f.brain.profile.identity.name, PLACEHOLDER_NAME, 'next time, then');
+  assert.equal(f.brain.profile.identity.named, undefined, 'and the choice is still open');
+});
+
+test('a fresh profile is waiting to be named', async () => {
+  const f = await fixture();
+  assert.equal(f.brain.profile.identity.name, PLACEHOLDER_NAME);
+  assert.equal(f.brain.profile.identity.named, undefined, 'the two conditions to choose');
+});
+
+test('starting over means she gets to choose again', async () => {
+  // A reset makes her a stranger with a new face, and a stranger she names
+  // herself. Keeping the old name through a wipe would be the one thing that
+  // survived somebody asking for nothing to.
+  const f = await fixture();
+  await writeChosenName(f.config.profileDir, 'Mira', 'it fits');
+  await f.brain.reload();
+  assert.equal(f.brain.profile.identity.name, 'Mira');
+
+  await f.brain.wipe();
+  assert.equal(f.brain.profile.identity.name, PLACEHOLDER_NAME);
+  assert.equal(f.brain.profile.identity.named, undefined);
 });

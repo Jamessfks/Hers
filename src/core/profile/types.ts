@@ -11,6 +11,15 @@ import type { MoodVector } from '../../shared/protocol.ts';
 
 export interface Identity {
   name: string;
+  /**
+   * Who decided the name.
+   *
+   * Absent means nobody has yet, and the name is still the placeholder the
+   * project ships with — which is the signal for her to choose one. `self` is
+   * written the moment she does, and it is what makes the choice permanent:
+   * there is no second first conversation.
+   */
+  named?: 'self';
   age: string;
   gender: string;
   pronouns: string;

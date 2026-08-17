@@ -214,6 +214,7 @@ export class WebBridge {
       t: 'ready',
       version: this.#options.version,
       model: brain.config.model,
+      name: brain.profile.identity.name,
       voice: brain.profile.voice.voice,
       senses: this.#options.conversation.situation?.senses ?? {
         hearing: false,

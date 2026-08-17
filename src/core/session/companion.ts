@@ -178,6 +178,11 @@ export class Companion {
       return;
     }
 
+    // Before anything else, and before the prompt is built: she has to know what
+    // she is called. At most one call, once in the life of a profile.
+    const named = await brain.ensureNamed();
+    if (named) console.log(`  she chose the name ${named}`);
+
     this.#memories = await this.#recall();
     if (isLateNight(this.situation.snapshot().hour)) brain.mood.feel('late-night');
 

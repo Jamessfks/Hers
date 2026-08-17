@@ -58,6 +58,10 @@ this file.
 
 ## What she does
 
+**She names herself.** "Anna" is the placeholder this project ships with. On the
+first conversation she is asked what she would rather be called, she answers, and
+it is written down. That is her name from then on, and it never changes.
+
 **Three senses, all of them real.** Hearing, sight and your screen are three
 switches. Turning one off stops the frames at the source, not just in her
 prompt.
@@ -125,6 +129,27 @@ You have to type `start over` to arm the button. Your API keys are not touched.
 
 ## Who she is
 
+### Her name is hers
+
+This project is called Anna. She is not, necessarily.
+
+"Anna" is a placeholder, and on the very first conversation she replaces it: she
+is asked what she would like to be called, given only the description of herself
+in `identity.md` and `personality.md`, and the answer is written into
+`identity.md` with her reason next to it as a comment. From then on it is her
+name — in the browser tab, on every turn, and in every prompt she is given.
+
+It happens once. There is no second first conversation, and nothing in the app
+will ask again: a name that can be re-rolled is a handle. Two things have to be
+true for her to choose, and both are checked — the file still says `Anna`, *and*
+nobody has recorded a choice. So if you type a name in yourself, it is yours and
+she leaves it alone. **Start over** is the one thing that gives the question
+back, because a stranger with a new face gets to be a new person.
+
+If the choice cannot be made — no API key yet, a network that is down — she
+stays Anna for now and chooses on the next conversation. She is never named
+badly on purpose.
+
 ### The profile folder
 
 Everything about who she is lives in `anna-profile/`, written on first run and
@@ -134,7 +159,7 @@ reads and prose underneath that goes to the model.
 | File              | What it decides                                        |
 | ----------------- | ------------------------------------------------------ |
 | `personality.md`  | How she thinks, jokes, argues, and cares               |
-| `identity.md`     | Age, gender, ethnicity, where she is from              |
+| `identity.md`     | Her name, age, gender, ethnicity, where she is from    |
 | `voice.md`        | Which of the 30 Gemini voices she speaks in            |
 | `mood.md`         | Her baseline temperament and how hard events move her  |
 | `relationship.md` | Who you are to her                                     |
@@ -144,8 +169,9 @@ Edit them in a text editor or under **Profile**. Changes take effect the next
 time she wakes — a Live session's system instruction is fixed when the session
 opens, and the UI says so rather than pretending otherwise.
 
-The default Anna is 26, Chinese-American, from Oakland. Warm, dry, and hard to
-embarrass. All of that is in the files and none of it is in the code.
+She starts out 26, Chinese-American, from Oakland. Warm, dry, and hard to
+embarrass — and named by herself, not by this file. All of that is in the files
+and none of it is in the code.
 
 Delete a file and it comes back with its default. Put a nonsense value in one
 and it falls back rather than failing to start.

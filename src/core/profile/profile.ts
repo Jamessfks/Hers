@@ -16,6 +16,7 @@ import path from 'node:path';
 import type { MoodVector } from '../../shared/protocol.ts';
 import { DEFAULT_PROFILE_FILES, GALLERY_README } from './defaults.ts';
 import { PREBUILT_VOICES, PROFILE_FILES } from './types.ts';
+import { PLACEHOLDER_NAME } from './naming.ts';
 import type { Profile, ProfileFile } from './types.ts';
 
 // ---------------------------------------------------------------------------
@@ -107,7 +108,8 @@ export async function loadProfile(dir: string): Promise<Profile> {
   return {
     dir,
     identity: {
-      name: text(identity.name, 'Anna'),
+      name: text(identity.name, PLACEHOLDER_NAME),
+      ...(identity.named === 'self' ? { named: 'self' as const } : {}),
       age: text(identity.age, '26'),
       gender: text(identity.gender, 'female'),
       pronouns: text(identity.pronouns, 'she/her'),
@@ -205,4 +207,31 @@ function pickVoice(value: string | undefined): string {
   const wanted = value?.trim().toLowerCase();
   if (!wanted) return 'Aoede';
   return PREBUILT_VOICES.find((voice) => voice.toLowerCase() === wanted) ?? 'Aoede';
+}
+
+/**
+ * Writes the name she chose, and nothing else.
+ *
+ * Reads `identity.md`, changes two frontmatter keys and puts the rest back
+ * exactly as it was — prose, comments, ordering, any key this program has never
+ * heard of. A `saveProfileFiles` round trip would have been shorter and would
+ * have rewritten a file the user is invited to edit, on a path where they are
+ * not the one doing the editing.
+ *
+ * The reason goes in as a comment rather than as data: it is hers, it explains
+ * the file to whoever opens it, and nothing reads it back.
+ */
+export async function writeChosenName(dir: string, name: string, why: string): Promise<void> {
+  const file = path.join(dir, 'identity.md');
+  const parsed = parseProfileFile(await readOrDefault(dir, 'identity.md'));
+
+  parsed.frontmatter.name = name;
+  parsed.frontmatter.named = 'self';
+
+  const note = why ? `She chose this name herself. ${why}` : 'She chose this name herself.';
+  const body = parsed.body.includes('She chose this name herself')
+    ? parsed.body
+    : `<!-- ${note} -->\n\n${parsed.body}`.trim();
+
+  await writeFile(file, serialiseProfileFile({ ...parsed, body }), 'utf8');
 }
