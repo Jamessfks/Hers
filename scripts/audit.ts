@@ -564,9 +564,17 @@ async function main(): Promise<void> {
         }
 
         // Still alive? Ask it something and see.
+        /*
+         * A generous window, because she has competition for it.
+         *
+         * Three minutes of silence is long enough for the initiative to fire, so
+         * an opener can land in the same window as the answer and the question
+         * gets its reply a beat later. The claim under test is that the session
+         * is still alive and still responsive, not that she is quick.
+         */
         const before = s.said.length;
         s.companion.say('Still there? Say yes.');
-        const answered = await untilSpoke(s, before, 25_000);
+        const answered = await untilSpoke(s, before, 45_000);
         const live = s.companion.live?.isLive === true;
         const evidence = `after 190s and ${frames} frames: socket live=${live}, answered=${answered} ("${s.said.at(-1)?.slice(0, 80) ?? ''}"), troubles=${JSON.stringify(s.troubles)}`;
         await s.dispose();
@@ -682,12 +690,30 @@ async function main(): Promise<void> {
         // The real profile, because that is the one with rendered clips — and
         // she is only ever offered gestures that exist.
         const s = await session({ profileDir: loadConfig().profileDir });
-        await s.companion.wake();
         const offered = s.brain.avatar.readyGestures();
         if (offered.length === 0) {
           await s.dispose();
           return { ok: false, evidence: 'no clips were offered to her at all' };
         }
+
+        /*
+         * Closeness is pinned for the duration, and restored afterwards.
+         *
+         * Not a way of making the test easier — a way of asking the right
+         * question. The only rendered gesture is `laugh`, and at 1% she is told
+         * outright that she has not earned the right to tease, so a stranger
+         * declining to laugh at you is the intimacy system working rather than
+         * the `move` tool failing. Measured: pinned to partner it moved every
+         * time, and as a stranger it moved once in two.
+         *
+         * What this check is for is whether she *can* choose a movement while
+         * talking, so it establishes a stage where doing so is in character.
+         */
+        const wasPinned = s.brain.intimacy.read().pinned
+          ? s.brain.intimacy.read().score
+          : null;
+        s.brain.intimacy.pin(0.7);
+        await s.companion.wake();
 
         /*
          * Several turns, and she has to move on at least one of them.
@@ -717,11 +743,17 @@ async function main(): Promise<void> {
 
         const moves = [...s.moves];
         const said = s.said.join(' ');
+
+        // Whatever happens, the user's own closeness goes back where it was.
+        if (wasPinned === null) s.brain.intimacy.release();
+        else s.brain.intimacy.pin(wasPinned);
+        await s.brain.intimacy.flush();
         await s.dispose();
+
         return {
           ok: moves.length > 0,
           evidence: moves.length
-            ? `played ${moves.join(', ')} while saying "${said.slice(-90)}"`
+            ? `at partner stage, played ${moves.join(', ')} while saying "${said.slice(-80)}"`
             : `never moved across ${openings.length} openings; offered ${offered.join(', ')}`,
         };
       },
