@@ -26,10 +26,10 @@ evening. When told to go through the computer she said no, which is the shape of
 tools rather than a flourish: she has four — `feel`, `remember`, `show`, `move` — and
 none can read a file.
 
-![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](docs/screenshots/first-conversation.png)
+![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](docs/screenshots/first-conversation.jpg)
 
 <div align="center">
-<img src="docs/screenshots/telegram.png" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
+<img src="docs/screenshots/telegram.jpg" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
 </div>
 
 **And on a phone.** The same companion, not a second one: one memory, one mood, one
