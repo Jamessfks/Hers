@@ -279,8 +279,11 @@ export class Memory {
     const turns = this.#store.turnsSince(lastConsolidated);
     if (turns.length === 0) return;
 
+    // Labelled by role, not by name. She chooses her own name on the first
+    // conversation, and a transcript that called her Anna while she is called
+    // something else would be asking the distiller to reason about two people.
     const transcript = turns
-      .map((turn) => `${turn.speaker === 'user' ? 'Them' : 'Anna'}: ${turn.text}`)
+      .map((turn) => `${turn.speaker === 'user' ? 'Them' : 'Her'}: ${turn.text}`)
       .join('\n');
 
     try {
@@ -323,8 +326,9 @@ export class Memory {
 // ---------------------------------------------------------------------------
 
 const EXTRACTION_PROMPT = `
-You maintain the long-term memory of a companion named Anna. You are reading a
-transcript between Anna and the person she lives with.
+You maintain the long-term memory of an AI companion. You are reading a
+transcript between her, marked "Her", and the person she lives with, marked
+"Them".
 
 Return exactly two sections and nothing else.
 
@@ -332,12 +336,12 @@ FACTS
 One fact per line, formatted: kind | confidence | sentence
   kind is one of: identity, preference, thread, event, pattern
   confidence is 0.0 to 1.0
-  sentence is one short third-person sentence about the person, not about Anna
+  sentence is one short third-person sentence about the person, not about her
 
 Record only things that will still matter in a month. A durable fact is their
 sister's name, the job they are interviewing for, that they hate being asked how
 they slept. Not "they said hello", not "they seem tired today", and never
-anything Anna said about herself.
+anything the companion said about herself.
 
 Prefer no facts over weak facts. Zero lines is a valid answer.
 

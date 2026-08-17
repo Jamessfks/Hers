@@ -509,7 +509,7 @@ export class TelegramBridge {
           'If your camera does not come on, open it in Safari or Chrome rather than',
           "Telegram's own browser.",
         ].join('\n'),
-        { inline_keyboard: [[{ text: '📞 Call Anna', url: invite.url }]] },
+        { inline_keyboard: [[{ text: `📞 Call ${this.#brain.profile.identity.name}`, url: invite.url }]] },
       );
     } catch (error) {
       await this.#api.sendMessage(chatId, `I couldn't set that up: ${String(error)}`);

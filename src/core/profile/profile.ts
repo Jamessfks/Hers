@@ -228,7 +228,9 @@ export async function writeChosenName(dir: string, name: string, why: string): P
   parsed.frontmatter.name = name;
   parsed.frontmatter.named = 'self';
 
-  const note = why ? `She chose this name herself. ${why}` : 'She chose this name herself.';
+  // Her reason is her own sentence, so it is joined with a dash rather than a
+  // full stop — a lower-case fragment after one reads as a typo in her file.
+  const note = why ? `She chose this name herself — ${why}` : 'She chose this name herself.';
   const body = parsed.body.includes('She chose this name herself')
     ? parsed.body
     : `<!-- ${note} -->\n\n${parsed.body}`.trim();

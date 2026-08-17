@@ -431,7 +431,7 @@ export class Ui {
     } else {
       const image = document.createElement('img');
       image.src = url;
-      image.alt = caption ?? 'A picture from Anna';
+      image.alt = caption ?? `A picture from ${this.#herName}`;
       image.loading = 'lazy';
       element.append(image);
     }
@@ -793,6 +793,11 @@ export class Ui {
     this.#still.alt = chosen;
     for (const label of this.#transcript.querySelectorAll('.line[data-who="anna"] .who')) {
       label.textContent = chosen;
+    }
+    // Prose in the markup that names her. Marked in the HTML rather than listed
+    // here, so a new sentence about her does not have to remember to come back.
+    for (const spot of document.querySelectorAll('[data-her-name]')) {
+      spot.textContent = chosen;
     }
   }
 
