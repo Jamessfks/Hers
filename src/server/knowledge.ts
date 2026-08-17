@@ -146,7 +146,13 @@ export async function runScan(brain: Brain, folders: readonly string[]): Promise
       undefined,
       SCAN_OUTPUT_TOKENS,
     );
-    const parsed = parseExtraction(await distiller.distil(SCAN_PROMPT, describeScan(report)));
+    const { text, truncated } = await distiller.distil(SCAN_PROMPT, describeScan(report));
+    if (truncated) {
+      console.warn(
+        `  the scan filled its ${SCAN_OUTPUT_TOKENS}-token reply; the last fact was dropped as a fragment`,
+      );
+    }
+    const parsed = parseExtraction(text, { truncated });
     for (const fact of parsed.facts) {
       // Capped below certainty whatever the model says. These were inferred from
       // documents rather than heard from the person, and a fact she was told

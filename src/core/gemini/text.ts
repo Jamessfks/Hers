@@ -6,7 +6,7 @@
  * failed picture costs a picture.
  */
 
-import { GoogleGenAI, Modality } from '@google/genai';
+import { FinishReason, GoogleGenAI, Modality } from '@google/genai';
 
 import { sniffImage } from '../avatar/image-info.ts';
 import type { Distiller } from '../memory/types.ts';
@@ -60,7 +60,13 @@ export function createGeminiDistiller(
           abortSignal: AbortSignal.timeout(DISTIL_TIMEOUT_MS),
         },
       });
-      return response.text ?? '';
+
+      // `MAX_TOKENS` is the SDK's own name for "ran out of output budget", and
+      // the enum is the authority on the spelling. Absent means the backend did
+      // not say; that is reported as not truncated, because inventing the answer
+      // would throw away a good fact on every reply that omits the field.
+      const truncated = response.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS;
+      return { text: response.text ?? '', truncated };
     },
   };
 }

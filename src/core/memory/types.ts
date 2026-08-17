@@ -97,6 +97,21 @@ export interface Embedder {
  * *not* the live conversation, and giving that job a two-method interface keeps
  * the whole of `memory/` testable without a network and without the Live API.
  */
+/**
+ * What a distiller pass came back with.
+ *
+ * `truncated` is here because the text alone cannot be trusted to be whole. The
+ * output budget is shared with thinking, so a reply can stop mid-line, and a
+ * half-written fact parses as a complete one — a memory kept for good that ends
+ * in a comma. Only the model knows it ran out of room; this carries that answer
+ * to the parser, which is the only place that can act on it.
+ */
+export interface Distillation {
+  text: string;
+  /** The model reached its output ceiling before it finished. */
+  truncated: boolean;
+}
+
 export interface Distiller {
-  distil(system: string, transcript: string): Promise<string>;
+  distil(system: string, transcript: string): Promise<Distillation>;
 }

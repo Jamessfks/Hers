@@ -17,10 +17,10 @@ function fixture(options: { distiller?: Distiller; now?: () => number } = {}) {
   return { store, memory };
 }
 
-function stubDistiller(reply: string): Distiller {
+function stubDistiller(reply: string, truncated = false): Distiller {
   return {
     async distil() {
-      return reply;
+      return { text: reply, truncated };
     },
   };
 }
@@ -287,4 +287,128 @@ test('relaunching mid-conversation resumes it rather than forgetting', () => {
   const third = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
   assert.notEqual(third.sessionId, first.sessionId, 'a long gap starts a new conversation');
   assert.deepEqual(third.liveTranscript(), []);
+});
+
+// -- a reply that ran out of room -------------------------------------------
+
+test('a fact cut off mid-sentence is not kept', () => {
+  /*
+   * The line at the bottom is what actually happened, on a real scan: the reply
+   * hit its output ceiling and the last fact ended at a comma. It parsed as a
+   * complete fact and was stored for good.
+   */
+  const raw = [
+    'FACTS',
+    'identity | 0.8 | they are a computer science student',
+    'thread | 0.8 | they are applying for AI/ML co-op roles for Spring 2027',
+    'preference | 0.8 | they have a deep interest in liminal spaces and analog horror,',
+  ].join('\n');
+
+  const whole = parseExtraction(raw);
+  assert.equal(whole.facts.length, 3, 'told nothing about the budget, it keeps all three');
+
+  const cut = parseExtraction(raw, { truncated: true });
+  assert.deepEqual(
+    cut.facts.map((fact) => fact.text),
+    ['they are a computer science student', 'they are applying for AI/ML co-op roles for Spring 2027'],
+    'the fragment goes and the two complete facts before it stay',
+  );
+});
+
+test('a truncated reply that reached SUMMARY has whole facts', () => {
+  // The heading is the evidence: to write it, the model had finished the facts.
+  // Dropping one here would throw away something complete.
+  const raw = [
+    'FACTS',
+    'identity | 0.9 | their sister is called Mei',
+    'event | 0.8 | they finished a presentation on Monday',
+    'SUMMARY',
+    'They had a hard week and it is over. They are wondering whether to',
+  ].join('\n');
+
+  const cut = parseExtraction(raw, { truncated: true });
+  assert.equal(cut.facts.length, 2, 'both facts were finished before the cut');
+  assert.equal(
+    cut.summary,
+    'They had a hard week and it is over.',
+    'the half sentence goes; this text gets merged forward for weeks',
+  );
+});
+
+test('a truncated summary with no finished sentence is no summary', () => {
+  const cut = parseExtraction(['FACTS', 'SUMMARY', 'They have been'].join('\n'), {
+    truncated: true,
+  });
+  assert.equal(cut.summary, '', 'better nothing than a fragment carried forward');
+});
+
+test('one fact, cut, leaves none rather than half of one', () => {
+  const cut = parseExtraction(['FACTS', 'identity | 0.8 | they are a computer scien'].join('\n'), {
+    truncated: true,
+  });
+  assert.deepEqual(cut.facts, []);
+});
+
+test('nothing is dropped from a reply that finished', () => {
+  const raw = ['FACTS', 'identity | 0.9 | their sister is called Mei', 'SUMMARY', 'A quiet week.'].join('\n');
+  const whole = parseExtraction(raw, { truncated: false });
+  assert.equal(whole.facts.length, 1);
+  assert.equal(whole.summary, 'A quiet week.');
+});
+
+test('a truncated consolidation stores the complete facts and drops the fragment', async () => {
+  // End to end through `Memory`, because the parser being right is only half of
+  // it — the flag has to survive the trip from the distiller to the parser.
+  const { memory } = fixture({
+    distiller: stubDistiller(
+      [
+        'FACTS',
+        'identity | 0.9 | their sister is called Mei',
+        'preference | 0.8 | they are interested in liminal spaces and',
+      ].join('\n'),
+      true,
+    ),
+  });
+
+  memory.record('user', 'my sister is called Mei');
+  await memory.consolidate();
+
+  assert.deepEqual(
+    memory.allFacts().map((fact) => fact.text),
+    ['their sister is called Mei'],
+  );
+});
+
+test('a cut that lands in the next line does not cost the fact above it', () => {
+  /*
+   * Verbatim shape of a real reply cut at 1100 tokens. `identity | high |` has no
+   * sentence, so it is skipped regardless; the fact above it ends with a newline,
+   * which is the evidence that it finished. An earlier version of this rule popped
+   * it anyway and lost a good memory on every truncated reply.
+   */
+  const raw = [
+    'FACTS',
+    'identity | high | The user studies CS at Northeastern University.',
+    'pattern | high | The user builds iOS apps.',
+    'identity | high |',
+  ].join('\n');
+
+  const cut = parseExtraction(raw, { truncated: true });
+  assert.deepEqual(
+    cut.facts.map((fact) => fact.text),
+    ['The user studies CS at Northeastern University.', 'The user builds iOS apps.'],
+  );
+});
+
+test('a trailing newline is proof the last fact finished', () => {
+  const raw = 'FACTS\nidentity | 0.9 | their sister is called Mei\n';
+  assert.equal(parseExtraction(raw, { truncated: true }).facts.length, 1);
+});
+
+test('a confidence the model wrote in words still yields a fact', () => {
+  // Seen live: `pattern | high | …`. Unparseable numbers fall back rather than
+  // dropping the sentence, which is the older half of this parser's job.
+  const [fact] = parseExtraction('FACTS\npattern | high | they run most days.\n').facts;
+  assert.equal(fact?.text, 'they run most days.');
+  assert.equal(fact?.confidence, 0.6);
 });

@@ -287,8 +287,13 @@ export class Memory {
       .join('\n');
 
     try {
-      const raw = await distiller.distil(EXTRACTION_PROMPT, transcript);
-      const parsed = parseExtraction(raw);
+      const { text: raw, truncated } = await distiller.distil(EXTRACTION_PROMPT, transcript);
+      if (truncated) {
+        // Said out loud because the remedy is a bigger budget, and from the
+        // outside a dropped fact is indistinguishable from a quiet conversation.
+        console.warn('  consolidation ran out of output budget; the last fact was dropped');
+      }
+      const parsed = parseExtraction(raw, { truncated });
       for (const fact of parsed.facts) {
         await this.remember(fact.kind, fact.text, { confidence: fact.confidence });
       }
@@ -360,10 +365,43 @@ export interface ExtractedFact {
  * Parses the extraction output defensively.
  *
  * Models add preamble, wrap things in markdown fences, and occasionally use a
- * different separator. None of that should cost us a memory, so the parser
- * takes anything that has the right shape and ignores everything else.
+ * different separator. None of that should cost us a memory, so the parser takes
+ * anything that has the right shape and ignores everything else.
+ *
+ * ## What `truncated` is for
+ *
+ * A reply that ran out of output budget stops mid-line, and a half-written fact
+ * has exactly the shape of a whole one. A real example, kept for good:
+ *
+ *     preference | 0.8 | they have a deep interest in liminal spaces and analog horror,
+ *
+ * Raising the ceiling does not fix this — it had already been raised once for the
+ * same reason, and there is always a longer answer. Whether the reply finished is
+ * a fact the model reports, so it is passed in and acted on here.
+ *
+ * Which line to distrust follows from where the cut landed, and the `SUMMARY`
+ * heading says where that was. If it is present, the model finished the fact
+ * block and moved on, so every fact is whole and only the summary is cut.
+ *
+ * If it is absent, the cut was inside the fact block — but that still does not
+ * mean the last *fact* is damaged, and assuming it did threw away good ones. From
+ * a real reply cut at 1100 tokens:
+ *
+ *     …
+ *     pattern | high | The user builds iOS apps.
+ *     identity | high |
+ *
+ * The cut landed in the next line's prefix. That line yields no sentence and is
+ * skipped anyway, and the fact above it finished — the newline after it is the
+ * proof. So the test is narrower: the last fact is dropped only when it came from
+ * the final line *and* that line was never terminated. Cut at 700 tokens the same
+ * reply ended `pattern | high | The user writes horror fiction`, with nothing
+ * after it, and that one is a fragment.
  */
-export function parseExtraction(raw: string): { facts: ExtractedFact[]; summary: string } {
+export function parseExtraction(
+  raw: string,
+  options: { truncated?: boolean } = {},
+): { facts: ExtractedFact[]; summary: string } {
   const text = raw.replace(/```[a-z]*\n?/gi, '');
   const factsStart = text.search(/^\s*FACTS\s*$/im);
   const summaryStart = text.search(/^\s*SUMMARY\s*$/im);
@@ -372,11 +410,25 @@ export function parseExtraction(raw: string): { facts: ExtractedFact[]; summary:
     factsStart === -1 ? 0 : factsStart,
     summaryStart === -1 ? undefined : summaryStart,
   );
-  const summary =
+  let summary =
     summaryStart === -1 ? '' : text.slice(summaryStart).replace(/^\s*SUMMARY\s*$/im, '').trim();
 
+  // A summary cut mid-sentence is merged into the rolling narrative and carried
+  // forward for weeks, so it is trimmed back to the last sentence that finished.
+  // Nothing survives only if nothing had finished, which is the honest outcome.
+  if (options.truncated && summaryStart !== -1) {
+    const lastEnd = Math.max(summary.lastIndexOf('.'), summary.lastIndexOf('!'), summary.lastIndexOf('?'));
+    summary = lastEnd === -1 ? '' : summary.slice(0, lastEnd + 1);
+  }
+
+  const lines = factBlock.split('\n');
   const facts: ExtractedFact[] = [];
-  for (const line of factBlock.split('\n')) {
+  // Which line each fact came from, so a cut one can be identified rather than
+  // guessed at. Kept beside the facts rather than on them: the line number is an
+  // artefact of this parse and no caller has any use for it.
+  const from: number[] = [];
+
+  for (const [index, line] of lines.entries()) {
     const parts = line.split('|').map((part) => part.trim());
     if (parts.length < 3) continue;
     const kind = parts[0]?.replace(/^[-*\s]+/, '').toLowerCase() as FactKind;
@@ -389,6 +441,15 @@ export function parseExtraction(raw: string): { facts: ExtractedFact[]; summary:
       confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.6,
       text: sentence,
     });
+    from.push(index);
+  }
+
+  // `split` puts the text after the final newline in the last element, so a block
+  // that ended cleanly has '' there. A non-empty last element is a line the model
+  // never finished writing — and it only costs a fact if a fact came from it.
+  const unterminated = (lines.at(-1) ?? '').trim() !== '';
+  if (options.truncated && summaryStart === -1 && unterminated && from.at(-1) === lines.length - 1) {
+    facts.pop();
   }
 
   return { facts, summary };
