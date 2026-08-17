@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.png" alt="Hers" width="132">
+
 # Hers
 
 **An Ambient Embodied AI companion who lives on your computer. Not on someone's server.**
