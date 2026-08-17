@@ -5,7 +5,7 @@
  * rendered, and neither can be taken on trust from the file name:
  *
  *  1. **The format.** The first photograph handed to this app was named
- *     `Anna_origin.png` and contained JPEG bytes — `ffd8ffe0`, JFIF, baseline.
+ *     a `.png` name and contained JPEG bytes — `ffd8ffe0`, JFIF, baseline.
  *     That is not an exotic case, it is what happens every time someone renames
  *     a file or saves one out of a tool that ignores the extension. Hedra sniffs
  *     the bytes and ignores both the filename and the declared Content-Type, so

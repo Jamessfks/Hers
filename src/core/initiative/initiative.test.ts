@@ -56,7 +56,7 @@ function situation(overrides: Partial<SituationSnapshot> = {}): SituationSnapsho
     screen: { activity: 'still', stillSeconds: 0, sinceSwitchMs: Infinity, at: 0 },
     seeing: { camera: false, screen: false },
     sinceUserSpokeMs: 30_000,
-    sinceAnnaSpokeMs: 30_000,
+    sinceHerSpokeMs: 30_000,
     turns: 4,
     hour: 14,
     localTime: 'Friday 2:00pm',
@@ -82,7 +82,7 @@ function build(
     observe: () => situation(),
     onOpen: (reason) => {
       opened.push({ at: clock.now, reason });
-      if (options.completeTurns !== false) initiative.noteAnnaFinished(true);
+      if (options.completeTurns !== false) initiative.noteHerFinished(true);
     },
     now: () => clock.now,
     setTimer: (fn, ms) => clock.setTimer(fn, ms),

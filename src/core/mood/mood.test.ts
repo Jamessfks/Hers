@@ -99,7 +99,7 @@ test('nonsense from the model is clamped rather than believed', () => {
 });
 
 test('mood survives a restart, decayed by however long it was away', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-mood-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-mood-'));
   const first = fixture({ dir });
   first.mood.nudge({ valence: -0.7 });
   const knocked = first.mood.read().current.valence;
@@ -119,7 +119,7 @@ test('mood survives a restart, decayed by however long it was away', async () =>
 });
 
 test('a corrupt state file is a shrug, not a crash', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-mood-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-mood-'));
   await writeFile(path.join(dir, 'mood.state.json'), '{not json at all', 'utf8');
   const mood = new Mood({ anchor: ANCHOR, dir });
   await assert.doesNotReject(() => mood.restore());
@@ -127,7 +127,7 @@ test('a corrupt state file is a shrug, not a crash', async () => {
 });
 
 test('editing mood.md outvotes a drifted state file', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-mood-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-mood-'));
   await writeFile(
     path.join(dir, 'mood.state.json'),
     JSON.stringify({

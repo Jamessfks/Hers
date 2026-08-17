@@ -24,7 +24,7 @@ import type { Fact, FactKind, RecalledFact, Summary, Turn } from './types.ts';
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS turns (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  speaker    TEXT    NOT NULL CHECK (speaker IN ('user', 'anna')),
+  speaker    TEXT    NOT NULL CHECK (speaker IN ('user', 'her')),
   text       TEXT    NOT NULL,
   at         INTEGER NOT NULL,
   session_id TEXT    NOT NULL
@@ -61,6 +61,49 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
+/**
+ * Renames the speaker `anna` to `her` in a database written before v1.0.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so
+ * an older file keeps its old `CHECK (speaker IN ('user', 'anna'))` — and the
+ * first thing she said after this rename would fail the constraint and take the
+ * turn with it. SQLite cannot alter a CHECK, so the table is rebuilt.
+ *
+ * The trigger is the constraint itself rather than a version number: the stored
+ * `sql` is the true statement of what this file will accept, a `user_version`
+ * somebody else's branch also bumped is not, and reading the truth costs one
+ * query at startup.
+ *
+ * Ids are carried across explicitly so nothing that points at a turn — every
+ * fact's `source_turn_id`, every summary's range — starts pointing at a
+ * different one.
+ */
+function renameSpeakerToHer(db: DatabaseSync): void {
+  const table = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'turns'`)
+    .get() as unknown as { sql?: string } | undefined;
+  if (!table?.sql?.includes("'anna'")) return;
+
+  db.exec(`
+    BEGIN IMMEDIATE;
+    CREATE TABLE turns_migrated (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      speaker    TEXT    NOT NULL CHECK (speaker IN ('user', 'her')),
+      text       TEXT    NOT NULL,
+      at         INTEGER NOT NULL,
+      session_id TEXT    NOT NULL
+    );
+    INSERT INTO turns_migrated (id, speaker, text, at, session_id)
+      SELECT id, CASE speaker WHEN 'anna' THEN 'her' ELSE speaker END, text, at, session_id
+      FROM turns;
+    DROP TABLE turns;
+    ALTER TABLE turns_migrated RENAME TO turns;
+    CREATE INDEX IF NOT EXISTS turns_at ON turns (at DESC);
+    CREATE INDEX IF NOT EXISTS turns_session ON turns (session_id, id);
+    COMMIT;
+  `);
+}
+
 /** Tunes how the four ranking signals trade off. They sum to 1. */
 export const RECALL_WEIGHTS = {
   similarity: 0.62,
@@ -85,6 +128,7 @@ export class MemoryStore {
     this.#db.exec('PRAGMA journal_mode = WAL');
     this.#db.exec('PRAGMA foreign_keys = ON');
     this.#db.exec(SCHEMA);
+    renameSpeakerToHer(this.#db);
   }
 
   close(): void {
@@ -329,7 +373,7 @@ export class MemoryStore {
 
 interface TurnRow {
   id: number;
-  speaker: 'user' | 'anna';
+  speaker: 'user' | 'her';
   text: string;
   at: number;
   session_id: string;

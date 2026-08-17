@@ -3,7 +3,7 @@
  *
  * Sending a config field a model does not accept is not a soft failure — the
  * setup is rejected and the socket closes, which looks to a user exactly like
- * "Anna is broken". So capabilities are declared here and the session strips
+ * "the app is broken". So capabilities are declared here and the session strips
  * anything the chosen model cannot take.
  *
  * As documented by Google:
@@ -28,7 +28,7 @@
  * The same session config on `gemini-3.1-flash-live-preview` works with one
  * tool and with all of them.
  *
- * That is not a trade worth making. Anna's tools are how she feels, remembers,
+ * That is not a trade worth making. Her tools are how she feels, remembers,
  * sends a picture and moves her face; a model that drops the connection the
  * moment a user *speaks to her with tools attached* has no working voice path
  * at all. `enableAffectiveDialog` — mood carried in the voice rather than only
@@ -36,7 +36,7 @@
  * feature, not the feature.
  *
  * So: 3.1 by default, mood still reaches her through the prompt, and
- * `ANNA_MODEL` will still select 2.5 for anyone who wants affective dialog and
+ * `HERS_MODEL` will still select 2.5 for anyone who wants affective dialog and
  * can live without tools on the voice path.
  */
 
@@ -77,7 +77,7 @@ export const KNOWN_LIVE_MODELS = Object.keys(CAPABILITIES);
 /**
  * Unknown models get the conservative answer rather than an optimistic one.
  *
- * Someone will set `ANNA_MODEL` to something released after this file was
+ * Someone will set `HERS_MODEL` to something released after this file was
  * written, and the failure mode for guessing "yes" is a session that will not
  * open at all. Guessing "no" costs a feature and still talks.
  */
@@ -88,7 +88,7 @@ export function capabilitiesOf(model: string): ModelCapabilities {
       proactiveAudio: false,
       nativeAudio: true,
       // Optimistic on this one alone: refusing tools by default would silently
-      // disable half of Anna on every model released after this file.
+      // disable half of her behaviour on every model released after this file.
       toolsWithAudio: true,
     }
   );

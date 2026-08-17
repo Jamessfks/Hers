@@ -1,5 +1,5 @@
 /**
- * Anna's voice, coming out of the speakers.
+ * Her voice, coming out of the speakers.
  *
  * Audio arrives as a stream of small PCM chunks with no timing information, and
  * the job is to play them back-to-back with no seam. The way that is done here

@@ -24,7 +24,7 @@ const BACKOFF_MS = [250, 500, 1000, 2000, 4000];
 
 export interface ConnectionHandlers {
   onMessage(message: ServerMessage): void;
-  /** Anna's voice: PCM signed 16-bit little-endian, 24kHz mono. */
+  /** Her voice: PCM signed 16-bit little-endian, 24kHz mono. */
   onAudio(pcm: ArrayBuffer): void;
   /** `reconnected` is false the first time, true after a drop. */
   onOpen(reconnected: boolean): void;
@@ -123,7 +123,7 @@ export class Connection {
         return;
       }
       const { kind, payload } = decodeMediaFrame(new Uint8Array(event.data));
-      if (kind === MediaKind.ANNA_PCM24) {
+      if (kind === MediaKind.HERS_PCM24) {
         // `slice` rather than a view: the player keeps the buffer past this
         // callback, and a view into a reused frame would be overwritten.
         this.#handlers.onAudio(payload.slice().buffer);

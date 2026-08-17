@@ -28,19 +28,19 @@ function recorder(name: SurfaceName) {
   const surface: Surface = {
     name,
     transcript: (who, text, final, origin) => {
-      if (who === 'anna' && final) heard.push({ text, origin });
+      if (who === 'her' && final) heard.push({ text, origin });
     },
   };
   return { surface, heard };
 }
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-conv-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-conv-'));
   const brain = await Brain.open(
     loadConfig({
       GEMINI_API_KEY: 'test-key',
-      ANNA_PROFILE: path.join(root, 'profile'),
-      ANNA_DATA: path.join(root, 'data'),
+      HERS_PROFILE: path.join(root, 'profile'),
+      HERS_DATA: path.join(root, 'data'),
     } as NodeJS.ProcessEnv),
     { offline: true },
   );
@@ -61,7 +61,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 const settled = () => new Promise((resolve) => setTimeout(resolve, 500));
 
 /** Puts words in her mouth and closes the turn, the way the API would. */
-function annaSays(socket: FakeSocket, text: string): void {
+function sheSays(socket: FakeSocket, text: string): void {
   socket.emit({
     serverContent: { outputTranscription: { text }, turnComplete: true },
   } as unknown as LiveServerMessage);
@@ -96,7 +96,7 @@ test('an opener reaches every surface, because she started it', async () => {
   f.conversation.attach(telegram.surface);
   await f.conversation.wake();
 
-  annaSays(f.socket(), 'Hey. You have gone quiet on me.');
+  sheSays(f.socket(), 'Hey. You have gone quiet on me.');
   await settled();
 
   assert.deepEqual(web.heard.map((h) => h.text), ['Hey. You have gone quiet on me.']);
@@ -114,7 +114,7 @@ test('a reply carries the origin of the thing it answers', async () => {
   await f.conversation.wake();
 
   f.conversation.say('hey', 'telegram');
-  annaSays(f.socket(), 'Hey yourself.');
+  sheSays(f.socket(), 'Hey yourself.');
   await settled();
 
   // Both are handed it — the browser is the view onto everything — but each is
@@ -156,7 +156,7 @@ test('what the website switched on is what she has on Telegram too', async () =>
   await f.conversation.wake();
 
   f.conversation.setSense('screen', true);
-  assert.equal(f.conversation.situation?.senses.screen, true, 'one situation, one Anna');
+  assert.equal(f.conversation.situation?.senses.screen, true, 'one situation, one of her');
 });
 
 test('a surface leaving does not end a conversation somebody else is in', async () => {
@@ -185,7 +185,7 @@ test('a surface that throws does not silence the others', async () => {
   f.conversation.attach(telegram.surface);
   await f.conversation.wake();
 
-  annaSays(f.socket(), 'Still here.');
+  sheSays(f.socket(), 'Still here.');
   await settled();
 
   assert.deepEqual(telegram.heard.map((h) => h.text), ['Still here.']);

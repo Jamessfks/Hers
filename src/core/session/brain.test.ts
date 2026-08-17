@@ -11,11 +11,11 @@ import { writeChosenName } from '../profile/profile.ts';
 import { PLACEHOLDER_NAME } from '../profile/naming.ts';
 
 async function fixture(env: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-brain-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-brain-'));
   const config = loadConfig({
     GEMINI_API_KEY: 'test-key',
-    ANNA_PROFILE: path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
     ...env,
   } as NodeJS.ProcessEnv);
   return { root, config, brain: await Brain.open(config, { offline: true }) };
@@ -86,12 +86,12 @@ test('a wipe leaves a working brain rather than a closed one', async () => {
 // -- the guard --------------------------------------------------------------
 
 test('what is safe to delete, and what is not', () => {
-  const cwd = path.resolve('/Users/someone/code/anna');
+  const cwd = path.resolve('/Users/someone/code/hers');
   const home = path.resolve('/Users/someone');
   const safe = (dir: string) => safeToDelete(dir, cwd, home);
 
-  assert.equal(safe('/Users/someone/code/anna/data'), true);
-  assert.equal(safe('/Users/someone/Library/Anna/profile'), true);
+  assert.equal(safe('/Users/someone/code/hers/data'), true);
+  assert.equal(safe('/Users/someone/Library/Hers/profile'), true);
 
   assert.equal(safe(''), false);
   assert.equal(safe('data'), false, 'a relative path could resolve anywhere');
@@ -138,7 +138,7 @@ test('a borrowed profile is a copy, so nothing a test does reaches the real one'
   original.brain.intimacy.release();
   await original.brain.intimacy.flush();
 
-  const borrowed = await mkdtemp(path.join(tmpdir(), 'anna-borrowed-'));
+  const borrowed = await mkdtemp(path.join(tmpdir(), 'hers-borrowed-'));
   const { cp } = await import('node:fs/promises');
   await cp(path.join(original.config.profileDir, 'avatar'), path.join(borrowed, 'avatar'), {
     recursive: true,
@@ -147,8 +147,8 @@ test('a borrowed profile is a copy, so nothing a test does reaches the real one'
   const copy = await Brain.open(
     loadConfig({
       GEMINI_API_KEY: 'test-key',
-      ANNA_PROFILE: borrowed,
-      ANNA_DATA: path.join(borrowed, 'data'),
+      HERS_PROFILE: borrowed,
+      HERS_DATA: path.join(borrowed, 'data'),
     } as NodeJS.ProcessEnv),
     { offline: true },
   );

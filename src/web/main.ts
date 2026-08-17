@@ -145,7 +145,7 @@ async function uploadFace(file: File): Promise<void> {
   }
 }
 
-const player = new Player({ onLevel: (level) => ui.setAnnaLevel(level) });
+const player = new Player({ onLevel: (level) => ui.setHerLevel(level) });
 
 const microphone = new Microphone({
   onChunk: (pcm) => connection.sendMedia(MediaKind.MIC_PCM16, pcm),

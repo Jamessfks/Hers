@@ -10,7 +10,7 @@
  * It opens a real Live session, says one thing, waits for audio to come back,
  * and closes. That single round trip exercises the key, the model name, the
  * quota, the voice, the websocket path and the audio pipeline in one go. If it
- * passes, the only things left between here and Anna talking are the browser's
+ * passes, the only things left between here and her talking are the browser's
  * own permissions.
  */
 
@@ -29,7 +29,7 @@ async function main(): Promise<number> {
   const config = loadConfig();
   let failures = 0;
 
-  console.log('\nAnna — checking\n');
+  console.log('\nHers — checking\n');
 
   // -- configuration --------------------------------------------------------
 
@@ -148,7 +148,7 @@ function liveRoundTrip(apiKey: string, model: string): Promise<RoundTrip> {
           bytes += pcm.length;
         },
         onUserText: () => undefined,
-        onAnnaText: (text, final) => {
+        onHerText: (text, final) => {
           if (final) said = text;
         },
         onTurnComplete: () => {

@@ -10,14 +10,14 @@ const root = path.dirname(fileURLToPath(import.meta.url));
  * Copies the phone's call page into the build.
  *
  * `call/` is a single static file with no build step of its own, and its real
- * home is GitHub Pages — a phone cannot reach the machine Anna runs on, so the
+ * home is GitHub Pages — a phone cannot reach the machine Hers runs on, so the
  * page has to be somewhere public. Copying it here as well means the same file
  * is reachable at `http://localhost:5175/call/`, which is how you check the
  * call UI without publishing anything first.
  */
 function copyCallPage() {
   return {
-    name: 'anna-copy-call-page',
+    name: 'hers-copy-call-page',
     async closeBundle() {
       await cp(path.join(root, 'call'), path.join(root, 'dist', 'web', 'call'), {
         recursive: true,
@@ -29,7 +29,7 @@ function copyCallPage() {
 /**
  * Builds the website into `dist/web`, which is what the Node server serves.
  *
- * There is no dev server here on purpose. Anna's server owns the WebSocket, the
+ * There is no dev server here on purpose. the local server owns the WebSocket, the
  * gallery route and the origin check, and running Vite's server alongside it
  * would mean a second origin that the WebSocket handshake has to be taught to
  * trust — which is exactly the check that stops a hostile page reaching in. So

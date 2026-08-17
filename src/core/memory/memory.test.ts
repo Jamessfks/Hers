@@ -55,7 +55,7 @@ test('embeddings are unit length and deterministic', async () => {
 test('turns round-trip in order', () => {
   const { store } = fixture();
   store.appendTurn({ speaker: 'user', text: 'first', at: 1, sessionId: 's' });
-  store.appendTurn({ speaker: 'anna', text: 'second', at: 2, sessionId: 's' });
+  store.appendTurn({ speaker: 'her', text: 'second', at: 2, sessionId: 's' });
   assert.deepEqual(
     store.recentTurns(10).map((turn) => turn.text),
     ['first', 'second'],
@@ -178,7 +178,7 @@ test('consolidation writes facts and a summary', async () => {
   });
 
   memory.record('user', 'i have a google interview thursday');
-  memory.record('anna', 'what are they going to make you do');
+  memory.record('her', 'what are they going to make you do');
   await memory.consolidate();
 
   assert.equal(store.allFacts().length, 2);
@@ -241,13 +241,13 @@ test('usage is damped so a few incumbents cannot crowd out everything', async ()
 
 test('the transcript is one conversation, not every conversation', async () => {
   // beginSession existed and nothing ever called it, so the prompt replayed
-  // messages from other days as the current conversation. Anna told a user they
+  // messages from other days as the current conversation. she told a user they
   // were "looping" because she was reading three separate runs as one.
   let clock = 1_000_000;
   const { store, memory } = fixture({ now: () => clock });
 
   memory.record('user', 'monday thing');
-  memory.record('anna', 'monday reply');
+  memory.record('her', 'monday reply');
 
   clock += 3 * 60 * 60 * 1000; // three hours later
   memory.record('user', 'tuesday thing');

@@ -1,5 +1,5 @@
 /**
- * Anna's server.
+ * the local server.
  *
  * One process, run from a clone, on macOS or Windows or anything else with a
  * current Node. It serves the website, holds the Gemini key, and owns the one
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Brain } from '../core/session/brain.ts';
 import { Conversation } from '../core/session/conversation.ts';
-import { loadConfig, loadDotEnv } from './config.ts';
+import { loadConfig, loadDotEnv, migrateProfileDir } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 import { applyGeminiKey, checkGeminiKey, maskKey } from './setup.ts';
 import { knowledgeState, runScan, suggestedFolders } from './knowledge.ts';
@@ -28,13 +28,21 @@ import { WebBridge } from './ws.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
 
-export const VERSION = '2.0.0';
+export const VERSION = '1.0.0';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
 
 export async function main(): Promise<void> {
   loadDotEnv();
+
+  // Before the config is read, because it decides which folder the config will
+  // name. Announced rather than silent: somebody who has been talking to her for
+  // weeks should be told her folder moved, not left to find out.
+  const moved = migrateProfileDir();
+  if (moved.to) console.log(`  moved ${moved.from}/ to ${moved.to}/ — the project is now called Hers`);
+  else if (moved.error) console.warn(`! could not rename ${moved.from}/: ${moved.error}`);
+
   // Not `const`: pasting a key into the website re-reads the environment, and
   // everything downstream has to be looking at the new one rather than the one
   // this process happened to start with.
@@ -167,11 +175,11 @@ export async function main(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     server.once('error', (error: NodeJS.ErrnoException) => {
       // The common one, and the one whose default message tells you nothing
-      // about what to do: another Anna is usually already running.
+      // about what to do: another copy is usually already running.
       if (error.code === 'EADDRINUSE') {
         reject(
           new Error(
-            `Something is already using port ${config.port}. Another Anna, probably — stop it, or set ANNA_PORT to something else.`,
+            `Something is already using port ${config.port}. Another copy of Hers, probably — stop it, or set HERS_PORT to something else.`,
           ),
         );
         return;
@@ -181,7 +189,7 @@ export async function main(): Promise<void> {
     server.listen(config.port, config.host, resolve);
   });
 
-  console.log(`\n  Anna is at http://${displayHost(config.host)}:${config.port}\n`);
+  console.log(`\n  Hers is at http://${displayHost(config.host)}:${config.port}\n`);
   console.log(`  profile   ${config.profileDir}`);
   console.log(`  memory    ${path.join(config.dataDir, 'memory.db')}`);
   console.log(`  model     ${config.model}`);
@@ -233,7 +241,7 @@ function displayHost(host: string): string {
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('server/index.ts')) {
   main().catch((error: unknown) => {
-    console.error('Anna could not start:', error);
+    console.error('Hers could not start:', error);
     process.exit(1);
   });
 }

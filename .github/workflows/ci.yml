@@ -9,7 +9,7 @@
 #
 # macOS is deliberately *not* in the matrix, which is a change from the Electron
 # version. There is no native code, no code signing and nothing platform-
-# specific left in this tree; the runner would be testing Node, not Anna. On a
+# specific left in this tree; the runner would be testing Node, not Hers. On a
 # private repository macOS minutes bill at ten times Linux and Windows at two,
 # so the old six-job matrix cost roughly seven times this one to learn the same
 # thing.

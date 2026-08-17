@@ -154,7 +154,7 @@ export class Vision {
     for (const track of stream.getTracks()) {
       // Chrome's "Stop sharing" bar and macOS revoking camera access both end
       // the track without any other signal, and a UI still showing the sense as
-      // on after that is lying to the user about what Anna can see.
+      // on after that is lying to the user about what she can see.
       track.addEventListener('ended', () => {
         if (source === 'camera') this.stopCamera();
         else this.stopScreen();

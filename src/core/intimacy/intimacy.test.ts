@@ -233,7 +233,7 @@ test('a nonsense value is clamped rather than believed', () => {
 // -- persistence ------------------------------------------------------------
 
 test('the relationship survives the process', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-intimacy-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-intimacy-'));
   const time = clock();
 
   const first = new Intimacy({ dir, now: time.now });
@@ -251,7 +251,7 @@ test('the relationship survives the process', async () => {
 });
 
 test('a missing or corrupt file is a fresh start, not a crash', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-intimacy-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-intimacy-'));
   const intimacy = new Intimacy({ dir });
   await intimacy.restore();
   assert.equal(intimacy.read().percent, 1);

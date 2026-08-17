@@ -99,7 +99,7 @@ function jpeg(width: number, height: number): Buffer {
 }
 
 async function studio(hedra: ReturnType<typeof fakeHedra> | null = null, budgetUsd = 1) {
-  const dir = path.join(await mkdtemp(path.join(tmpdir(), 'anna-avatar-')), 'avatar');
+  const dir = path.join(await mkdtemp(path.join(tmpdir(), 'hers-avatar-')), 'avatar');
   const instance = new AvatarStudio({ dir, client: hedra?.client ?? null, budgetUsd });
   await instance.load();
   return { dir, studio: instance };

@@ -1,5 +1,5 @@
 /**
- * The thin slice of the Telegram Bot API that Anna uses.
+ * The thin slice of the Telegram Bot API that she uses.
  *
  * Written against `fetch` rather than a client library, because the surface
  * needed here is eight methods and a long-poll loop, and every Telegram client

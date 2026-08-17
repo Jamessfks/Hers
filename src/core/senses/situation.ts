@@ -1,5 +1,5 @@
 /**
- * What Anna currently knows about the person she is with, other than what they
+ * What she currently knows about the person she is with, other than what they
  * have said.
  *
  * This is a small amount of state, and the temptation is to make it a large
@@ -31,7 +31,7 @@ export interface Presence {
  * Distinct from {@link Presence} on purpose. Presence is about the *tab* — the
  * only thing a web page can honestly report about a person — and this is about
  * the window they are actually working in. Someone reading a long document with
- * Anna's tab in the background is idle by one measure and busy by the other,
+ * Her tab in the background is idle by one measure and busy by the other,
  * and those deserve different things said to them.
  */
 export interface ScreenState {
@@ -63,8 +63,8 @@ export interface SituationSnapshot {
   seeing: { camera: boolean; screen: boolean };
   /** Milliseconds since the user last said or typed anything. Infinity if never. */
   sinceUserSpokeMs: number;
-  /** Milliseconds since Anna last finished a turn. Infinity if never. */
-  sinceAnnaSpokeMs: number;
+  /** Milliseconds since she last finished a turn. Infinity if never. */
+  sinceHerSpokeMs: number;
   /** Turns exchanged in this conversation. */
   turns: number;
   /** Local hour, 0-23. */
@@ -96,7 +96,7 @@ export class Situation {
   #screenAt = 0;
   #switchedAt = 0;
   #userSpokeAt = 0;
-  #annaSpokeAt = 0;
+  #herSpokeAt = 0;
   #turns = 0;
 
   constructor(now: () => number = () => Date.now()) {
@@ -159,8 +159,8 @@ export class Situation {
     this.#turns += 1;
   }
 
-  noteAnnaSpoke(): void {
-    this.#annaSpokeAt = this.#now();
+  noteHerSpoke(): void {
+    this.#herSpokeAt = this.#now();
     this.#turns += 1;
   }
 
@@ -185,7 +185,7 @@ export class Situation {
   reset(): void {
     this.#turns = 0;
     this.#userSpokeAt = 0;
-    this.#annaSpokeAt = 0;
+    this.#herSpokeAt = 0;
   }
 
   snapshot(): SituationSnapshot {
@@ -205,7 +205,7 @@ export class Situation {
         screen: this.#senses.screen && fresh(this.#sawScreenAt, now),
       },
       sinceUserSpokeMs: this.#userSpokeAt ? now - this.#userSpokeAt : Number.POSITIVE_INFINITY,
-      sinceAnnaSpokeMs: this.#annaSpokeAt ? now - this.#annaSpokeAt : Number.POSITIVE_INFINITY,
+      sinceHerSpokeMs: this.#herSpokeAt ? now - this.#herSpokeAt : Number.POSITIVE_INFINITY,
       turns: this.#turns,
       hour: when.getHours(),
       localTime: formatLocalTime(when),
@@ -233,7 +233,7 @@ export function formatLocalTime(when: Date): string {
   return `${day} ${hour12}:${minutes}${hour24 < 12 ? 'am' : 'pm'}`;
 }
 
-/** True in the small hours, when Anna should be gentler and lower-energy. */
+/** True in the small hours, when she should be gentler and lower-energy. */
 export function isLateNight(hour: number): boolean {
   return hour >= 1 && hour < 5;
 }

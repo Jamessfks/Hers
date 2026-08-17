@@ -3,7 +3,7 @@
  *
  * The contract this module keeps, and the reason it is more defensive than it
  * looks: **loading a profile can fail in a hundred small ways and none of them
- * may stop Anna from waking up.** The folder is meant to be edited by hand, in
+ * may stop her from waking up.** The folder is meant to be edited by hand, in
  * a text editor, by someone who is not thinking about parsers. A stray tab in
  * the frontmatter, a deleted file, a number written as "0,5" — every one of
  * those falls back to a default and gets on with it.

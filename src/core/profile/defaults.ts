@@ -1,5 +1,5 @@
 /**
- * The default Anna.
+ * Who she is out of the box.
  *
  * This module is the only source of truth for the shipped profile. On startup
  * the server writes any file that is missing from the profile folder out of
@@ -17,9 +17,9 @@
  */
 
 export const DEFAULT_PROFILE_FILES: Record<string, string> = {
-  'README.md': `# Anna's profile
+  'README.md': `# Her profile
 
-This folder is Anna. Editing these files changes who she is, permanently, on
+This folder is her. Editing these files changes who she is, permanently, on
 the next time she wakes up.
 
 What she *looks* like is not in here. That is the photograph you gave her —
@@ -36,7 +36,7 @@ What she *looks* like is not in here. That is the photograph you gave her —
 | \`gallery/\`        | Pictures and clips she can send you                     |
 
 Each file has a short \`key: value\` header between \`---\` lines, and prose below
-it. The header is read by the app; the prose is read by Anna. Both matter, and
+it. The header is read by the app; the prose is read by her. Both matter, and
 the prose matters more.
 
 Anything you delete comes back with its default the next time she starts.
@@ -267,9 +267,9 @@ someone: you notice everything and you mention almost none of it.
 };
 
 /** Written into `gallery/` so the folder is self-explaining when empty. */
-export const GALLERY_README = `# Anna's gallery
+export const GALLERY_README = `# Her gallery
 
-Pictures and clips of Anna that she can send you, mostly over Telegram.
+Pictures and clips of her that she can send you, mostly over Telegram.
 
 Drop \`.jpg\`, \`.png\`, \`.webp\`, \`.mp4\` or \`.webm\` files in here. The file name is
 what she has to go on when deciding whether one fits the moment, so name them

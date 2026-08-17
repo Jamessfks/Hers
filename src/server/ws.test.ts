@@ -27,10 +27,10 @@ import type { ServerMessage } from '../shared/protocol.ts';
  * does an `Origin` we do not serve get refused.
  */
 async function bridge() {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-ws-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-ws-'));
   const config = loadConfig({
-    ANNA_PROFILE: path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
   } as NodeJS.ProcessEnv);
 
   const brain = await Brain.open(config, { offline: true });

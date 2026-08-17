@@ -1,7 +1,7 @@
 /**
  * `npm run dev`.
  *
- * Two processes: Vite rebuilding the site on every save, and Anna's server
+ * Two processes: Vite rebuilding the site on every save, and the local server
  * restarting on every save. Spawned from Node rather than chained with `&`
  * because `&` is not a thing in PowerShell, and Windows is a supported target.
  *
@@ -12,15 +12,15 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 
-const PORT = Number(process.env.ANNA_PORT ?? 5175);
-const HOST = process.env.ANNA_HOST ?? '127.0.0.1';
+const PORT = Number(process.env.HERS_PORT ?? 5175);
+const HOST = process.env.HERS_HOST ?? '127.0.0.1';
 
 /**
  * Checked before anything is started, because of how the failure looks.
  *
  * `node --watch` restarts a process that exits, so a server that cannot bind
  * fails, restarts, fails again — and the one line saying why scrolls past
- * inside a wall of Vite output. Worse, the port is usually held by an Anna the
+ * inside a wall of Vite output. Worse, the port is usually held by a copy the
  * developer forgot was running, so the symptom is "my changes do nothing":
  * the browser is talking to the old one.
  */
@@ -35,11 +35,11 @@ async function portIsFree() {
 
 if (!(await portIsFree())) {
   console.error(
-    `\n  Port ${PORT} is already in use — almost certainly an Anna you started earlier.\n` +
+    `\n  Port ${PORT} is already in use — almost certainly a copy of Hers you started earlier.\n` +
       `  Stop it first:\n\n` +
       `    pkill -f "src/server/index.ts"\n\n` +
       `  or run this one somewhere else:\n\n` +
-      `    ANNA_PORT=5176 npm run dev\n`,
+      `    HERS_PORT=5176 npm run dev\n`,
   );
   process.exit(1);
 }

@@ -30,7 +30,7 @@
  * ## Where this goes further, and why
  *
  * OpenClaw's documentation says nothing about an agent that speaks first, so
- * there is no precedent to copy for the case that matters most here. Anna's rule
+ * there is no precedent to copy for the case that matters most here. Her rule
  * is that an opener belongs to no channel, so it goes to *all* of them — one
  * decision, one API call, delivered everywhere she is reachable. A companion who
  * says "still up?" to your phone and something else entirely to your desk is two
@@ -73,7 +73,7 @@ export type Origin = SurfaceName | null;
  */
 export interface Surface {
   readonly name: SurfaceName;
-  transcript(who: 'user' | 'anna', text: string, final: boolean, origin: Origin): void;
+  transcript(who: 'user' | 'her', text: string, final: boolean, origin: Origin): void;
   audio?(pcm: Buffer, origin: Origin): void;
   show?(item: GalleryItem, origin: Origin): void;
   move?(gesture: string): void;

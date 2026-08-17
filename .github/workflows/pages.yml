@@ -1,15 +1,15 @@
 # Publishes the phone's call page.
 #
 # `call/` is one static HTML file and it has to be somewhere public, because a
-# phone cannot reach the machine Anna runs on — that is the entire reason the
+# phone cannot reach the machine Hers runs on — that is the entire reason the
 # LiveKit bridge exists. GitHub Pages is free, is HTTPS (which `getUserMedia`
 # requires), and is already where this repository lives.
 #
 # Nothing secret is published. The page is inert until it is opened with a room
-# and a token in its URL fragment, and Anna's server mints those locally.
+# and a token in its URL fragment, and the local server mints those.
 #
 # Enable it once under Settings -> Pages -> Source: GitHub Actions, then point
-# ANNA_CALL_PAGE_URL at https://<you>.github.io/<repo>/
+# HERS_CALL_PAGE_URL at https://<you>.github.io/<repo>/
 
 name: Publish the call page
 

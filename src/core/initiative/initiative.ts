@@ -15,7 +15,7 @@
  *     variation is what makes it read as a person deciding to speak.
  *
  *  2. **It waits for a gap.** A timer that fires while she is mid-sentence
- *     produces two Annas talking over each other. When the moment arrives and
+ *     produces two of her talking over each other. When the moment arrives and
  *     the floor is busy, it re-arms for a short retry rather than firing or
  *     giving up — so the guarantee is on three minutes of *silence*, which is
  *     the thing anyone actually meant.
@@ -74,11 +74,11 @@ export interface InitiativeOptions {
   /** Hard ceiling on silence. */
   maxSilenceMs?: number;
   minSilenceMs?: number;
-  /** True while Anna or the user is talking; the opener waits for false. */
+  /** True while she or the user is talking; the opener waits for false. */
   isBusy(): boolean;
   /** The situation to reason about when picking a reason to speak. */
   observe(): SituationSnapshot;
-  /** Fires with the reason Anna should be given. */
+  /** Fires with the reason she should be given. */
   onOpen(reason: string): void;
   now?: () => number;
   /** Injectable so tests do not wait three minutes. */
@@ -142,8 +142,8 @@ export class Initiative {
     return this.#running && this.#unanswered >= GIVE_UP_AFTER;
   }
 
-  /** Anna finished a turn. The clock restarts, but she is now owed an answer. */
-  noteAnnaFinished(opener: boolean): void {
+  /** She finished a turn. The clock restarts, but she is now owed an answer. */
+  noteHerFinished(opener: boolean): void {
     if (!this.#running) return;
     if (opener) this.#unanswered += 1;
     this.#arm();
@@ -194,7 +194,7 @@ export class Initiative {
     }
 
     this.#options.onOpen(pickReason(this.#options.observe(), this.#unanswered));
-    // Re-armed by `noteAnnaFinished` once the turn lands. Arming here as well
+    // Re-armed by `noteHerFinished` once the turn lands. Arming here as well
     // guarantees the clock keeps running even if the turn never completes,
     // which is what happens when the session drops mid-opener.
     this.#arm();
@@ -206,7 +206,7 @@ export class Initiative {
 // ---------------------------------------------------------------------------
 
 /**
- * Picks the reason handed to Anna as a `⟦director⟧` note.
+ * Picks the reason handed to her as a `⟦director⟧` note.
  *
  * Ordered by how specific the reason is, because specificity is the whole
  * difference between an opener that lands and one that is wallpaper. A reason

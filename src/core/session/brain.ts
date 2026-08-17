@@ -1,9 +1,9 @@
 /**
- * Everything about Anna that outlives a conversation.
+ * Everything about her that outlives a conversation.
  *
  * Her memory, her mood, her profile and her gallery are one set of things, not
  * one set per transport. Somebody who tells her about their week on the phone
- * and then opens the browser should not meet a second Anna who has never heard
+ * and then opens the browser should not meet a second her who has never heard
  * of it, and a mood knocked flat over Telegram should still be flat at the
  * desk. So this is a singleton the {@link Companion} instances borrow, and each
  * `Companion` owns only what is genuinely per-conversation: a live socket, a
@@ -143,7 +143,7 @@ export class Brain {
     for (const dir of dirs) {
       if (safeToDelete(dir)) continue;
       throw new Error(
-        `Refusing to delete ${dir}. Point ANNA_DATA and ANNA_PROFILE at folders of their own.`,
+        `Refusing to delete ${dir}. Point HERS_DATA and HERS_PROFILE at folders of their own.`,
       );
     }
 
@@ -175,7 +175,7 @@ export class Brain {
    * marker alone would let a re-roll happen if the file were ever hand-edited.
    *
    * Awaited before the first system instruction is built, because a companion who
-   * introduces herself as Anna and is called something else a minute later has
+   * introduces herself as the placeholder and is called something else a minute later has
    * not chosen a name, she has had two.
    *
    * Failure is silent and repeatable. No key, a refusal, a timeout: the
@@ -292,7 +292,7 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
  * Whether a directory is one this program is allowed to delete outright.
  *
  * The reset button hands a path from configuration to `rm -r`, and the whole
- * question is what happens when that path is wrong. `ANNA_PROFILE=~` is a
+ * question is what happens when that path is wrong. `HERS_PROFILE=~` is a
  * plausible typo and an unrecoverable one, so the rule is deliberately blunt:
  * it must be a real, absolute, nested path, and it must not contain the place
  * this program is running from or the account it is running as.
@@ -303,7 +303,7 @@ export function safeToDelete(dir: string, cwd = process.cwd(), home = os.homedir
   const target = path.resolve(dir);
   const { root } = path.parse(target);
   if (target === root) return false;
-  // One level under the root is `/data` or `C:\anna` — a directory somebody
+  // One level under the root is `/data` or `C:\hers` — a directory somebody
   // could plausibly mean, but not one worth being wrong about.
   if (path.dirname(target) === root) return false;
   if (target === path.resolve(home)) return false;

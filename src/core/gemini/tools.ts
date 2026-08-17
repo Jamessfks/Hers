@@ -1,5 +1,5 @@
 /**
- * The three things Anna can do besides talk.
+ * The three things she can do besides talk.
  *
  * Kept to three deliberately. A realtime model with a long tool list spends its
  * attention deciding rather than talking, and the symptom is a companion who
@@ -28,10 +28,10 @@ export const MOVE = 'move';
  * rendered. Offering her a gesture with no clip behind it produces a call that
  * moves nothing, and she has no way to tell the difference.
  */
-export function annaTools(readyGestures: readonly string[] = []): FunctionDeclaration[] {
-  if (readyGestures.length === 0) return ANNA_TOOLS;
+export function companionTools(readyGestures: readonly string[] = []): FunctionDeclaration[] {
+  if (readyGestures.length === 0) return HERS_TOOLS;
   return [
-    ...ANNA_TOOLS,
+    ...HERS_TOOLS,
     {
       name: MOVE,
       description:
@@ -54,7 +54,7 @@ export function annaTools(readyGestures: readonly string[] = []): FunctionDeclar
   ];
 }
 
-export const ANNA_TOOLS: FunctionDeclaration[] = [
+export const HERS_TOOLS: FunctionDeclaration[] = [
   {
     name: FEEL,
     description:

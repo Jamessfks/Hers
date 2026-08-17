@@ -1,5 +1,5 @@
 /**
- * The pictures and clips Anna can send.
+ * The pictures and clips she can send.
  *
  * Backed by a plain folder, because that is the interface a person already
  * knows: drop files in, name them like captions, done. No database, no import
@@ -418,7 +418,7 @@ export class Gallery {
 const ONLY_HER = new Set([
   'a', 'an', 'the', 'of', 'in', 'it', 'is', 'this', 'that',
   'i', 'me', 'my', 'we', 'us', 'can', 'could', 'please', 'do', 'does',
-  'you', 'your', 'yours', 'yourself', 'her', 'herself', 'she', 'anna',
+  'you', 'your', 'yours', 'yourself', 'her', 'herself', 'she',
   'picture', 'pictures', 'pic', 'photo', 'photos', 'photograph', 'image',
   'selfie', 'portrait', 'face', 'look', 'looks', 'like', 'see', 'show',
   'send', 'sent', 'give', 'want', 'real', 'actual', 'actually', 'really',
@@ -516,7 +516,7 @@ function slug(description: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 48) || 'anna'
+      .slice(0, 48) || 'her'
   );
 }
 

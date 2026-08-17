@@ -43,7 +43,7 @@ test('she may not choose the placeholder, however politely', () => {
 // -- writing it down --------------------------------------------------------
 
 test('the chosen name is written, and the rest of the file is left alone', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-naming-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-naming-'));
   await ensureProfile(dir);
 
   const before = await readFile(path.join(dir, 'identity.md'), 'utf8');
@@ -64,7 +64,7 @@ test('the chosen name is written, and the rest of the file is left alone', async
 });
 
 test('a hand-edited key nobody has heard of survives the write', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-naming-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-naming-'));
   await ensureProfile(dir);
   const file = path.join(dir, 'identity.md');
   await writeFile(
@@ -80,7 +80,7 @@ test('a hand-edited key nobody has heard of survives the write', async () => {
 });
 
 test('the loader reads the marker back, which is what stops a re-roll', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-naming-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-naming-'));
   await ensureProfile(dir);
 
   assert.equal((await loadProfile(dir)).identity.named, undefined, 'nobody has chosen yet');
@@ -93,7 +93,7 @@ test('the loader reads the marker back, which is what stops a re-roll', async ()
 });
 
 test('writing twice does not stack the note', async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-naming-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-naming-'));
   await ensureProfile(dir);
   await writeChosenName(dir, 'Mira', 'first');
   await writeChosenName(dir, 'Mira', 'second');

@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="noindex" />
-    <title>Calling Anna</title>
+    <title>Calling her</title>
 
     <!--
       The phone's end of a call.
 
       One static file, deliberately. It is served from GitHub Pages — or any
-      static host — because a phone cannot reach the machine Anna runs on, and
+      static host — because a phone cannot reach the machine Hers runs on, and
       opening a port or running a tunnel is a worse thing to ask of someone
-      than a free LiveKit project. Nothing here talks to Anna's server at all:
-      the page joins a LiveKit room, Anna joins the same room from her side,
+      than a free LiveKit project. Nothing here talks to that server at all:
+      the page joins a LiveKit room, she joins the same room from her side,
       and LiveKit is the only thing either end has to reach.
 
       The room name and the token arrive in the URL *fragment*. A fragment is
@@ -178,8 +178,8 @@
           });
 
           room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-            const annaTalking = speakers.some((speaker) => speaker.identity === 'anna');
-            document.body.dataset.state = annaTalking ? 'talking' : 'connected';
+            const sheIsTalking = speakers.some((speaker) => speaker.identity === 'hers');
+            document.body.dataset.state = sheIsTalking ? 'talking' : 'connected';
           });
 
           room.on(RoomEvent.Disconnected, () => finish('Call ended.'));
@@ -220,7 +220,7 @@
         room = null;
       }
 
-      // Leaving the page must actually leave the room, or Anna sits in an
+      // Leaving the page must actually leave the room, or she sits in an
       // empty call until her own timeout fires.
       addEventListener('pagehide', () => room?.disconnect());
     </script>

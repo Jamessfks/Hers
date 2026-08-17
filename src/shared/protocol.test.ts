@@ -44,7 +44,7 @@ test('an empty frame decodes to nothing rather than throwing', () => {
 test('the outbound kind is distinct from every inbound one', () => {
   const inbound = [MediaKind.MIC_PCM16, MediaKind.CAMERA_JPEG, MediaKind.SCREEN_JPEG];
   assert.ok(
-    !inbound.includes(MediaKind.ANNA_PCM24 as never),
+    !inbound.includes(MediaKind.HERS_PCM24 as never),
     'a collision here would route her own voice back into her ears',
   );
 });

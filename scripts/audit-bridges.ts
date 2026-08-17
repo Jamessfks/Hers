@@ -10,7 +10,7 @@
  *   livekit-server --dev          # placeholder keys, printed on startup
  *   npm run audit:bridges
  *
- * The LiveKit check does the whole thing: Anna is invited into a room, a fake
+ * The LiveKit check does the whole thing: she is invited into a room, a fake
  * caller joins and publishes real synthesised speech and real video frames, and
  * the assertion is that she *heard the words* and answered out loud. Nothing
  * about that is mocked except the human.
@@ -90,11 +90,11 @@ function speech(text: string, file: string): Buffer {
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  console.log('\n══ Anna — bridges ══');
+  console.log('\n══ Hers — bridges ══');
   console.log(`   livekit  ${config.livekit ? config.livekit.url : 'not configured'}`);
   console.log(`   telegram ${config.telegram ? 'configured' : 'not configured'}`);
 
-  const scratch = await mkdtemp(path.join(tmpdir(), 'anna-bridges-'));
+  const scratch = await mkdtemp(path.join(tmpdir(), 'hers-bridges-'));
 
   // -- LiveKit -------------------------------------------------------------
 
@@ -106,18 +106,18 @@ async function main(): Promise<void> {
       `nothing is listening at ${config.livekit.url}. Run: livekit-server --dev`,
     );
   } else {
-    await check('LiveKit — Anna joins, hears a caller speak, and answers', async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'anna-call-'));
+    await check('LiveKit — she joins, hears a caller speak, and answers', async () => {
+      const root = await mkdtemp(path.join(tmpdir(), 'hers-call-'));
       const brain = await Brain.open(
         loadConfig({
           ...process.env,
-          ANNA_PROFILE: path.join(root, 'profile'),
-          ANNA_DATA: path.join(root, 'data'),
+          HERS_PROFILE: path.join(root, 'profile'),
+          HERS_DATA: path.join(root, 'data'),
         } as NodeJS.ProcessEnv),
       );
       const calls = new CallBridge({ brain, livekit: config.livekit! });
 
-      // Anna joins the room and waits, which is the whole design: no webhook,
+      // She joins the room and waits, which is the whole design: no webhook,
       // so nothing has to be able to reach this machine.
       const invite = await calls.invite('audit');
       const token = new URL(invite.url).hash.slice(1);
@@ -125,12 +125,12 @@ async function main(): Promise<void> {
       if (!callerToken) throw new Error('the invite carried no caller token');
 
       const caller = new Room();
-      let annaAudioBytes = 0;
+      let herAudioBytes = 0;
       caller.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
         if (track.kind !== TrackKind.KIND_AUDIO) return;
         void (async () => {
           const stream = new AudioStream(track, { sampleRate: 24000, numChannels: 1 });
-          for await (const frame of stream) annaAudioBytes += frame.data.byteLength;
+          for await (const frame of stream) herAudioBytes += frame.data.byteLength;
         })();
       });
 
@@ -164,11 +164,11 @@ async function main(): Promise<void> {
       // answer to a question nobody has asked yet. An earlier version of this
       // check counted that as the reply and passed while hearing nothing.
       await wait(4000);
-      annaAudioBytes = 0;
+      herAudioBytes = 0;
       const beforeTurns = brain.memory.liveTranscript(20).length;
 
       const pcm = speech(
-        'Anna, can you hear me? My sister is a doctor and she lives in Boston.',
+        'Hey, can you hear me? My sister is a doctor and she lives in Boston.',
         path.join(scratch, 'call.wav'),
       );
       const samplesPerChunk = 16000 * 0.02; // 20ms
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
         const heardIt = turns.some(
           (turn) => turn.speaker === 'user' && /boston/i.test(turn.text),
         );
-        if (heardIt && turns.length > beforeTurns + 1 && annaAudioBytes > 20_000) break;
+        if (heardIt && turns.length > beforeTurns + 1 && herAudioBytes > 20_000) break;
         await wait(400);
       }
 
@@ -201,7 +201,7 @@ async function main(): Promise<void> {
         .join(' ');
       const said = brain.memory
         .liveTranscript(10)
-        .filter((turn) => turn.speaker === 'anna')
+        .filter((turn) => turn.speaker === 'her')
         .map((turn) => turn.text)
         .join(' ');
 
@@ -210,10 +210,10 @@ async function main(): Promise<void> {
       await brain.close();
       await rm(root, { recursive: true, force: true });
 
-      const ok = /boston/i.test(heard) && annaAudioBytes > 40_000;
+      const ok = /boston/i.test(heard) && herAudioBytes > 40_000;
       return {
         ok,
-        evidence: `room ${invite.room}: she heard "${heard || '(nothing)'}", answered "${said || '(nothing)'}", and sent ${annaAudioBytes} bytes of voice back down the call`,
+        evidence: `room ${invite.room}: she heard "${heard || '(nothing)'}", answered "${said || '(nothing)'}", and sent ${herAudioBytes} bytes of voice back down the call`,
       };
     });
   }
@@ -284,7 +284,7 @@ async function main(): Promise<void> {
         if (!ogg) return { ok: false, evidence: 'the Ogg/Opus encoder produced nothing' };
 
         const before = await pendingUpdateCount(config.telegram!.token);
-        await api.sendVoice(chatId, { data: ogg, name: 'anna.ogg', mimeType: 'audio/ogg' }, 2);
+        await api.sendVoice(chatId, { data: ogg, name: 'voice.ogg', mimeType: 'audio/ogg' }, 2);
         void before;
 
         return {

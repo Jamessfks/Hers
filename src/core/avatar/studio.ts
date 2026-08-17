@@ -1,5 +1,5 @@
 /**
- * Anna's face: one photograph, and the clips rendered from it.
+ * Her face: one photograph, and the clips rendered from it.
  *
  * The photograph is the fixed point. Every clip is generated *from* it and is
  * asked to return to it, so the interface can cut from any clip back to the
@@ -156,7 +156,7 @@ const EMPTY: Manifest = { source: null, clips: {}, pending: [], baselineUsd: nul
 // ---------------------------------------------------------------------------
 
 export interface StudioOptions {
-  /** `anna-profile/avatar`. */
+  /** `hers-profile/avatar`. */
   dir: string;
   client: HedraClient | null;
   /** Ceiling on what may be spent from this folder's baseline, in USD. */
@@ -609,7 +609,7 @@ export class AvatarStudio {
     this.#spentDelta = used;
     if (used >= this.#budget) {
       throw new AvatarError(
-        `The Hedra budget is spent — $${used.toFixed(2)} of $${this.#budget.toFixed(2)}. Raise ANNA_HEDRA_BUDGET_USD to allow more.`,
+        `The Hedra budget is spent — $${used.toFixed(2)} of $${this.#budget.toFixed(2)}. Raise HERS_HEDRA_BUDGET_USD to allow more.`,
       );
     }
     void seconds;

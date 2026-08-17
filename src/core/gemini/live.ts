@@ -1,7 +1,7 @@
 /**
  * One live conversation with Gemini.
  *
- * This is the only place in Anna that talks to a model in real time. The
+ * This is the only place in this project that talks to a model in real time. The
  * browser and the phone are two transports in front of it, not two
  * implementations of it — which is the whole reason the LiveKit bridge does not
  * use `@livekit/agents`: the Node build of its Gemini plugin cannot take video
@@ -26,7 +26,7 @@
  * So: hold the handle, rebuild eagerly on `goAway`, rebuild with backoff on
  * anything else, and drop realtime media on the floor while there is no socket.
  * Buffering realtime audio across a reconnect would be worse than losing it —
- * the user would hear Anna answer a question from thirty seconds ago.
+ * the user would hear her answer a question from thirty seconds ago.
  */
 
 import { GoogleGenAI, MediaResolution, Modality, StartSensitivity, EndSensitivity } from '@google/genai';
@@ -42,15 +42,15 @@ import { capabilitiesOf } from './models.ts';
 export type LiveState = 'idle' | 'connecting' | 'live' | 'reconnecting' | 'closed' | 'error';
 
 export interface LiveHandlers {
-  /** Anna's voice: raw PCM, signed 16-bit little-endian, 24kHz mono. */
+  /** Her voice: raw PCM, signed 16-bit little-endian, 24kHz mono. */
   onAudio(pcm: Buffer): void;
   /** Running transcription of the user's speech. */
   onUserText(text: string, final: boolean): void;
-  /** Running transcription of Anna's speech. */
-  onAnnaText(text: string, final: boolean): void;
+  /** Running transcription of her speech. */
+  onHerText(text: string, final: boolean): void;
   /** A turn finished cleanly. */
   onTurnComplete(): void;
-  /** Anna was cut off. Anything queued for playback is now stale. */
+  /** She was cut off. Anything queued for playback is now stale. */
   onInterrupted(): void;
   /** Resolve to the value the model should see as the function's result. */
   onToolCall(name: string, args: Record<string, unknown>): Promise<unknown>;
@@ -64,7 +64,7 @@ export interface LiveOptions {
   model: string;
   voice: string;
   languageCode?: string;
-  /** The whole of who Anna is. Rebuilt from scratch on every reconnect. */
+  /** The whole of who she is. Rebuilt from scratch on every reconnect. */
   systemInstruction: () => string;
   tools?: FunctionDeclaration[];
   /** Lower costs fewer tokens per frame. Screen text needs at least MEDIUM. */
@@ -172,13 +172,13 @@ export class LiveConversation {
   #connecting: Promise<void> | null = null;
   /** Transcript fragments waiting for the turn to close. */
   #userBuffer = '';
-  #annaBuffer = '';
+  #herBuffer = '';
   /** Pending settle: see `#settle`. */
   #settleTimer: ReturnType<typeof setTimeout> | null = null;
   #turnEnded = false;
   /** True between a completion signal and the settle it scheduled. */
   #awaitingSettle = false;
-  /** Where the first completion flag fell in `#annaBuffer`. -1 when none has. */
+  /** Where the first completion flag fell in `#herBuffer`. -1 when none has. */
   #boundary = -1;
   /** Guards against a stale socket's callbacks reaching a live session. */
   #generation = 0;
@@ -291,7 +291,7 @@ export class LiveConversation {
   }
 
   /**
-   * Asks Anna to speak now, for a stated reason, without the user having said
+   * Asks her to speak now, for a stated reason, without the user having said
    * anything. This is the mechanism behind the three-minute rule.
    */
   prompt(note: string): void {
@@ -476,7 +476,7 @@ export class LiveConversation {
          * work at all.
          */
         this.#options.handlers.onTrouble(
-          `${this.#options.model} drops the connection when tools are used with speech, so she is running without them. Use ANNA_MODEL=gemini-3.1-flash-live-preview to get them back.`,
+          `${this.#options.model} drops the connection when tools are used with speech, so she is running without them. Use HERS_MODEL=gemini-3.1-flash-live-preview to get them back.`,
         );
       }
     }
@@ -486,7 +486,7 @@ export class LiveConversation {
   }
 
   /**
-   * `ANNA_DEBUG=1` prints what the session is doing behind the conversation.
+   * `HERS_DEBUG=1` prints what the session is doing behind the conversation.
    *
    * Off by default because a single reconnect is routine and not worth a line
    * in someone's terminal. On, because the alternative is what happened here:
@@ -495,7 +495,7 @@ export class LiveConversation {
    * answer". The reason string is the whole diagnosis.
    */
   #debug(message: string): void {
-    if (process.env.ANNA_DEBUG) console.error(`[live] ${message}`);
+    if (process.env.HERS_DEBUG) console.error(`[live] ${message}`);
   }
 
   #scheduleReconnect(reason: string): void {
@@ -575,7 +575,7 @@ export class LiveConversation {
     if (content.interrupted) {
       if (this.#settleTimer) clearTimeout(this.#settleTimer);
       this.#settleTimer = null;
-      this.#annaBuffer = '';
+      this.#herBuffer = '';
       this.#options.handlers.onInterrupted();
     }
 
@@ -599,8 +599,8 @@ export class LiveConversation {
 
     const said = content.outputTranscription?.text;
     if (said) {
-      this.#annaBuffer += said;
-      this.#options.handlers.onAnnaText(spoken(this.#annaBuffer), false);
+      this.#herBuffer += said;
+      this.#options.handlers.onHerText(spoken(this.#herBuffer), false);
       if (this.#awaitingSettle) this.#scheduleSettle();
     }
 
@@ -623,7 +623,7 @@ export class LiveConversation {
     if (content.generationComplete || content.turnComplete) {
       // Where this utterance ended. Anything after it is either its own tail or
       // the start of the next one, and only a second flag can say which.
-      if (!this.#awaitingSettle) this.#boundary = this.#annaBuffer.length;
+      if (!this.#awaitingSettle) this.#boundary = this.#herBuffer.length;
       this.#awaitingSettle = true;
       this.#scheduleSettle();
     }
@@ -657,9 +657,9 @@ export class LiveConversation {
     }
     this.#userBuffer = '';
 
-    const whole = this.#annaBuffer;
+    const whole = this.#herBuffer;
     const boundary = this.#boundary;
-    this.#annaBuffer = '';
+    this.#herBuffer = '';
     this.#boundary = -1;
 
     const parts =
@@ -668,7 +668,7 @@ export class LiveConversation {
         : [whole];
     for (const part of parts) {
       const said = spoken(part);
-      if (said.trim()) this.#options.handlers.onAnnaText(said, true);
+      if (said.trim()) this.#options.handlers.onHerText(said, true);
     }
 
     if (this.#turnEnded) {
@@ -694,7 +694,7 @@ export class LiveConversation {
     if (this.#settleTimer) clearTimeout(this.#settleTimer);
     this.#settleTimer = null;
     this.#userBuffer = '';
-    this.#annaBuffer = '';
+    this.#herBuffer = '';
     this.#boundary = -1;
     this.#turnEnded = false;
     this.#awaitingSettle = false;
@@ -705,7 +705,7 @@ export class LiveConversation {
    *
    * Every call gets a response even when the handler throws, because a model
    * waiting on a function response that never arrives simply stops talking, and
-   * from the outside that is indistinguishable from Anna ignoring you.
+   * from the outside that is indistinguishable from her ignoring you.
    *
    * ## Why the socket is captured rather than read at the end
    *
@@ -802,7 +802,7 @@ async function withDeadline<T>(
  * did not ask the question, and answers no longer carry prose to read out), so
  * this should never fire. It stays because the cost of it firing is a sentence
  * that is slightly short, and the cost of it not being here was a permanent
- * record of Anna saying something no one can parse.
+ * record of her saying something no one can parse.
  *
  * Deliberately narrow, in two ways. It only looks at the *start* of a line, so
  * braces mid-sentence are left alone — she is allowed to talk about code. And

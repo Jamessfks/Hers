@@ -15,7 +15,7 @@ import {
 } from './profile.ts';
 import { PROFILE_FILES } from './types.ts';
 
-const scratch = () => mkdtemp(path.join(tmpdir(), 'anna-profile-'));
+const scratch = () => mkdtemp(path.join(tmpdir(), 'hers-profile-'));
 
 // -- frontmatter ------------------------------------------------------------
 

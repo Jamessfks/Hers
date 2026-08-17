@@ -19,7 +19,7 @@ async function valueOf(file: string, name: string): Promise<string | null> {
 }
 
 async function envFile(contents?: string): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-env-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-env-'));
   const file = path.join(root, '.env');
   if (contents !== undefined) await writeFile(file, contents, 'utf8');
   return file;
@@ -33,7 +33,7 @@ test('a missing file is written from nothing', async () => {
 
 test('everything else in the file survives, comments and order included', async () => {
   const file = await envFile(
-    ['# Anna', 'HEDRA_API_KEY=k_live_x:sk_y', '', 'GEMINI_API_KEY=old', 'ANNA_PORT=5175', ''].join(
+    ['# Hers', 'HEDRA_API_KEY=k_live_x:sk_y', '', 'GEMINI_API_KEY=old', 'HERS_PORT=5175', ''].join(
       '\n',
     ),
   );
@@ -42,18 +42,18 @@ test('everything else in the file survives, comments and order included', async 
   const lines = (await readFile(file, 'utf8')).split('\n');
 
   assert.deepEqual(lines.slice(0, 5), [
-    '# Anna',
+    '# Hers',
     'HEDRA_API_KEY=k_live_x:sk_y',
     '',
     'GEMINI_API_KEY=AIzaNew',
-    'ANNA_PORT=5175',
+    'HERS_PORT=5175',
   ]);
 });
 
 test('a variable set twice is set twice again, not left half stale', async () => {
   // The last assignment wins when the file is read, so a rewrite that updated
   // only the first one would look like it had done nothing at all.
-  const file = await envFile('GEMINI_API_KEY=one\nANNA_PORT=1\nGEMINI_API_KEY=two\n');
+  const file = await envFile('GEMINI_API_KEY=one\nHERS_PORT=1\nGEMINI_API_KEY=two\n');
   await setEnvValue(file, 'GEMINI_API_KEY', 'three');
 
   const contents = await readFile(file, 'utf8');
@@ -78,9 +78,9 @@ test('a commented-out line is a comment, not the value', async () => {
 });
 
 test('a file with no trailing newline still gets its own line', async () => {
-  const file = await envFile('ANNA_PORT=5175');
+  const file = await envFile('HERS_PORT=5175');
   await setEnvValue(file, 'GEMINI_API_KEY', 'AIza');
-  assert.match(await readFile(file, 'utf8'), /^ANNA_PORT=5175\nGEMINI_API_KEY=AIza\n?$/);
+  assert.match(await readFile(file, 'utf8'), /^HERS_PORT=5175\nGEMINI_API_KEY=AIza\n?$/);
 });
 
 test('a quoted value is read back without its quotes', async () => {
@@ -89,7 +89,7 @@ test('a quoted value is read back without its quotes', async () => {
 });
 
 test('a value that would need quoting is refused rather than mangled', async () => {
-  const file = await envFile('ANNA_PORT=5175\n');
+  const file = await envFile('HERS_PORT=5175\n');
   for (const bad of ['has a space', 'has"quote', 'trailing#comment', 'new\nline', '']) {
     await assert.rejects(
       () => setEnvValue(file, 'GEMINI_API_KEY', bad),
@@ -97,7 +97,7 @@ test('a value that would need quoting is refused rather than mangled', async () 
       JSON.stringify(bad),
     );
   }
-  assert.equal(await readFile(file, 'utf8'), 'ANNA_PORT=5175\n', 'and nothing was written');
+  assert.equal(await readFile(file, 'utf8'), 'HERS_PORT=5175\n', 'and nothing was written');
 });
 
 test('the keys this program actually stores are all acceptable', async () => {
@@ -119,9 +119,9 @@ test('a name that is not a variable name is refused', async () => {
   // The name goes into a regular expression that decides which line to
   // overwrite. Anything outside this shape is either a mistake or a way to
   // rewrite a line nobody meant to touch.
-  const file = await envFile('ANNA_PORT=5175\n');
+  const file = await envFile('HERS_PORT=5175\n');
   for (const bad of ['gemini_api_key', '1KEY', 'A B', 'KEY.*', '']) {
     await assert.rejects(() => setEnvValue(file, bad, 'value'), EnvFileError, JSON.stringify(bad));
   }
-  assert.equal(await readFile(file, 'utf8'), 'ANNA_PORT=5175\n');
+  assert.equal(await readFile(file, 'utf8'), 'HERS_PORT=5175\n');
 });

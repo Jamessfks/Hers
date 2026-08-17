@@ -1,5 +1,5 @@
 /**
- * Anna's mood.
+ * Her mood.
  *
  * Two layers, because one is not a mood — it is a setting.
  *
@@ -20,7 +20,7 @@
  *
  *   - Things the app *knows*, because they are mechanical: a long silence, the
  *     user coming back, three in the morning. These are in {@link MOOD_EVENTS}.
- *   - Things only Anna knows, because they are about meaning: that landed, that
+ *   - Things only she knows, because they are about meaning: that landed, that
  *     stung, this is the best conversation in a week. Those arrive as a `feel`
  *     function call from the model itself (see core/gemini/tools.ts).
  *
@@ -291,7 +291,7 @@ function constrainDrift(baseline: MoodVector, anchor: MoodVector): MoodVector {
 // ---------------------------------------------------------------------------
 
 /**
- * Turns the vector into something Anna can be told she is feeling.
+ * Turns the vector into something she can be told she is feeling.
  *
  * Numbers are useless in a prompt — a model given `valence: -0.4` will either
  * ignore it or, far worse, say "my valence is negative" out loud. It needs the

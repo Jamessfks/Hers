@@ -1,5 +1,5 @@
 /**
- * The memory facade: the only memory API the rest of Anna uses.
+ * The memory facade: the only memory API the rest of she uses.
  *
  * Responsibilities, in the order they matter:
  *
@@ -7,7 +7,7 @@
  *  2. Retrieve the handful of facts worth putting in the next prompt.
  *  3. Consolidate, in the background: distil raw turns into durable facts and
  *     keep a rolling summary so old transcript can fall out of context without
- *     Anna losing the thread.
+ *     her losing the thread.
  *
  * Consolidation runs off the critical path deliberately. It costs a model call,
  * and a companion that pauses for two seconds every twelfth turn to think about
@@ -30,7 +30,7 @@ const LIVE_TRANSCRIPT_TURNS = 24;
  *
  * `beginSession` existed and was never called by anything, so every turn since
  * install belonged to one endless session and the prompt replayed messages from
- * other days as the current conversation. Observed consequence: Anna telling
+ * other days as the current conversation. Observed consequence: her telling
  * someone they were "looping" and had said the same thing "yesterday, and the
  * day before" — she was reading three separate test runs as one conversation.
  *
@@ -85,7 +85,7 @@ export class Memory {
    *
    * Needed before the file can be deleted or reopened. Windows will not unlink
    * a file that is still open, so a reset that skipped this would leave the old
-   * memory on disk on exactly one of the two platforms Anna supports.
+   * memory on disk on exactly one of the two platforms she is on.
    */
   dispose(): void {
     this.#store.close();
@@ -102,7 +102,7 @@ export class Memory {
     return this.#sessionId;
   }
 
-  record(speaker: 'user' | 'anna', text: string): void {
+  record(speaker: 'user' | 'her', text: string): void {
     const trimmed = text.trim();
     if (!trimmed) return;
     const at = this.#now();
@@ -147,7 +147,7 @@ export class Memory {
   }
 
   /**
-   * The facts worth showing Anna before she answers `text`.
+   * The facts worth showing her before she answers `text`.
    *
    * Returns plain sentences rather than structured facts: the prompt reads
    * better, and every attempt to give a model a schema for its own memories has
@@ -168,7 +168,7 @@ export class Memory {
 
   /**
    * Writes a fact directly. Used by consolidation and by the user saying
-   * something Anna should obviously keep ("my sister's name is Mei").
+   * something she should obviously keep ("my sister's name is Mei").
    *
    * Near-duplicates are merged rather than accumulated. Without this, a person
    * who mentions their job three times ends up with three nearly identical

@@ -1,5 +1,5 @@
 /*
- * Anna's interface.
+ * Her interface.
  *
  * A companion window, not a dashboard. Two halves: she is on the left at the
  * size a person is, and the conversation is on the right in bubbles. That shape
@@ -294,7 +294,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   max-width: min(80%, 46ch);
   animation: rise 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
-.line[data-who='anna'] { align-self: flex-start; align-items: flex-start; }
+.line[data-who='her'] { align-self: flex-start; align-items: flex-start; }
 .line[data-who='user'] { align-self: flex-end; align-items: flex-end; }
 
 .line .who { font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); padding: 0 10px 3px; }
@@ -307,7 +307,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: var(--bubble);
   white-space: pre-wrap; word-break: break-word;
 }
-.line[data-who='anna'] .said { background: var(--sunken); color: var(--ink); border-bottom-left-radius: 6px; }
+.line[data-who='her'] .said { background: var(--sunken); color: var(--ink); border-bottom-left-radius: 6px; }
 .line[data-who='user'] .said { background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 6px; }
 /* Still being transcribed: present, but not yet a finished thought. */
 .line[data-pending='true'] .said { opacity: 0.62; }

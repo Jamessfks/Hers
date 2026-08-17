@@ -15,7 +15,7 @@ import {
 } from './scan.ts';
 
 async function tree(files: Record<string, string>): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-scan-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-scan-'));
   for (const [name, contents] of Object.entries(files)) {
     const file = path.join(root, name);
     await mkdir(path.dirname(file), { recursive: true });
@@ -150,7 +150,7 @@ test('an excerpt is the opening of a file, not the whole thing', async () => {
 });
 
 test('a folder that is not there is reported, not thrown', async () => {
-  const report = await scanFolders([path.join(tmpdir(), 'anna-definitely-not-here')]);
+  const report = await scanFolders([path.join(tmpdir(), 'hers-definitely-not-here')]);
   assert.equal(report.findings.length, 0);
   assert.equal(report.denied.length, 1);
   assert.match(report.denied[0]?.reason ?? '', /nothing at that path/i);

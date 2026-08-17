@@ -177,7 +177,7 @@ function portraitJpeg(): Buffer {
  */
 async function borrowedProfile(): Promise<string> {
   const real = loadConfig().profileDir;
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-audit-profile-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-audit-profile-'));
   await cp(path.join(real, 'avatar'), path.join(root, 'avatar'), { recursive: true });
   return root;
 }
@@ -209,7 +209,7 @@ async function session(
     senses?: Record<string, boolean>;
   } = {},
 ): Promise<Session> {
-  const root = options.dir ?? (await mkdtemp(path.join(tmpdir(), 'anna-audit-')));
+  const root = options.dir ?? (await mkdtemp(path.join(tmpdir(), 'hers-audit-')));
 
   /*
    * Nothing this harness creates may land inside the repository.
@@ -226,8 +226,8 @@ async function session(
 
   const config = loadConfig({
     ...process.env,
-    ANNA_PROFILE: options.profileDir ?? path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: options.profileDir ?? path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
     ...options.env,
   } as NodeJS.ProcessEnv);
 
@@ -341,12 +341,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log('\n══ Anna — live audit ══');
+  console.log('\n══ Hers — live audit ══');
   console.log(`   model    ${config.model}`);
   console.log(`   paid     ${PAID ? 'yes (image generation and a Hedra render)' : 'no'}`);
   console.log(`   quick    ${QUICK ? 'yes (skipping endurance)' : 'no'}`);
 
-  const scratch = await mkdtemp(path.join(tmpdir(), 'anna-audit-fx-'));
+  const scratch = await mkdtemp(path.join(tmpdir(), 'hers-audit-fx-'));
 
   // -- 6. Hearing ----------------------------------------------------------
   await check(
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
       // how a synthetic voice and a recogniser happen to agree about a Chinese
       // name tests neither of them and fails the product for it.
       const pcm = speak(
-        'Hello Anna. My sister is a doctor and she lives in Boston.',
+        'Hello. My sister is a doctor and she lives in Boston.',
         path.join(scratch, 'a.wav'),
       );
       await stream(s.companion, pcm);
@@ -453,7 +453,7 @@ async function main(): Promise<void> {
     'Mood — she calls `feel`, and it moves and persists',
     '#2 mood',
     async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'anna-audit-mood-'));
+      const root = await mkdtemp(path.join(tmpdir(), 'hers-audit-mood-'));
       const s = await session({ dir: root });
       await s.companion.wake();
       const before = s.brain.mood.read();
@@ -474,8 +474,8 @@ async function main(): Promise<void> {
       const reopened = await Brain.open(
         loadConfig({
           ...process.env,
-          ANNA_PROFILE: path.join(root, 'profile'),
-          ANNA_DATA: path.join(root, 'data'),
+          HERS_PROFILE: path.join(root, 'profile'),
+          HERS_DATA: path.join(root, 'data'),
         } as NodeJS.ProcessEnv),
         { offline: true },
       );
@@ -495,7 +495,7 @@ async function main(): Promise<void> {
     'Memory — a fact survives into a second, separate conversation',
     '#4 memory',
     async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'anna-audit-mem-'));
+      const root = await mkdtemp(path.join(tmpdir(), 'hers-audit-mem-'));
       const first = await session({ dir: root });
       await first.companion.wake();
       first.companion.say(
@@ -535,7 +535,7 @@ async function main(): Promise<void> {
         // *default* is asserted separately, from config.
         const declared = loadConfig({ ...process.env } as NodeJS.ProcessEnv).maxSilenceMs;
         const s = await session({
-          env: { ANNA_MAX_SILENCE_MS: '30000', ANNA_MIN_SILENCE_MS: '10000' },
+          env: { HERS_MAX_SILENCE_MS: '30000', HERS_MIN_SILENCE_MS: '10000' },
         });
         await s.companion.wake();
 
@@ -655,12 +655,12 @@ async function main(): Promise<void> {
     'Avatar — an uploaded picture becomes the source that gestures render from',
     'avatar',
     async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'anna-face-'));
+      const root = await mkdtemp(path.join(tmpdir(), 'hers-face-'));
       const brain = await Brain.open(
         loadConfig({
           ...process.env,
-          ANNA_PROFILE: path.join(root, 'profile'),
-          ANNA_DATA: path.join(root, 'data'),
+          HERS_PROFILE: path.join(root, 'profile'),
+          HERS_DATA: path.join(root, 'data'),
         } as NodeJS.ProcessEnv),
         { offline: true },
       );

@@ -14,8 +14,8 @@ if you go quiet.
 Three commands, then everything else happens in the browser.
 
 ```bash
-git clone https://github.com/Jamessfks/anna-embodied.git
-cd anna-embodied
+git clone https://github.com/Jamessfks/Hers.git
+cd Hers
 npm install
 ```
 
@@ -152,7 +152,7 @@ badly on purpose.
 
 ### The profile folder
 
-Everything about who she is lives in `anna-profile/`, written on first run and
+Everything about who she is lives in `hers-profile/`, written on first run and
 then yours. Six markdown files, each with a short `key: value` header the app
 reads and prose underneath that goes to the model.
 
@@ -216,7 +216,7 @@ With a `HEDRA_API_KEY` set you can render her movements — `idle`, `nod`, `tilt
 `smile`, `laugh`, `lean in`, `look away`. Each is rendered once from the
 photograph, takes a few minutes, and costs money: **a 2-second clip measured at
 $0.05.** Nothing is ever rendered automatically; every one is a click, and every
-one is checked against `ANNA_HEDRA_BUDGET_USD` first. Start with `idle` — it is
+one is checked against `HERS_HEDRA_BUDGET_USD` first. Start with `idle` — it is
 the one she rests in between the others.
 
 Render them from the Face dialog, or from Telegram with `/gestures` to see what
@@ -231,7 +231,7 @@ nothing can be generated while she is speaking.
 ### Her gallery
 
 Drop `.jpg`, `.png`, `.webp`, `.mp4` or `.webm` files into
-`anna-profile/gallery/`. Name them like captions — `laughing-kitchen.jpg`,
+`hers-profile/gallery/`. Name them like captions — `laughing-kitchen.jpg`,
 `at-the-window-rainy.jpg` — because the name is what she matches against. A
 `captions.json` can give longer ones.
 
@@ -280,7 +280,7 @@ For a real phone call with camera and voice you need LiveKit as well:
 3. Make a free project at [cloud.livekit.io](https://cloud.livekit.io) and put
    its URL, key and secret in `.env`.
 4. Publish `call/` — it is one static file — to GitHub Pages, and point
-   `ANNA_CALL_PAGE_URL` at it. The included workflow does this on push.
+   `HERS_CALL_PAGE_URL` at it. The included workflow does this on push.
 
 Then message the bot `/call`. She joins a room and sends you a link; open it, tap
 **Call**, and she can see you and hear you. Talk normally.
@@ -299,12 +299,12 @@ knowing:
 | Variable                 | Default          | What it does                            |
 | ------------------------ | ---------------- | --------------------------------------- |
 | `GEMINI_API_KEY`         | —                | The one thing she needs. Settable in the UI |
-| `ANNA_PORT`              | `5175`           | Where the website is served             |
-| `ANNA_PROFILE`           | `anna-profile`   | Who she is                              |
-| `ANNA_DATA`              | `data`           | What she remembers                      |
-| `ANNA_MAX_SILENCE_MS`    | `180000`         | The three-minute rule's ceiling         |
+| `HERS_PORT`              | `5175`           | Where the website is served             |
+| `HERS_PROFILE`           | `hers-profile`   | Who she is                              |
+| `HERS_DATA`              | `data`           | What she remembers                      |
+| `HERS_MAX_SILENCE_MS`    | `180000`         | The three-minute rule's ceiling         |
 | `HEDRA_API_KEY`          | —                | Movement. Without it, a still photograph |
-| `ANNA_HEDRA_BUDGET_USD`  | `1`              | Hard ceiling on render spend            |
+| `HERS_HEDRA_BUDGET_USD`  | `1`              | Hard ceiling on render spend            |
 | `TELEGRAM_BOT_TOKEN`     | —                | The bot                                 |
 | `LIVEKIT_URL` + key/secret | —              | Phone calls                             |
 
@@ -479,7 +479,7 @@ Telegram cannot be tested without you: a bot is forbidden from opening a
 conversation, so until a human sends it one message there is no chat to answer
 and no id to allowlist. The audit says so rather than passing.
 
-Set `ANNA_DEBUG=1` to have every reconnect print its reason. A single reconnect
+Set `HERS_DEBUG=1` to have every reconnect print its reason. A single reconnect
 is routine; a stream of them with the same reason is a diagnosis.
 
 ---

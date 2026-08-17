@@ -24,13 +24,13 @@ after(() => {
 });
 
 async function serve() {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-http-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-http-'));
   const webRoot = path.join(root, 'web');
   const galleryDir = path.join(root, 'gallery');
   await mkdir(webRoot, { recursive: true });
   await mkdir(galleryDir, { recursive: true });
 
-  await writeFile(path.join(webRoot, 'index.html'), '<!doctype html><title>Anna</title>');
+  await writeFile(path.join(webRoot, 'index.html'), '<!doctype html><title>Hers</title>');
   await writeFile(path.join(webRoot, 'app.js'), 'console.log(1)');
   await writeFile(path.join(galleryDir, 'smiling.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // The things a traversal would be aiming at.
@@ -87,7 +87,7 @@ test('the site is served, and unknown paths fall back to it', async () => {
   const app = await serve();
   const index = await app.get('/');
   assert.equal(index.status, 200);
-  assert.match(await index.text(), /<title>Anna<\/title>/);
+  assert.match(await index.text(), /<title>Hers<\/title>/);
 
   const asset = await app.get('/app.js');
   assert.equal(asset.status, 200);
@@ -100,12 +100,12 @@ test('the site is served, and unknown paths fall back to it', async () => {
 test('a directory serves its own index, not the app shell', async () => {
   const app = await serve();
   await mkdir(path.join(app.root, 'web', 'call'), { recursive: true });
-  await writeFile(path.join(app.root, 'web', 'call', 'index.html'), '<title>Calling Anna</title>');
+  await writeFile(path.join(app.root, 'web', 'call', 'index.html'), '<title>Calling her</title>');
 
   const response = await app.get('/call/');
   assert.match(
     await response.text(),
-    /Calling Anna/,
+    /Calling her/,
     'falling through to the app shell here looks exactly like the call page being broken',
   );
 });

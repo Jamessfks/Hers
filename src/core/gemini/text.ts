@@ -1,5 +1,5 @@
 /**
- * The two things Anna asks Gemini for that are not a live conversation.
+ * The two things she asks Gemini for that are not a live conversation.
  *
  * Both are background work. Neither may ever block a turn, and neither may take
  * down a session by throwing — a failed consolidation costs a few facts, and a
@@ -120,7 +120,7 @@ export async function transcribeMedia(
 
 export interface PortraitRequest {
   apiKey: string;
-  /** What the picture should show, in Anna's own words. */
+  /** What the picture should show, in her own words. */
   description: string;
   /**
    * The photograph of her that the new picture must be of. Not optional.
@@ -144,7 +144,7 @@ export interface GeneratedImage {
 }
 
 /**
- * Makes a new picture of Anna.
+ * Makes a new picture of her.
  *
  * Returns null rather than throwing on every failure path, including a refusal:
  * image models decline requests for photorealistic people often enough that a

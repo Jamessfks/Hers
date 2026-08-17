@@ -1,5 +1,5 @@
 /**
- * One conversation with Anna.
+ * One conversation with her.
  *
  * A `Companion` is created per conversation and thrown away at the end of it —
  * one at the desk, one per phone call, one for Telegram. Each owns a live
@@ -33,7 +33,7 @@ import type {
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { FACT_KINDS, FEEL, MOVE, REMEMBER, SHOW, annaTools } from '../gemini/tools.ts';
+import { FACT_KINDS, FEEL, MOVE, REMEMBER, SHOW, companionTools } from '../gemini/tools.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import type { FactKind } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
@@ -43,9 +43,9 @@ import { Situation, isLateNight } from '../senses/situation.ts';
 import type { Brain } from './brain.ts';
 
 export interface CompanionSink {
-  /** Anna's voice: PCM signed 16-bit little-endian, 24kHz mono. */
+  /** Her voice: PCM signed 16-bit little-endian, 24kHz mono. */
   audio(pcm: Buffer): void;
-  transcript(who: 'user' | 'anna', text: string, final: boolean): void;
+  transcript(who: 'user' | 'her', text: string, final: boolean): void;
   state(state: ConnectionState): void;
   mood(mood: MoodReadout): void;
   /** Drop queued audio: she was cut off. */
@@ -191,7 +191,7 @@ export class Companion {
       model: brain.config.model,
       voice: brain.profile.voice.voice,
       languageCode: brain.profile.voice.languageCode,
-      tools: annaTools(this.#brain.avatar.readyGestures()),
+      tools: companionTools(this.#brain.avatar.readyGestures()),
       // Rebuilt rather than captured, so a reconnect picks up her current mood
       // and the senses that are on now rather than the ones that were on when
       // the conversation started.
@@ -199,7 +199,7 @@ export class Companion {
       handlers: {
         onAudio: (pcm) => this.#sink.audio(pcm),
         onUserText: (text, final) => this.#onUserText(text, final),
-        onAnnaText: (text, final) => this.#onAnnaText(text, final),
+        onHerText: (text, final) => this.#onHerText(text, final),
         onTurnComplete: () => this.#onTurnComplete(),
         onInterrupted: () => this.#onInterrupted(),
         onToolCall: (name, args) => this.#onToolCall(name, args),
@@ -243,7 +243,7 @@ export class Companion {
    *      been spending time outside."
    *
    * Labelling it harder did not fix it. Measured against the live model with
-   * the label "This is a photograph of YOU, Anna … not the person you are
+   * the label "This is a photograph of YOU … not the person you are
    * talking to", asked "do I have a tan?", she still answered from the picture.
    * A vivid image in context beats a sentence saying not to use it, and the
    * documented alternatives are closed: the Live API's own SDK says of
@@ -430,21 +430,21 @@ export class Companion {
     this.#showFaceIfAsked(text);
   }
 
-  #onAnnaText(text: string, final: boolean): void {
-    this.#sink.transcript('anna', text, final);
+  #onHerText(text: string, final: boolean): void {
+    this.#sink.transcript('her', text, final);
     if (!final) {
       this.#speaking = true;
       return;
     }
-    this.situation.noteAnnaSpoke();
-    this.#brain.memory.record('anna', text);
+    this.situation.noteHerSpoke();
+    this.#brain.memory.record('her', text);
   }
 
   #onTurnComplete(): void {
     this.#speaking = false;
     const wasOpener = this.#openerInFlight;
     this.#openerInFlight = false;
-    this.#initiative.noteAnnaFinished(wasOpener);
+    this.#initiative.noteHerFinished(wasOpener);
 
     const turns = this.situation.snapshot().turns;
     if (turns > 0 && turns % 12 === 0) {

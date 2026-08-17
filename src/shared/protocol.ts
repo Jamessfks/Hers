@@ -1,5 +1,5 @@
 /**
- * The wire between the browser and the local Anna server.
+ * The wire between the browser and the local server.
  *
  * Two frame kinds, on purpose:
  *
@@ -33,8 +33,8 @@ export const MediaKind = {
   CAMERA_JPEG: 0x02,
   /** Browser -> server. A screen still, JPEG. */
   SCREEN_JPEG: 0x03,
-  /** Server -> browser. Anna's voice, PCM signed 16-bit little-endian, 24kHz mono. */
-  ANNA_PCM24: 0x81,
+  /** Server -> browser. Her voice, PCM signed 16-bit little-endian, 24kHz mono. */
+  HERS_PCM24: 0x81,
 } as const;
 
 export type MediaKind = (typeof MediaKind)[keyof typeof MediaKind];
@@ -88,7 +88,7 @@ export type ClientMessage =
    *
    * The browser cannot see which application has focus, and should not try —
    * what it can honestly report is whether this tab has been touched, which is
-   * enough for Anna to tell "sitting here quietly" from "gone".
+   * enough for her to tell "sitting here quietly" from "gone".
    */
   | { t: 'presence'; idleSeconds: number; tabVisible: boolean }
   /**
@@ -212,13 +212,13 @@ export type ServerMessage =
    * true once the turn is closed. The UI replaces rather than appends while
    * false, or the transcript stutters.
    */
-  | { t: 'transcript'; who: 'user' | 'anna'; text: string; final: boolean }
-  /** Anna's audio was cut off. Drop whatever is still queued for playback. */
+  | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
+  /** Her audio was cut off. Drop whatever is still queued for playback. */
   | { t: 'interrupted' }
   | { t: 'sense'; sense: SenseName; on: boolean }
   /** Something went wrong, phrased for a person rather than a log. */
   | { t: 'trouble'; message: string }
-  /** A picture or clip Anna chose to show. Served from /gallery. */
+  /** A picture or clip she chose to show. Served from /gallery. */
   | { t: 'show'; url: string; kind: 'image' | 'clip'; caption?: string }
   | { t: 'profile'; files: Record<string, string> }
   /** The photograph and which gestures have been rendered from it. */
@@ -266,7 +266,7 @@ export interface IntimacyView {
 }
 
 export interface PastTurn {
-  speaker: 'user' | 'anna';
+  speaker: 'user' | 'her';
   text: string;
   at: number;
 }

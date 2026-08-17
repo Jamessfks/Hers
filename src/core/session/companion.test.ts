@@ -13,7 +13,7 @@ import type { GalleryItem } from '../gallery/gallery.ts';
 import type { ConnectionState, MoodReadout } from '../../shared/protocol.ts';
 
 /**
- * A whole Anna, with the socket faked and nothing else.
+ * A whole companion, with the socket faked and nothing else.
  *
  * This is the test that answers "does the thing work", as opposed to "does the
  * part work" — memory, mood, the prompt, the tools and the live session all run
@@ -38,11 +38,11 @@ class FakeSocket implements LiveSocket {
 }
 
 async function fixture(env: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-companion-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-companion-'));
   const config = loadConfig({
     GEMINI_API_KEY: 'test-key',
-    ANNA_PROFILE: path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
     ...env,
   } as NodeJS.ProcessEnv);
 
@@ -191,8 +191,8 @@ test('both halves of a turn reach the transcript and memory', async () => {
   await settled();
 
   const speakers = f.brain.memory.liveTranscript(10).map((turn) => turn.speaker);
-  assert.deepEqual(speakers, ['user', 'anna']);
-  assert.ok(f.transcript.some((line) => line.who === 'anna' && line.final));
+  assert.deepEqual(speakers, ['user', 'her']);
+  assert.ok(f.transcript.some((line) => line.who === 'her' && line.final));
   await f.companion.sleep();
 });
 
@@ -350,7 +350,7 @@ test('a sense being switched off is told to her, quietly', async () => {
 });
 
 test('frames are dropped when a sense is off, and rate-limited when it is on', async () => {
-  const f = await fixture({ ANNA_CAMERA_FPS: '1' });
+  const f = await fixture({ HERS_CAMERA_FPS: '1' });
   await f.companion.wake();
 
   f.companion.see(Buffer.from([1]), 'camera');
@@ -450,10 +450,10 @@ test('typing to her records the turn and reaches the model', async () => {
 });
 
 test('no API key is said plainly rather than thrown', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-nokey-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-nokey-'));
   const config = loadConfig({
-    ANNA_PROFILE: path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
   } as NodeJS.ProcessEnv);
   const brain = await Brain.open(config, { offline: true });
 
@@ -544,7 +544,7 @@ test('the screen watcher reaches her, and only while she is sharing a screen', a
 
 test('when she speaks first she looks at the screen as it is now, not as it was', async () => {
   // A real opener, on a real timer, wound down to seconds.
-  const f = await fixture({ ANNA_MIN_SILENCE_MS: '1000', ANNA_MAX_SILENCE_MS: '5000' });
+  const f = await fixture({ HERS_MIN_SILENCE_MS: '1000', HERS_MAX_SILENCE_MS: '5000' });
   await f.companion.wake();
   f.companion.setSense('screen', true);
 
@@ -575,7 +575,7 @@ test('when she speaks first she looks at the screen as it is now, not as it was'
 });
 
 test('a frame from a sense that has since been switched off is not used', async () => {
-  const f = await fixture({ ANNA_MIN_SILENCE_MS: '1000', ANNA_MAX_SILENCE_MS: '5000' });
+  const f = await fixture({ HERS_MIN_SILENCE_MS: '1000', HERS_MAX_SILENCE_MS: '5000' });
   await f.companion.wake();
   f.companion.setSense('screen', true);
   f.companion.see(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'screen');

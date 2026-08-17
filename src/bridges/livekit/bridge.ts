@@ -1,5 +1,5 @@
 /**
- * Calling Anna from a phone.
+ * Calling her from a phone.
  *
  * ## Why LiveKit is here and `@livekit/agents` is not
  *
@@ -12,16 +12,16 @@
  *
  * What it is not used for is the model. `@livekit/agents` has a Gemini realtime
  * plugin, and on Node it cannot take video input — that is Python only, and
- * documented as such. Video is half of what a phone call to Anna is *for*, so
+ * documented as such. Video is half of what a phone call is *for*, so
  * the agent framework is not usable here. Instead this bridge uses the plain
  * LiveKit media SDK as a pipe and feeds the same {@link Companion} the browser
  * uses. One brain, one Gemini session type, one language.
  *
- * ## Why Anna joins first
+ * ## Why she joins first
  *
  * There is no webhook, because a webhook needs an address the internet can
  * reach and that is the thing being avoided. So the flow is inverted: issuing a
- * call link makes Anna join the room and wait in it. If nobody arrives she
+ * call link makes her join the room and wait in it. If nobody arrives she
  * leaves again. It costs a few minutes of an idle participant and it removes
  * the entire class of inbound-connectivity problems.
  */
@@ -48,7 +48,7 @@ import { Companion } from '../../core/session/companion.ts';
 import type { Brain } from '../../core/session/brain.ts';
 import { INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE } from '../../shared/protocol.ts';
 
-/** How long Anna waits in an empty room before giving up on the call. */
+/** How long she waits in an empty room before giving up on the call. */
 const WAIT_FOR_CALLER_MS = 3 * 60 * 1000;
 /** How long a call may run before it is closed regardless. */
 const MAX_CALL_MS = 60 * 60 * 1000;
@@ -87,7 +87,7 @@ export class CallBridge {
   }
 
   /**
-   * Mints a caller token, opens the room, and puts Anna in it.
+   * Mints a caller token, opens the room, and puts her in it.
    *
    * The token goes in the URL *fragment*. A fragment is never sent to the
    * server that hosts the page, never appears in its logs, and does not survive
@@ -96,11 +96,11 @@ export class CallBridge {
    */
   async invite(callerName = 'you'): Promise<CallInvite> {
     if (!this.#config.callPageUrl) {
-      throw new Error('ANNA_CALL_PAGE_URL is not set, so there is nowhere to send the call.');
+      throw new Error('HERS_CALL_PAGE_URL is not set, so there is nowhere to send the call.');
     }
     await this.hangUp();
 
-    const room = `anna-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const room = `hers-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     const caller = new AccessToken(this.#config.apiKey, this.#config.apiSecret, {
       identity: `caller-${Math.random().toString(36).slice(2, 8)}`,
@@ -117,17 +117,17 @@ export class CallBridge {
       canPublishData: false,
     });
 
-    const anna = new AccessToken(this.#config.apiKey, this.#config.apiSecret, {
-      identity: 'anna',
+    const her = new AccessToken(this.#config.apiKey, this.#config.apiSecret, {
+      identity: 'hers',
       name: this.#brain.profile.identity.name,
       ttl: TOKEN_TTL,
     });
-    anna.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true });
+    her.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true });
 
     const call = new ActiveCall({
       brain: this.#brain,
       url: this.#config.url,
-      token: await anna.toJwt(),
+      token: await her.toJwt(),
       onEnded: () => {
         if (this.#active === call) this.#active = null;
       },
@@ -217,7 +217,7 @@ class ActiveCall {
 
     await this.#room.connect(this.#url, this.#token, { autoSubscribe: true, dynacast: true });
 
-    const track = LocalAudioTrack.createAudioTrack('anna', speaker);
+    const track = LocalAudioTrack.createAudioTrack('hers', speaker);
     const publishOptions = new TrackPublishOptions();
     publishOptions.source = TrackSource.SOURCE_MICROPHONE;
     await this.#room.localParticipant?.publishTrack(track, publishOptions);
@@ -265,7 +265,7 @@ class ActiveCall {
    * The caller's voice.
    *
    * `AudioStream` resamples to whatever is asked for, so asking for exactly
-   * what the Live API wants means there is no resampling code anywhere in Anna
+   * what the Live API wants means there is no resampling code anywhere in this project
    * — which is one fewer place for a click, a pitch shift or an off-by-one in a
    * ring buffer to live.
    */

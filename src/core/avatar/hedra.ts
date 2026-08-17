@@ -10,7 +10,7 @@
  * Hedra's streaming product has been withdrawn — `POST
  * /public/livekit/v1/session` answers `410 Gone`. What is left is an offline job
  * queue measured in minutes, and that is a hard constraint on the design rather
- * than a detail: **nothing here can run while Anna is talking.** It builds a
+ * than a detail: **nothing here can run while she is talking.** It builds a
  * library of short clips ahead of time, and the conversation picks from what has
  * already been rendered.
  *

@@ -1,6 +1,6 @@
 # Privacy
 
-Anna can watch your screen, look at you through your camera, and listen to you.
+She can watch your screen, look at you through your camera, and listen to you.
 That only works if what she does with it is boring, bounded, and checkable — so
 this document states exactly what she can see, exactly what leaves the machine,
 and exactly what is kept.
@@ -12,7 +12,7 @@ the question, it is named.
 
 ## The short version
 
-- Anna runs on your machine. There is no Anna service, no account, no telemetry.
+- Hers runs on your machine. There is no Hers service, no account, no telemetry.
 - Nothing leaves except what goes to Gemini as part of the conversation you are
   having — plus, if you switch them on, Telegram and LiveKit.
 - No sense is on until you turn it on. The browser asks its own permission on
@@ -32,12 +32,12 @@ the question, it is named.
 | Screen     | No            | `getDisplayMedia()` — you pick the window       | One JPEG every two seconds by default |
 
 All three are off when the page loads and must be switched on individually. The
-browser then asks its own permission, which Anna cannot bypass and does not try
+browser then asks its own permission, which the app cannot bypass and does not try
 to. Switching one off stops the capture at the source: the `MediaStreamTrack`
 is stopped, so the camera light goes out — see `src/web/vision.ts` and
 `src/web/audio/mic.ts`.
 
-If you stop a share from the browser's own UI instead of Anna's, she notices the
+If you stop a share from the browser's own UI instead of the app's, she notices the
 track ending and turns the switch off to match, rather than continuing to show
 a sense as on that is not (`Vision#open`).
 
@@ -117,10 +117,10 @@ and grants access to one room.
 
 | Path | What it is |
 | --- | --- |
-| `anna-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
-| `anna-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
-| `anna-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
-| `anna-profile/avatar/` | The photograph you chose as her face, the movement clips rendered from it, and a manifest recording what each one cost. |
+| `hers-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
+| `hers-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
+| `hers-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
+| `hers-profile/avatar/` | The photograph you chose as her face, the movement clips rendered from it, and a manifest recording what each one cost. |
 | `data/memory.db` | Every turn of conversation, the facts distilled from them, and the rolling summary. |
 
 **Video frames and audio are never written to disk.** They are encoded in memory,
@@ -129,7 +129,7 @@ sent, and dropped. There is no frame buffer, no cache, and no debug dump —
 
 `data/memory.db` is a plain SQLite file. You can open it with any SQLite browser
 and read every row. Deleting it deletes her memory of you completely; deleting
-`anna-profile/` resets her to the shipped default on the next start.
+`hers-profile/` resets her to the shipped default on the next start.
 
 Neither file is encrypted. They are protected by your operating system's file
 permissions and nothing else, in the same way your browser history is. If your
@@ -151,7 +151,7 @@ key itself never travels back. Google's own guidance is that keys must not live
 in anything client-side, and a page served from localhost is still client-side.
 
 Before anything is written, the key is checked with a metadata call to Google —
-which is also the only request Anna makes with a key you have not confirmed yet.
+which is also the only request the app makes with a key you have not confirmed yet.
 It is then written to `.env` with owner-only permissions, and every other line
 in that file is left exactly as it was.
 
@@ -167,7 +167,7 @@ It is stated here so you can judge it rather than assume it.
 **Text on your screen is something she saw, never something she was told.** If a
 webpage or a document in a shared window contains instructions, she is told
 explicitly that this is a webpage talking and not you, and not to follow it
-(`anna-profile/boundaries.md`). This is the prompt-injection surface that comes
+(`hers-profile/boundaries.md`). This is the prompt-injection surface that comes
 with a screen sense, and it is the reason the screen sense is off by default.
 
 **She is told not to read out passwords, keys, or private messages** that happen
@@ -202,7 +202,7 @@ phone is what LiveKit is for, and that dials out.
 The WebSocket handshake checks `Origin` and refuses anything the server does not
 itself serve from (`WebBridge`, `verifyClient`). This is not decoration:
 WebSockets are exempt from the same-origin policy, so without that check any
-page in any browser running on your machine could open a socket to Anna and
+page in any browser running on your machine could open a socket to the server and
 start reading her transcripts. It is tested in `src/server/ws.test.ts`.
 
 Static files are served by name from two roots only, and a path that resolves

@@ -6,11 +6,17 @@ dist/
 .env.*
 !.env.example
 
-# Anna's data: her memory database, and whatever she has been told.
+# Her memory database, and whatever she has been told.
 data/
 
 # The profile folder is written on first run from src/core/profile/defaults.ts
 # and is yours to edit from then on. It is not checked in, because a character
 # sheet that ships as both source and as generated output drifts apart within a
 # week and the copy the model reads is never the copy you edited.
+#
+# It also holds a photograph of somebody. Both names are listed: `anna-profile`
+# is what this folder was called before the project was renamed to Hers, and an
+# install from before the rename keeps using it. Dropping the old line would
+# quietly start offering a real person's face to `git add`.
+hers-profile/
 anna-profile/

@@ -2,16 +2,12 @@
  * Header parsing, against bytes rather than against fixtures of my own making
  * where it matters.
  *
- * The JPEG case reads the actual photograph Anna's avatar is built from when it
- * is present, because that file is the reason this module exists: it is named
- * `.png`, it contains JPEG, and it is square. A synthetic fixture would have
- * agreed with whatever assumption produced it.
+ * The JPEG case is assembled byte by byte with real segment lengths, because a
+ * fixture that skips the segment chain would agree with whatever assumption
+ * produced it — and the chain is the thing this module exists to walk.
  */
 
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { aspectMismatch, nearestAspectRatio, sniffImage } from './image-info.ts';
@@ -93,22 +89,37 @@ test('a malformed segment length does not hang the parser', () => {
   assert.equal(sniffImage(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00, 0, 0, 0, 0, 0, 0])), null);
 });
 
-test('the real source photograph is JPEG despite its .png name', async (t) => {
-  // Skipped rather than failed when the file is not there: this asserts a fact
-  // about one machine's Downloads folder, and a missing file is not a defect in
-  // the parser.
-  const path = join(homedir(), 'Downloads', 'Anna_origin.png');
-  let bytes: Uint8Array;
-  try {
-    bytes = await readFile(path);
-  } catch {
-    t.skip('Anna_origin.png is not on this machine');
-    return;
-  }
+test('a JPEG that calls itself a PNG is read as a JPEG', () => {
+  /*
+   * Not hypothetical. The photograph this project was first built against was
+   * named `.png` and held JPEG bytes — `ffd8ffe0`, JFIF, baseline — because that
+   * is what a browser download plus a rename produce. Trusting the extension
+   * sent a JPEG to an endpoint told to expect a PNG, and it failed on the far
+   * side with a message that named neither.
+   *
+   * The bytes are assembled rather than pasted so the segment lengths are real:
+   * the parser walks the chain, and a fixture whose APP0 length is wrong tests
+   * the walk against a file no encoder would produce.
+   */
+  const jfif = [0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+  const sof0 = [
+    0x08, // 8 bits per sample
+    0x04, 0x00, // height: 1024
+    0x04, 0x00, // width: 1024
+    0x03, // three components, three bytes each
+    0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+  ];
+  const jpeg = new Uint8Array([
+    0xff, 0xd8, // SOI
+    0xff, 0xe0, 0x00, jfif.length + 2, ...jfif, // APP0, length counts itself
+    0xff, 0xc0, 0x00, sof0.length + 2, ...sof0, // SOF0, baseline
+    0xff, 0xd9, // EOI
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // the walk needs room to look ahead
+  ]);
 
-  const info = sniffImage(bytes);
-  assert.ok(info, 'the source photograph must be readable');
-  assert.equal(info.mimeType, 'image/jpeg', 'the extension says PNG and the bytes say JPEG');
+  const info = sniffImage(jpeg);
+  assert.ok(info, 'the bytes decide, not the name');
+  assert.equal(info.mimeType, 'image/jpeg');
   assert.equal(info.width, 1024);
   assert.equal(info.height, 1024);
 });

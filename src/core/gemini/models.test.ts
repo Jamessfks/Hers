@@ -10,7 +10,7 @@ import { DEFAULT_LIVE_MODEL, KNOWN_LIVE_MODELS, capabilitiesOf } from './models.
  * combined with audio input close the socket with `1011 Internal error
  * occurred.` — reproduced on every attempt, and narrowed by bisection to
  * exactly that pair. Changing the default back to it, or marking it as
- * tool-capable, breaks Anna's voice path completely and silently.
+ * tool-capable, breaks Her voice path completely and silently.
  */
 test('the default model is one that can use tools while being spoken to', () => {
   assert.equal(capabilitiesOf(DEFAULT_LIVE_MODEL).toolsWithAudio, true);

@@ -8,7 +8,7 @@
  * project, along with the clicks and the off-by-one buffer bugs that come with
  * it.
  *
- * Echo cancellation is left to the browser and is the reason Anna does not hear
+ * Echo cancellation is left to the browser and is the reason she does not hear
  * herself. It works because her voice goes out through the same output device
  * the browser is cancelling against; a user on headphones gets it for free
  * either way.

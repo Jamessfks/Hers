@@ -1,5 +1,5 @@
 /**
- * Assembling everything Anna is into one system instruction.
+ * Assembling everything she is into one system instruction.
  *
  * This is the file where the product happens. Every other module exists so that
  * these words reach Gemini with the right things attached.

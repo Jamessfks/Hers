@@ -138,7 +138,7 @@ function opusHead(channels: number, inputRate: number): Buffer {
 
 /** RFC 7845 §5.2. */
 function opusTags(): Buffer {
-  const vendor = Buffer.from('anna', 'utf8');
+  const vendor = Buffer.from('hers', 'utf8');
   const tags = Buffer.alloc(8 + 4 + vendor.length + 4);
   tags.write('OpusTags', 0, 'ascii');
   tags.writeUInt32LE(vendor.length, 8);

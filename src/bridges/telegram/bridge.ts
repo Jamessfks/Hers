@@ -1,5 +1,5 @@
 /**
- * Anna on Telegram.
+ * Her, on Telegram.
  *
  * Long polling, so nothing listens for inbound connections and no webhook URL
  * has to exist. The bot dials out, holds the request open for fifty seconds,
@@ -23,7 +23,7 @@
  * ## Who is allowed to talk to her
  *
  * A bot token is a bearer credential on a public endpoint — anyone who finds
- * the bot can message it, and Anna's memory is one person's private life. So
+ * the bot can message it, and Her memory is one person's private life. So
  * every update is checked against an allowlist. When none is configured she
  * pins herself to the first chat that speaks to her and ignores everyone after,
  * which is a sane default rather than an open door.
@@ -319,7 +319,7 @@ export class TelegramBridge {
   // -------------------------------------------------------------------------
 
   async #command(chatId: number, raw: string): Promise<void> {
-    // `/call@AnnaBot arg` in a group.
+    // `/call@YourBot arg` in a group.
     const [head, ...rest] = raw.split(/\s+/);
     const command = (head ?? '').split('@')[0]?.toLowerCase() ?? '';
     const argument = rest.join(' ').trim();
@@ -548,7 +548,7 @@ export class TelegramBridge {
          * message came from".
          */
         transcript: (who, text, final, origin) => {
-          if (who !== 'anna' || !final || !this.#mine(origin)) return;
+          if (who !== 'her' || !final || !this.#mine(origin)) return;
           void this.#say(chatId, text);
         },
         audio: (pcm, origin) => {
@@ -601,7 +601,7 @@ export class TelegramBridge {
 
     await this.#api.sendVoice(
       chatId,
-      { data: ogg, name: 'anna.ogg', mimeType: 'audio/ogg' },
+      { data: ogg, name: 'voice.ogg', mimeType: 'audio/ogg' },
       pcmSeconds(pcm),
     );
     await this.#api.sendMessage(chatId, text);

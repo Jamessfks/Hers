@@ -12,7 +12,7 @@
  * twenty lines in the server.
  *
  * **There is one desktop conversation, not one per tab.** A second tab opening
- * a second Live session would mean two Annas with one memory, two sets of
+ * a second Live session would mean two of her with one memory, two sets of
  * billing, and both of them talking. The newest tab takes the conversation and
  * the previous one is told why it went quiet.
  */
@@ -102,7 +102,7 @@ export class WebBridge {
     this.#options.conversation.detach('web');
     this.#attached = false;
     await this.#options.conversation.sleep();
-    for (const client of this.#wss.clients) client.close(1001, 'Anna is shutting down');
+    for (const client of this.#wss.clients) client.close(1001, 'Hers is shutting down');
     await new Promise<void>((resolve) => this.#wss.close(() => resolve()));
   }
 
@@ -167,7 +167,7 @@ export class WebBridge {
     this.#attached = true;
     this.#options.conversation.attach({
       name: 'web',
-      audio: (pcm) => this.#sendMedia(MediaKind.ANNA_PCM24, pcm),
+      audio: (pcm) => this.#sendMedia(MediaKind.HERS_PCM24, pcm),
       transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
       state: (state) => this.#send({ t: 'state', state }),
       mood: (mood) => this.#send({ t: 'mood', mood }),
@@ -439,7 +439,7 @@ export class WebBridge {
    * Everything is re-sent rather than a delta: after a reset, the correct
    * transcript, memory, mood, avatar and configuration are all different at
    * once, and a browser that patched some of them would be showing a mixture of
-   * two Annas.
+   * two of her.
    */
   refresh(): void {
     const socket = this.#socket;

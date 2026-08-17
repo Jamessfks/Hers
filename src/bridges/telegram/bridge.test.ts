@@ -120,10 +120,10 @@ function textMessage(chatId: number, text: string, updateId = 1): TelegramUpdate
 }
 
 async function fixture(allowedChatIds: number[] = []) {
-  const root = await mkdtemp(path.join(tmpdir(), 'anna-telegram-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-telegram-'));
   const config = loadConfig({
-    ANNA_PROFILE: path.join(root, 'profile'),
-    ANNA_DATA: path.join(root, 'data'),
+    HERS_PROFILE: path.join(root, 'profile'),
+    HERS_DATA: path.join(root, 'data'),
   } as NodeJS.ProcessEnv);
 
   const brain = await Brain.open(config, { offline: true });
@@ -332,7 +332,7 @@ test('/help lists what she does, in her own name', async () => {
 
 test('a command addressed to the bot in a group still works', async () => {
   const f = await fixture([100]);
-  f.api.queue([textMessage(100, '/whoami@AnnaCompanionBot', 1)]);
+  f.api.queue([textMessage(100, '/whoami@HersCompanionBot', 1)]);
   await pump(f.bridge);
   assert.match(f.api.sent[0]?.text ?? '', /100/);
 });

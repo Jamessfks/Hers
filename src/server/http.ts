@@ -464,7 +464,7 @@ function send(response: ServerResponse, status: number, type: string, body: stri
 
 /** Shown when someone runs `npm start` before `npm run build`. */
 export function missingBuildPage(): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Anna</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Hers</title>
 <style>
   body { font: 16px/1.6 ui-sans-serif, system-ui, sans-serif; background:#0f1015; color:#e8e6f0;
          display:grid; place-items:center; min-height:100vh; margin:0; }
@@ -473,7 +473,7 @@ export function missingBuildPage(): string {
   h1 { font-weight: 500; letter-spacing:-.02em; }
 </style></head><body><main>
 <h1>The website has not been built yet.</h1>
-<p>Anna's server is running, but there is nothing to serve. Build it once:</p>
+<p>The server is running, but there is nothing to serve. Build it once:</p>
 <p><code>npm run build</code></p>
 <p>Or run <code>npm run dev</code>, which rebuilds as you edit.</p>
 </main></body></html>`;

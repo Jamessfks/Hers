@@ -8,7 +8,7 @@ npm run doctor
 
 It checks the key, the model, the profile folder, the memory database and the
 bridges, then opens a real Gemini session, says one thing and waits for audio.
-If that passes, the only things between you and Anna talking are the browser's
+If that passes, the only things between you and her talking are the browser's
 own permissions.
 
 ---
@@ -36,7 +36,7 @@ of it makes her speak. What makes her speak is:
   doing right now is exactly what you get.
 
 If you want a reply to a wave now rather than within three minutes, say
-something. If you want her to open more often, lower `ANNA_MAX_SILENCE_MS`.
+something. If you want her to open more often, lower `HERS_MAX_SILENCE_MS`.
 
 ### She answers on Telegram but not in the browser
 
@@ -47,11 +47,11 @@ shows a card saying so. Click **Bring her here** in the tab you want.
 ### She stopped mid-sentence and went quiet
 
 A Gemini session with video is capped at about two minutes and can drop at any
-time. Anna rebuilds it, and a single reconnect is routine. To see what is
+time. She rebuilds it, and a single reconnect is routine. To see what is
 happening:
 
 ```bash
-ANNA_DEBUG=1 npm start
+HERS_DEBUG=1 npm start
 ```
 
 Every reconnect then prints its reason. A stream of them with the *same* reason
@@ -75,7 +75,7 @@ character went missing or came along with a paste. Copy it again from
 
 ### "That value has characters in it that do not belong in a key"
 
-Something came with the paste — a space, a quote, a newline. Anna refuses to
+Something came with the paste — a space, a quote, a newline. Hers refuses to
 write it rather than guessing at the escaping and leaving you with a `.env` that
 reads back subtly wrong.
 
@@ -91,18 +91,18 @@ the file. Check for `GEMINI_API_KEY` already set in your shell.
 
 ### The button will not light up
 
-A denied permission arrives as an exception, and Anna says which one plainly.
+A denied permission arrives as an exception, and she says which one plainly.
 The browser only asks once per site — after a refusal you have to allow it from
 the address bar and try again.
 
 ### Screen sharing shares the wrong thing
 
-You pick the window or screen in the browser's own picker, not in Anna. Switch
+You pick the window or screen in the browser's own picker, not in Hers. Switch
 the sense off and on to be asked again.
 
 ### The camera light is on but she cannot see me
 
-If both the camera and screen are on, Anna sends **one** composited picture —
+If both the camera and screen are on, she is sent **one** composited picture —
 your screen with you inset in the corner — because the Live API takes stills on
 one channel with no way to label the source. She can still see you; you are
 smaller. Turn the screen sense off to send the camera full-frame.
@@ -122,12 +122,12 @@ deliberate, and it is what stops her face drifting.
 ### A render is stuck at "rendering"
 
 Hedra's queue is measured in minutes, and a two-second clip is a real job. Leave
-it. If it fails, Anna says so and the money is not spent twice — but note that
+it. If it fails, she says so and the money is not spent twice — but note that
 quitting the server mid-render abandons a job you have already paid for.
 
 ### "Budget reached"
 
-`ANNA_HEDRA_BUDGET_USD` is a hard ceiling checked against Hedra's own usage
+`HERS_HEDRA_BUDGET_USD` is a hard ceiling checked against Hedra's own usage
 figure before every render. Raise it in `.env` if you meant to.
 
 ---
@@ -137,7 +137,7 @@ figure before every render. Raise it in `.env` if you meant to.
 ### The bot does not answer
 
 - Is the server running? The bot is a long poll from *your machine*; nothing
-  answers when Anna is not up.
+  answers when she is not up.
 - Did you restart after adding `TELEGRAM_BOT_TOKEN`? It is read at startup.
 - Is your chat id allowed? Send `/whoami`. If someone else messaged the bot
   first, she pinned herself to them.
@@ -149,7 +149,7 @@ figure before every render. Raise it in `.env` if you meant to.
 
 ### Commands do not show in the `/` menu
 
-They are published on startup. Restart Anna; Telegram caches the list for a
+They are published on startup. Restart Hers; Telegram caches the list for a
 minute or two after that.
 
 ---
@@ -161,8 +161,8 @@ minute or two after that.
 - Open it in Safari or Chrome, not Telegram's in-app browser. On iOS the in-app
   browser does not reliably grant camera access.
 - Call links expire after fifteen minutes. Send `/call` again.
-- `ANNA_CALL_PAGE_URL` has to be somewhere your **phone** can reach. A
-  `127.0.0.1` address works only from the machine Anna runs on.
+- `HERS_CALL_PAGE_URL` has to be somewhere your **phone** can reach. A
+  `127.0.0.1` address works only from the machine Hers runs on.
 
 ---
 
@@ -172,9 +172,9 @@ minute or two after that.
 deleted: memory, conversations on every surface, mood, profile, gallery,
 photograph and clips. Your API keys survive.
 
-If it refuses with *"Refusing to delete …"*, `ANNA_PROFILE` or `ANNA_DATA` points
+If it refuses with *"Refusing to delete …"*, `HERS_PROFILE` or `HERS_DATA` points
 somewhere too dangerous to remove — your home directory, the root of a disk, or
-the folder Anna is running from. Point them at folders of their own.
+the folder Hers is running from. Point them at folders of their own.
 
 ---
 

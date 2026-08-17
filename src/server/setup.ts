@@ -1,5 +1,5 @@
 /**
- * Setting Anna up from the website: the key, and starting over.
+ * Setting her up from the website: the key, and starting over.
  *
  * Both of these used to be things you did in a text editor and a terminal, and
  * both are things a person should be able to do from the page they are already

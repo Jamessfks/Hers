@@ -8,7 +8,7 @@ import { GENERATIONS_PER_DAY, Gallery, mimeFor, wantsHerFace } from './gallery.t
 import type { GalleryOptions } from './gallery.ts';
 
 async function gallery(files: string[] = [], options: GalleryOptions = {}) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'anna-gallery-'));
+  const dir = await mkdtemp(path.join(tmpdir(), 'hers-gallery-'));
   await mkdir(dir, { recursive: true });
   for (const name of files) {
     await writeFile(path.join(dir, name), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
@@ -25,7 +25,7 @@ const FACE_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
  * that is where `AvatarStudio` keeps it.
  */
 async function withFace(files: string[] = [], options: GalleryOptions = {}) {
-  const avatarDir = await mkdtemp(path.join(tmpdir(), 'anna-face-'));
+  const avatarDir = await mkdtemp(path.join(tmpdir(), 'hers-face-'));
   const absolutePath = path.join(avatarDir, 'source.png');
   await writeFile(absolutePath, FACE_BYTES);
 
@@ -50,7 +50,7 @@ function recorder() {
 }
 
 test('an empty or missing folder is an empty gallery, not an error', async () => {
-  const missing = new Gallery(path.join(tmpdir(), 'anna-nothing-here-at-all'));
+  const missing = new Gallery(path.join(tmpdir(), 'hers-nothing-here-at-all'));
   assert.deepEqual(await missing.list(), []);
   assert.equal(await missing.pick('anything'), null);
 });

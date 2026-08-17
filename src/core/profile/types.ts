@@ -1,5 +1,5 @@
 /**
- * The shape of Anna's personalization folder once it has been read off disk.
+ * The shape of her personalization folder once it has been read off disk.
  *
  * Every field here has a default. A profile folder that is missing, empty,
  * half-edited or full of typos must still produce a complete `Profile`, because

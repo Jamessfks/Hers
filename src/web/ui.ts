@@ -124,7 +124,7 @@ export class Ui {
 
   readonly #senseButtons = new Map<SenseName, HTMLButtonElement>();
   /** The in-progress line per speaker, replaced until the turn closes. */
-  readonly #pending = new Map<'user' | 'anna', HTMLElement>();
+  readonly #pending = new Map<'user' | 'her', HTMLElement>();
   #profileFiles: Record<string, string> = {};
   #openFile = 'personality';
   #awake = false;
@@ -133,7 +133,7 @@ export class Ui {
   #toastTimer: number | null = null;
   /** Written by two independent meters; the louder wins. */
   #micLevel = 0;
-  #annaLevel = 0;
+  #herLevel = 0;
   #avatar: AvatarView | null = null;
   /** So a reconnect on an unconfigured server does not reopen the dialog. */
   #offeredSetup = false;
@@ -389,7 +389,7 @@ export class Ui {
    * rather than appending, because live transcription revises itself constantly
    * and appending each revision produces a stuttering wall of near-duplicates.
    */
-  line(who: 'user' | 'anna', text: string, final: boolean): void {
+  line(who: 'user' | 'her', text: string, final: boolean): void {
     this.#empty.hidden = true;
     const existing = this.#pending.get(who);
     const element = existing ?? this.#newLine(who);
@@ -418,7 +418,7 @@ export class Ui {
    */
   media(url: string, kind: 'image' | 'clip', caption?: string): void {
     this.#empty.hidden = true;
-    const element = this.#newLine('anna');
+    const element = this.#newLine('her');
     const said = element.querySelector('.said');
     said?.remove();
 
@@ -511,7 +511,7 @@ export class Ui {
    * Replaces whatever is on screen rather than appending: this arrives on
    * connect, and a reconnect that appended would show the last hour twice.
    */
-  setHistory(turns: readonly { speaker: 'user' | 'anna'; text: string }[]): void {
+  setHistory(turns: readonly { speaker: 'user' | 'her'; text: string }[]): void {
     this.#transcript.replaceChildren(this.#empty);
     this.#pending.clear();
     this.#empty.hidden = turns.length > 0;
@@ -619,8 +619,8 @@ export class Ui {
     this.#paintLevel();
   }
 
-  setAnnaLevel(level: number): void {
-    this.#annaLevel = level;
+  setHerLevel(level: number): void {
+    this.#herLevel = level;
     this.#paintLevel();
   }
 
@@ -791,7 +791,7 @@ export class Ui {
     this.#name.textContent = chosen;
     document.title = chosen;
     this.#still.alt = chosen;
-    for (const label of this.#transcript.querySelectorAll('.line[data-who="anna"] .who')) {
+    for (const label of this.#transcript.querySelectorAll('.line[data-who="her"] .who')) {
       label.textContent = chosen;
     }
     // Prose in the markup that names her. Marked in the HTML rather than listed
@@ -836,12 +836,12 @@ export class Ui {
   }
 
   #paintLevel(): void {
-    const level = Math.max(this.#micLevel * 0.5, this.#annaLevel).toFixed(3);
+    const level = Math.max(this.#micLevel * 0.5, this.#herLevel).toFixed(3);
     this.#orb.style.setProperty('--level', level);
     this.#portrait.style.setProperty('--level', level);
   }
 
-  #newLine(who: 'user' | 'anna'): HTMLElement {
+  #newLine(who: 'user' | 'her'): HTMLElement {
     const element = document.createElement('div');
     element.className = 'line';
     element.dataset.who = who;
@@ -851,7 +851,7 @@ export class Ui {
     element.dataset.same = String(previous?.dataset?.who === who);
     element.innerHTML = '<span class="who"></span><p class="said"></p>';
     const label = element.querySelector('.who');
-    if (label) label.textContent = who === 'anna' ? this.#herName : 'You';
+    if (label) label.textContent = who === 'her' ? this.#herName : 'You';
     this.#transcript.append(element);
     return element;
   }

@@ -1,7 +1,7 @@
 /**
  * Reading the machine, once, with permission, so she knows who she is talking to.
  *
- * The brief: *"Anna will scan the local hard drive before the conversation has
+ * The brief: *"She will scan the local hard drive before the conversation has
  * begun. She will ask the user if it is ok."* That second sentence is the whole
  * design and it is not decoration — this reads somebody's private documents and
  * sends excerpts to Google, so everything here exists to make that a decision
@@ -326,7 +326,7 @@ export function explain(error: unknown): string {
   if (code === 'EPERM' || code === 'EACCES') {
     return process.platform === 'darwin'
       ? 'macOS refused it. System Settings -> Privacy & Security -> Full Disk Access, ' +
-          'and add the app you start Anna from (Terminal, iTerm, or your editor). The ' +
+          'and add the app you start Hers from (Terminal, iTerm, or your editor). The ' +
           'grant follows the Node binary, so a Node upgrade silently revokes it.'
       : 'The operating system refused it. Check the folder permissions.';
   }

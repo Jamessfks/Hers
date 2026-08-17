@@ -52,7 +52,7 @@ function fixture(
   const states: LiveState[] = [];
   const audio: Buffer[] = [];
   const userText: { text: string; final: boolean }[] = [];
-  const annaText: { text: string; final: boolean }[] = [];
+  const herText: { text: string; final: boolean }[] = [];
   const troubles: string[] = [];
   let turns = 0;
   let interruptions = 0;
@@ -79,7 +79,7 @@ function fixture(
     handlers: {
       onAudio: (pcm) => audio.push(pcm),
       onUserText: (text, final) => userText.push({ text, final }),
-      onAnnaText: (text, final) => annaText.push({ text, final }),
+      onHerText: (text, final) => herText.push({ text, final }),
       onTurnComplete: () => (turns += 1),
       onInterrupted: () => (interruptions += 1),
       onToolCall: async () => ({ ok: true }),
@@ -96,7 +96,7 @@ function fixture(
     states,
     audio,
     userText,
-    annaText,
+    herText,
     troubles,
     get turns() {
       return turns;
@@ -152,7 +152,7 @@ test('a model without affective dialog is not sent it', async () => {
     handlers: {
       onAudio: () => undefined,
       onUserText: () => undefined,
-      onAnnaText: () => undefined,
+      onHerText: () => undefined,
       onTurnComplete: () => undefined,
       onInterrupted: () => undefined,
       onToolCall: async () => ({}),
@@ -179,7 +179,7 @@ test('an unknown model gets the conservative config rather than an optimistic on
     handlers: {
       onAudio: () => undefined,
       onUserText: () => undefined,
-      onAnnaText: () => undefined,
+      onHerText: () => undefined,
       onTurnComplete: () => undefined,
       onInterrupted: () => undefined,
       onToolCall: async () => ({}),
@@ -269,7 +269,7 @@ test('audio parts become audio and transcripts accumulate until the turn closes'
 
   assert.equal(f.audio.length, 1);
   assert.equal(f.audio[0]?.toString(), 'hi');
-  assert.deepEqual(f.annaText.at(-1), { text: 'You are up early.', final: true });
+  assert.deepEqual(f.herText.at(-1), { text: 'You are up early.', final: true });
   assert.equal(f.turns, 1);
 });
 
@@ -290,7 +290,7 @@ test('two generations in one turn are two utterances, not one run-on', async () 
   socket.emit({ serverContent: { turnComplete: true } } as unknown as LiveServerMessage);
   await settled();
 
-  const finals = f.annaText.filter((line) => line.final).map((line) => line.text);
+  const finals = f.herText.filter((line) => line.final).map((line) => line.text);
   assert.deepEqual(finals, ["Great, huh? What's up?", 'You know, you could use a friend.']);
   assert.equal(f.turns, 1, 'it is still one turn');
 });
@@ -307,7 +307,7 @@ test('a generation and its turn arriving together emit once, not twice', async (
   } as unknown as LiveServerMessage);
   await settled();
 
-  const finals = f.annaText.filter((line) => line.final);
+  const finals = f.herText.filter((line) => line.final);
   assert.equal(finals.length, 1, 'the usual case must not double up');
   assert.equal(finals[0]?.text, 'Just the one thing.');
 });
@@ -325,7 +325,7 @@ test('the transcript buffer resets between turns', async () => {
   } as unknown as LiveServerMessage);
   await settled();
 
-  assert.equal(f.annaText.at(-1)?.text, 'second', 'a turn must not inherit the last one');
+  assert.equal(f.herText.at(-1)?.text, 'second', 'a turn must not inherit the last one');
 });
 
 test('being interrupted clears what she was going to say', async () => {
@@ -344,7 +344,7 @@ test('being interrupted clears what she was going to say', async () => {
 
   assert.equal(f.interruptions, 1);
   assert.equal(
-    f.annaText.at(-1)?.text,
+    f.herText.at(-1)?.text,
     'Sorry.',
     'the abandoned half-sentence must not be prepended to the next one',
   );
@@ -497,7 +497,7 @@ test('a message from a socket that has been replaced is ignored', async () => {
     serverContent: { outputTranscription: { text: 'ghost' }, turnComplete: true },
   } as unknown as LiveServerMessage);
 
-  assert.equal(f.annaText.length, 0, 'a superseded socket spoke into the live conversation');
+  assert.equal(f.herText.length, 0, 'a superseded socket spoke into the live conversation');
 });
 
 test('a tool answer that arrives after a reconnect is dropped, not sent to a stranger', async () => {
@@ -576,7 +576,7 @@ test('a function response glued to the front of a sentence never reaches memory'
   } as unknown as LiveServerMessage);
   await settled();
 
-  assert.equal(f.annaText.at(-1)?.text, 'The one across your chest from that sports bra.');
+  assert.equal(f.herText.at(-1)?.text, 'The one across your chest from that sports bra.');
 });
 
 test('she is still allowed to talk about code', async () => {
@@ -591,7 +591,7 @@ test('she is still allowed to talk about code', async () => {
       serverContent: { outputTranscription: { text: line }, turnComplete: true },
     } as unknown as LiveServerMessage);
     await settled();
-    assert.equal(f.annaText.at(-1)?.text, line, line);
+    assert.equal(f.herText.at(-1)?.text, line, line);
   }
 });
 
@@ -628,7 +628,7 @@ test('a connect that never settles is a failure, not a hang', async () => {
     handlers: {
       onAudio: () => undefined,
       onUserText: () => undefined,
-      onAnnaText: () => undefined,
+      onHerText: () => undefined,
       onTurnComplete: () => undefined,
       onInterrupted: () => undefined,
       onToolCall: async () => ({}),
@@ -682,7 +682,7 @@ test('two utterances that arrive back to back stay two lines', async () => {
   } as unknown as LiveServerMessage);
   await settled();
 
-  const lines = f.annaText.filter((line) => line.final).map((line) => line.text);
+  const lines = f.herText.filter((line) => line.final).map((line) => line.text);
   assert.deepEqual(lines, ["I'd say kind of an artist", 'Maybe a little punk adjacent?']);
 });
 
@@ -705,6 +705,6 @@ test('a tail that arrives after the flag still belongs to the line it trails', a
   } as unknown as LiveServerMessage);
   await settled();
 
-  const lines = f.annaText.filter((line) => line.final).map((line) => line.text);
+  const lines = f.herText.filter((line) => line.final).map((line) => line.text);
   assert.deepEqual(lines, ['Thought you might still be buried under that presentation.']);
 });
