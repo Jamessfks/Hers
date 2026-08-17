@@ -74,6 +74,10 @@ export interface StaticOptions {
   setKey?: (key: string) => Promise<{ ok: boolean; error?: string; keyHint?: string }>;
   /** Forgets everything and starts again. */
   reset?: () => Promise<{ ok: boolean; error?: string }>;
+  /** What she has been allowed to read, and where it would be sensible to look. */
+  knowledge?: () => Promise<unknown>;
+  /** Permission to read these folders, followed immediately by the scan. */
+  scan?: (folders: string[]) => Promise<unknown>;
 }
 
 /** A key, a confirmation word — nothing that reaches here is large. */
@@ -104,6 +108,31 @@ export function createRequestHandler(options: StaticOptions) {
       return;
     }
 
+    /*
+     * Permission to read somebody's files, and the scan it authorises.
+     *
+     * One request rather than two on purpose: consent that is stored and then
+     * acted on later is consent whose scope has drifted from the moment it was
+     * given. Saying yes here is saying yes to this scan, now.
+     */
+    if (request.method === 'POST' && pathname === '/api/knowledge') {
+      if (!options.scan) {
+        send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'Not available.' }));
+        return;
+      }
+      const body = await readJson(request, response);
+      if (!body) return;
+      const folders = Array.isArray(body.folders)
+        ? body.folders.filter((folder): folder is string => typeof folder === 'string')
+        : [];
+      if (folders.length === 0) {
+        send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'No folders were chosen.' }));
+        return;
+      }
+      send(response, 200, TYPES['.json']!, JSON.stringify(await options.scan(folders)));
+      return;
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       send(response, 405, 'text/plain; charset=utf-8', 'Method not allowed');
       return;
@@ -116,6 +145,11 @@ export function createRequestHandler(options: StaticOptions) {
 
     if (pathname.startsWith('/avatar/clips/')) {
       await serveAvatarClip(options.avatar(), pathname.slice('/avatar/clips/'.length), response);
+      return;
+    }
+
+    if (pathname === '/api/knowledge' && options.knowledge) {
+      send(response, 200, TYPES['.json']!, JSON.stringify(await options.knowledge()));
       return;
     }
 

@@ -46,6 +46,28 @@ export interface UiHandlers {
   onPinIntimacy(score: number): void;
   /** Hand closeness back to time and contact. */
   onAutoIntimacy(): void;
+  /** Permission to read these folders, once. Resolves to a report or an error. */
+  onScan(folders: string[]): Promise<ScanOutcomeView>;
+  /** Ask what she has already been allowed to read. */
+  onLoadKnowledge(): Promise<KnowledgeView>;
+}
+
+/** What the server says about the scan afterwards. */
+export interface ScanOutcomeView {
+  ok?: boolean;
+  error?: string;
+  learned?: number;
+  seen?: number;
+  read?: number;
+  refused?: number;
+  denied?: { folder: string; reason: string }[];
+}
+
+/** What she has been allowed to read, and where it makes sense to offer. */
+export interface KnowledgeView {
+  folders?: string[];
+  scannedAt?: number;
+  suggested?: string[];
 }
 
 /** What has to be typed before the delete button will do anything. */
@@ -89,6 +111,9 @@ export class Ui {
   readonly #resetConfirm = need<HTMLInputElement>('reset-confirm');
   readonly #resetGo = need<HTMLButtonElement>('reset-go');
   readonly #resetStatus = need('reset-status');
+  readonly #scanFolders = need('scan-folders');
+  readonly #scanGo = need<HTMLButtonElement>('scan-go');
+  readonly #scanStatus = need('scan-status');
   readonly #intimacyReadout = need('intimacy-readout');
   readonly #intimacyRange = need<HTMLInputElement>('intimacy-range');
   readonly #intimacyAuto = need<HTMLButtonElement>('intimacy-auto');
@@ -166,7 +191,12 @@ export class Ui {
       if (event.key === 'Enter') addMemory();
     });
 
-    need('setup-open').addEventListener('click', () => this.#setup.showModal());
+    need('setup-open').addEventListener('click', () => {
+      void this.#loadKnowledge();
+      this.#setup.showModal();
+    });
+
+    this.#scanGo.addEventListener('click', () => void this.#scan());
 
     this.#keySave.addEventListener('click', () => void this.#saveKey());
     this.#keyInput.addEventListener('keydown', (event) => {
@@ -668,6 +698,77 @@ export class Ui {
       this.#offeredSetup = true;
       if (!this.#setup.open) this.#setup.showModal();
     }
+  }
+
+  /**
+   * Offers the folders, ticked by nobody.
+   *
+   * Deliberately unticked. A pre-ticked box is not consent, and this reads
+   * somebody's private documents — the user has to do something for it to
+   * happen, and if they read nothing and click nothing then nothing is read.
+   */
+  async #loadKnowledge(): Promise<void> {
+    const view = await this.#handlers.onLoadKnowledge();
+    const already = new Set(view.folders ?? []);
+    const offered = view.suggested ?? [];
+
+    this.#scanFolders.replaceChildren();
+    for (const folder of offered) {
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = folder;
+      const name = document.createElement('span');
+      name.textContent = folder.split('/').pop() ?? folder;
+      const full = document.createElement('code');
+      full.textContent = folder;
+      label.append(box, name, full);
+      this.#scanFolders.append(label);
+    }
+
+    if (already.size > 0 && view.scannedAt) {
+      const when = new Date(view.scannedAt).toLocaleDateString();
+      this.#status(
+        this.#scanStatus,
+        `Last read ${when}: ${[...already].map((f) => f.split('/').pop()).join(', ')}.`,
+        'good',
+      );
+    }
+  }
+
+  async #scan(): Promise<void> {
+    const chosen = [...this.#scanFolders.querySelectorAll<HTMLInputElement>('input:checked')].map(
+      (box) => box.value,
+    );
+    if (chosen.length === 0) {
+      this.#status(this.#scanStatus, 'Tick a folder first.', 'bad');
+      return;
+    }
+
+    this.#scanGo.disabled = true;
+    this.#status(this.#scanStatus, 'Reading…', 'working');
+    const outcome = await this.#handlers.onScan(chosen);
+    this.#scanGo.disabled = false;
+
+    if (outcome.error && !outcome.ok) {
+      this.#status(this.#scanStatus, outcome.error, 'bad');
+      return;
+    }
+
+    const parts = [
+      `${outcome.seen ?? 0} files seen, ${outcome.read ?? 0} read`,
+      `${outcome.refused ?? 0} skipped for looking private`,
+      `${outcome.learned ?? 0} things kept`,
+    ];
+    // A refusal is the ordinary case on macOS until access is granted, and the
+    // reason from the server carries the remedy.
+    for (const denial of outcome.denied ?? []) {
+      parts.push(`${denial.folder.split('/').pop() ?? denial.folder}: ${denial.reason}`);
+    }
+    if (outcome.error) parts.push(outcome.error);
+    parts.push('She will have it the next time she wakes.');
+
+    this.#status(this.#scanStatus, parts.join(' · '), outcome.denied?.length ? 'bad' : 'good');
   }
 
   #status(element: HTMLElement, message: string, kind: 'working' | 'good' | 'bad'): void {

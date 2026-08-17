@@ -14,6 +14,7 @@
  */
 
 import { createServer } from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,6 +22,7 @@ import { Brain } from '../core/session/brain.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 import { applyGeminiKey, checkGeminiKey, maskKey } from './setup.ts';
+import { knowledgeState, runScan, suggestedFolders } from './knowledge.ts';
 import { WebBridge } from './ws.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
@@ -88,6 +90,31 @@ export async function main(): Promise<void> {
         } catch (error) {
           return { ok: false, error: error instanceof Error ? error.message : String(error) };
         }
+      },
+
+      /** What she has been allowed to read, and where it makes sense to offer. */
+      knowledge: async () => ({
+        ...(await knowledgeState(brain)),
+        suggested: suggestedFolders(os.homedir()),
+        platform: process.platform,
+      }),
+
+      /**
+       * Permission, then the scan it authorises.
+       *
+       * The conversation is told afterwards rather than restarted: a session's
+       * memories are fixed when it wakes, so what she has just learned reaches
+       * her the next time she does. Saying so in the reply is more honest than
+       * silently doing nothing until a reconnect.
+       */
+      scan: async (folders) => {
+        const outcome = await runScan(brain, folders);
+        web.refresh();
+        console.log(
+          `  knowledge scan — ${outcome.seen} files seen, ${outcome.read} read, ` +
+            `${outcome.refused} refused, ${outcome.learned} facts kept`,
+        );
+        return outcome;
       },
 
       /**

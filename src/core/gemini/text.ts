@@ -34,7 +34,19 @@ const DISTIL_TIMEOUT_MS = 30_000;
 const TRANSCRIBE_TIMEOUT_MS = 60_000;
 const IMAGE_TIMEOUT_MS = 120_000;
 
-export function createGeminiDistiller(apiKey: string, model = DISTILLER_MODEL): Distiller {
+/**
+ * `maxOutputTokens` is a parameter because the budget is shared with thinking.
+ *
+ * Gemini 3 spends part of any output allowance reasoning before it writes, so a
+ * cap sized for a short reply can truncate the reply itself. The default suits a
+ * consolidation pass; a job that asks for a dozen facts and a summary needs to
+ * say so.
+ */
+export function createGeminiDistiller(
+  apiKey: string,
+  model = DISTILLER_MODEL,
+  maxOutputTokens = 900,
+): Distiller {
   const ai = new GoogleGenAI({ apiKey });
   return {
     async distil(system, transcript) {
@@ -44,7 +56,7 @@ export function createGeminiDistiller(apiKey: string, model = DISTILLER_MODEL): 
         config: {
           systemInstruction: system,
           temperature: 0.2,
-          maxOutputTokens: 900,
+          maxOutputTokens,
           abortSignal: AbortSignal.timeout(DISTIL_TIMEOUT_MS),
         },
       });

@@ -24,6 +24,7 @@ import { Microphone } from './audio/mic.ts';
 import { Player } from './audio/player.ts';
 import { Vision } from './vision.ts';
 import { Ui } from './ui.ts';
+import type { KnowledgeView, ScanOutcomeView } from './ui.ts';
 
 /** How often presence is reported. Cheap, and the server only needs the shape. */
 const PRESENCE_INTERVAL_MS = 15_000;
@@ -54,6 +55,28 @@ const ui = new Ui({
   },
   onPinIntimacy: (score) => connection.send({ t: 'intimacy.pin', score }),
   onAutoIntimacy: () => connection.send({ t: 'intimacy.auto' }),
+  onLoadKnowledge: async () => {
+    try {
+      const response = await fetch('/api/knowledge');
+      return response.ok ? ((await response.json()) as KnowledgeView) : {};
+    } catch {
+      return {};
+    }
+  },
+  onScan: async (folders) => {
+    try {
+      const response = await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ folders }),
+      });
+      return (await response.json()) as ScanOutcomeView;
+    } catch (error) {
+      return {
+        error: `Could not reach the server: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  },
   onSaveKey: (key) => post('/api/key', { key }),
   onReset: async (confirm) => {
     // Whatever is playing is about to belong to somebody who no longer exists.
