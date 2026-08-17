@@ -49,24 +49,22 @@ open her memory and cross out a line you would rather she did not keep.
 
 ## What it looks like
 
-She saw a Google page on the shared screen and asked about it, unprompted. The
-picture is one she decided to send — generated from the photograph, in a scene she
-described herself.
+**At the desk.** She was watching the shared screen, saw a Google page on it, and
+asked about it before being asked anything. The picture is one she decided to
+send — generated from the photograph you gave her, in a scene she described
+herself. The word beside her name, top left, is her live mood.
 
-![Her noticing what is on the shared screen, and sending a picture of herself](docs/screenshots/screen-sense.png)
-
-Asked to perform, she declines. The mood in the top-left ("buoyant") is live, it
-moves during the conversation, and it is in her voice as well as her words.
-
-![Declining to laugh on command](docs/screenshots/web.png)
+![She notices a page on the shared screen, asks about it unprompted, and sends a picture of herself](docs/screenshots/screen-sense.png)
 
 <div align="center">
-<img src="docs/screenshots/telegram.png" alt="The same conversation continuing on Telegram, with her remembering the interview" width="360">
+<img src="docs/screenshots/telegram.png" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
 </div>
 
-Later, on a phone. Same companion, same memory: she was told about an interview
-once and asks about *the Google one*. Her portrait is the chat wallpaper. The last
-line is hers.
+**And on a phone.** The same companion, not a second one: one memory, one mood,
+one conversation reached from somewhere else. `/me` returns the photograph you
+gave her. `/mood` answers in a word rather than a number. And a hello came back as
+a five-second **voice note**, because she decided that one was worth hearing out
+loud rather than reading.
 
 ---
 
