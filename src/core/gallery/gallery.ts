@@ -399,6 +399,34 @@ export function wantsHerFace(description: string): boolean {
   return words.every((word) => ONLY_HER.has(word));
 }
 
+/** Words that make a sentence a request to *see*, rather than merely about her. */
+const SEEING = new Set([
+  'look', 'looks', 'see', 'show', 'picture', 'pictures', 'pic', 'photo',
+  'photos', 'photograph', 'selfie', 'portrait', 'image', 'face',
+]);
+
+/**
+ * True when the user is asking to be shown her, in their own words.
+ *
+ * Stricter than {@link wantsHerFace}, and it has to be. That one judges a
+ * description *she* wrote, when she has already decided to send something, so
+ * the only question left is which file. This judges an arbitrary sentence a
+ * person typed, and the cost of a false positive is a photograph arriving
+ * because they said hello.
+ *
+ * "how are you" is the case that proves it: every word of it is in the
+ * vocabulary of things that name only her, so `wantsHerFace` says yes. It is
+ * not a request to see anybody. Requiring a word about *seeing* is what
+ * separates "what do you look like" from "how are you", and naming a scene —
+ * "you at the window watching the rain" — takes it out of scope entirely,
+ * because that is a picture that has to be made rather than one that exists.
+ */
+export function asksToSeeHer(text: string): boolean {
+  const words = text.toLowerCase().match(/[a-z']+/g);
+  if (!words || words.length === 0) return false;
+  return words.every((word) => ONLY_HER.has(word)) && words.some((word) => SEEING.has(word));
+}
+
 /** Below this many characters a shared prefix is a coincidence, not a match. */
 const PREFIX_FLOOR = 4;
 

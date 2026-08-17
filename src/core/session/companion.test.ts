@@ -154,7 +154,7 @@ test('no picture of her is ever put into the conversation', async () => {
   );
 
   const prompt = f.systemInstructions[0] ?? '';
-  assert.match(prompt, /send them a picture/i, 'the capability moves to the show tool');
+  assert.match(prompt, /never answer that question in words/i, 'the picture is the answer');
   assert.match(prompt, /cannot see them/i, 'and the honest answer when blind is stated');
   assert.ok(!/eye colour|hairstyle|body type/i.test(prompt), 'the prose description is back');
   await f.companion.sleep();
@@ -621,3 +621,106 @@ function facePng(width = 512, height = 640): Buffer {
   header[25] = 6;
   return header;
 }
+
+test('asking to see her sends the photograph, without the model having to decide', async () => {
+  /*
+   * "What do you look like?" came back as "artist Maybe a little punk adjacent?
+   * You tell me." — no picture, and invented, because she has no written
+   * description of herself and the question demanded an answer anyway. A direct
+   * request deserves a direct answer, so this one does not go through the model.
+   */
+  const f = await fixture();
+  await f.brain.avatar.setSource(facePng(), 'image/png');
+  await f.companion.wake();
+
+  f.companion.say('What do you look like?');
+  await settle();
+
+  assert.equal(f.shown.length, 1, 'the photograph should have gone out');
+  assert.equal(f.shown[0]?.name, 'source.png', 'and it is the one they uploaded, not a generation');
+
+  // She is told it went, so she does not describe a face she cannot see.
+  const told = f.socket().content.map((each) => JSON.stringify(each.turns)).join(' ');
+  assert.match(told, /has just been sent to them/);
+  await f.companion.sleep();
+});
+
+test('ordinary conversation does not trip the photograph', async () => {
+  const f = await fixture();
+  await f.brain.avatar.setSource(facePng(), 'image/png');
+  await f.companion.wake();
+
+  // Every word of "how are you" is in the vocabulary that names only her, which
+  // is why the gallery's own classifier says yes to it and this one must not.
+  for (const line of ['how are you', 'hey', 'I finished it!', 'and we can move on']) {
+    f.companion.say(line);
+  }
+  await settle();
+
+  assert.equal(f.shown.length, 0, 'a photograph arriving because they said hello is the old bug');
+  await f.companion.sleep();
+});
+
+test('with no photograph yet, asking to see her sends nothing rather than something else', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  f.companion.say('send me a picture of you');
+  await settle();
+
+  assert.equal(f.shown.length, 0);
+  await f.companion.sleep();
+});
+
+test('one question does not get two identical photographs', async () => {
+  /*
+   * A request to see her is answered from code, and the model reasonably
+   * reaches for `show` on the same turn because it was just asked. Both resolve
+   * to the same file. Observed live: two copies of her photograph, seconds
+   * apart, for one "what do you look like?".
+   */
+  const f = await fixture();
+  await f.brain.avatar.setSource(facePng(), 'image/png');
+  await f.companion.wake();
+
+  f.companion.say('What do you look like?');
+  await settle();
+  assert.equal(f.shown.length, 1);
+
+  f.socket().emit({
+    toolCall: {
+      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you' } }],
+    },
+  } as unknown as LiveServerMessage);
+  await settle();
+
+  assert.equal(f.shown.length, 1, 'the model asked for the one that had already gone');
+  const answered = (f.socket().tools[0] as Array<{ response: { ok: boolean } }>)[0];
+  assert.equal(answered?.response.ok, true, 'and she is told it worked, because it did');
+
+  await f.companion.sleep();
+});
+
+test('a different picture is still sent while the photograph is fresh', async () => {
+  const f = await fixture();
+  await f.brain.avatar.setSource(facePng(), 'image/png');
+  await writeFile(path.join(f.root, 'profile', 'gallery', 'at-the-window-rainy.jpg'), 'not a jpeg');
+  await f.companion.wake();
+
+  f.companion.say('What do you look like?');
+  await settle();
+  assert.equal(f.shown.length, 1);
+
+  f.socket().emit({
+    toolCall: {
+      functionCalls: [
+        { id: '1', name: 'show', args: { description: 'at the window watching the rain' } },
+      ],
+    },
+  } as unknown as LiveServerMessage);
+  await settle();
+
+  assert.equal(f.shown.length, 2, 'a scene is a different picture, not a duplicate');
+  assert.equal(f.shown[1]?.name, 'at-the-window-rainy.jpg');
+  await f.companion.sleep();
+});

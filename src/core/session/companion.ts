@@ -37,6 +37,7 @@ import { FACT_KINDS, FEEL, MOVE, REMEMBER, SHOW, annaTools } from '../gemini/too
 import { Initiative } from '../initiative/initiative.ts';
 import type { FactKind } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
+import { asksToSeeHer } from '../gallery/gallery.ts';
 import { isGesture } from '../avatar/studio.ts';
 import { Situation, isLateNight } from '../senses/situation.ts';
 import type { Brain } from './brain.ts';
@@ -78,6 +79,8 @@ const MOOD_NOTIFY_DELTA = 0.25;
  * which case it should not be used at all.
  */
 const FRAME_STILL_TRUE_MS = 20_000;
+/** How long after sending her photograph a second copy is a duplicate. */
+const DUPLICATE_FACE_MS = 20_000;
 /** Facts pulled into the system instruction at wake. */
 const RECALL_LIMIT = 8;
 
@@ -99,6 +102,8 @@ export class Companion {
    * answer to "what is in front of her right now".
    */
   #lastFrame: { bytes: Buffer; kind: 'camera' | 'screen'; at: number } | null = null;
+  /** When the photograph was last sent because they asked for it. */
+  #faceSentAt = 0;
   /** True between a `⟦director⟧` cue and the turn it produces. */
   #openerInFlight = false;
   #speaking = false;
@@ -285,6 +290,7 @@ export class Companion {
     this.#brain.mood.feel('exchange');
     this.#initiative.poke();
     this.#live?.sendText(trimmed);
+    this.#showFaceIfAsked(trimmed);
   }
 
   setSense(sense: SenseName, on: boolean): void {
@@ -325,6 +331,34 @@ export class Companion {
     if (activity === 'switched' && known && this.#initiative.waiting) this.#initiative.poke();
   }
 
+  /**
+   * They asked to see her, so she is seen — without the model having to decide.
+   *
+   * Everything else she sends is her choice, and should be. This one is not,
+   * because a direct question deserves a direct answer and asking a model to
+   * remember to call a tool is asking for it to be missed. It was: "what do you
+   * look like?" came back as "artist Maybe a little punk adjacent? You tell me."
+   * — no picture, and worse, invented. She has no written description of
+   * herself by design, so when she answers that question in words she is not
+   * recalling, she is making it up.
+   *
+   * The photograph is sent straight from disk. She is told it went, so she can
+   * say something about it rather than describing a face she cannot see.
+   */
+  #showFaceIfAsked(text: string): void {
+    if (!asksToSeeHer(text)) return;
+    const face = this.#brain.gallery.face();
+    if (!face) return;
+
+    this.#faceSentAt = this.#now();
+    this.#sink.show(face);
+    this.#live?.inject(
+      'They asked to see you, so the photograph of you has just been sent to them ' +
+        'and they are looking at it now. Say something as you would when someone ' +
+        'is looking at a picture of you. Do not describe your own face in words.',
+    );
+  }
+
   /** The user started speaking over her. */
   interrupt(): void {
     this.#userTalking = true;
@@ -346,6 +380,7 @@ export class Companion {
     this.#brain.memory.record('user', text);
     this.#emitMood(false, () => this.#brain.mood.feel('exchange'));
     this.#initiative.poke();
+    this.#showFaceIfAsked(text);
   }
 
   #onAnnaText(text: string, final: boolean): void {
@@ -452,6 +487,23 @@ export class Companion {
           apiKey: this.#brain.config.geminiApiKey,
         });
         if (!item) return { ok: false, reason: 'nothing in the gallery fits and none was made' };
+
+        /*
+         * Not twice for one question.
+         *
+         * A request to see her is answered from code, and the model often
+         * reaches for `show` on the same turn — reasonably, since it was asked.
+         * Both resolve to the same file, so two identical photographs arrive
+         * seconds apart. She is told it worked, because it did.
+         */
+        const face = this.#brain.gallery.face();
+        const already =
+          face &&
+          item.name === face.name &&
+          this.#now() - this.#faceSentAt < DUPLICATE_FACE_MS;
+        if (already) return { ok: true };
+
+        if (item.name === face?.name) this.#faceSentAt = this.#now();
         this.#sink.show(item);
         return { ok: true };
       }
