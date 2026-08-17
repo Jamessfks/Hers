@@ -183,8 +183,9 @@ be working first, because `/call` is how you start one.
    key and secret in `.env` as `LIVEKIT_URL`, `LIVEKIT_API_KEY` and
    `LIVEKIT_API_SECRET`. All three or none; half of them is a warning and no calls.
 2. Publish `call/` — one static HTML file, no build step — to GitHub Pages and point
-   `HERS_CALL_PAGE_URL` at it. The included workflow does this on push once Pages is
-   enabled under Settings → Pages → Source: GitHub Actions. It has to be public because
+   `HERS_CALL_PAGE_URL` at it. The included workflow does this once you enable Pages
+   under Settings → Pages → Source: GitHub Actions and turn the workflow on under the
+   Actions tab; publishing the one file by hand works just as well. It has to be public because
    your phone cannot reach your machine, which is the whole reason LiveKit is here.
 
 Then message the bot `/call`. She joins a room and sends you a link; open it, tap
@@ -203,8 +204,8 @@ waving at the camera does not get a reply, which is an answer and not a bug.
 ### Platform
 
 macOS and Windows both work. There is no native code, nothing to compile and nothing to
-sign. CI runs the suite on Linux across Node 22.18, 24 and current, plus one Windows job
-on the floor version, because a cross-platform mistake shows up there first.
+sign. There is no CI in this repository — `npm run check` is the whole pipeline and it
+runs anywhere Node does, on Node 22.18, 24 and current.
 
 ---
 
