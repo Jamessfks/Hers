@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.png" alt="Hers" width="132">
+<img src="https://github.com/Jamessfks/Hers/releases/download/v1.0.0/logo.png" alt="Hers" width="132">
 
 # Hers
 
@@ -26,10 +26,10 @@ evening. When told to go through the computer she said no, which is the shape of
 tools rather than a flourish: she has four — `feel`, `remember`, `show`, `move` — and
 none can read a file.
 
-![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](docs/screenshots/first-conversation.jpg)
+![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](https://github.com/Jamessfks/Hers/releases/download/v1.0.0/first-conversation.jpg)
 
 <div align="center">
-<img src="docs/screenshots/telegram.jpg" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
+<img src="https://github.com/Jamessfks/Hers/releases/download/v1.0.0/telegram.jpg" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
 </div>
 
 **And on a phone.** The same companion, not a second one: one memory, one mood, one
