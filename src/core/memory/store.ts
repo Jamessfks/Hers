@@ -104,6 +104,55 @@ function renameSpeakerToHer(db: DatabaseSync): void {
   `);
 }
 
+/**
+ * How alike two facts have to be before the second one is redundant.
+ *
+ * Measured, not chosen. On a real database, four facts about the same
+ * presentation — stored separately because `upsertFact` only dedupes on exact
+ * text — sat at 0.885 to 0.907 against each other. Two facts with nothing to do
+ * with one another ("they have short hair", "they finished a presentation") sat
+ * at 0.825, because this embedding model puts *everything* above 0.69.
+ *
+ * So the honest gap is about six hundredths, and 0.88 sits in it. That margin is
+ * far too thin to delete anybody's memory over, which is exactly why this runs
+ * here and not in {@link MemoryStore.upsertFact}: a wrong call costs one slot in
+ * one prompt, and the fact is still on disk, still in the UI, still recalled the
+ * next time it is the best answer.
+ */
+const CROWDING_SIMILARITY = 0.88;
+
+/**
+ * Takes the best `limit` facts, skipping ones that restate a fact already taken.
+ *
+ * The bug this fixes is not storage, it is contradiction. A model handed
+ *
+ *     the user has a presentation coming up at the start of the week
+ *     the user recently completed a presentation they were anxious about
+ *     the person recently completed a presentation
+ *     the user had a presentation last week that went very well
+ *
+ * has been told one thing four times in three tenses, and it answers accordingly
+ * — inventing a continuity that fits all of them. Handing it the highest-scoring
+ * one of the four leaves room for four *different* things it does not know yet.
+ *
+ * Compared against the facts already kept rather than pairwise across all of
+ * them, so the survivor is always the one that scored best.
+ */
+function crowdOut(scored: readonly RecalledFact[], limit: number): RecalledFact[] {
+  const kept: RecalledFact[] = [];
+  for (const fact of scored) {
+    if (kept.length >= limit) break;
+    const restates = kept.some(
+      (other) =>
+        fact.embedding &&
+        other.embedding &&
+        similarity(fact.embedding, other.embedding) >= CROWDING_SIMILARITY,
+    );
+    if (!restates) kept.push(fact);
+  }
+  return kept;
+}
+
 /** Tunes how the four ranking signals trade off. They sum to 1. */
 export const RECALL_WEIGHTS = {
   similarity: 0.62,
@@ -287,7 +336,7 @@ export class MemoryStore {
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit);
+    return crowdOut(scored, limit);
   }
 
   /**
