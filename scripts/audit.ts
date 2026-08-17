@@ -21,7 +21,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -157,6 +157,29 @@ function portraitJpeg(): Buffer {
     data[i * 4 + 3] = 255;
   }
   return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
+}
+
+/**
+ * A throwaway profile that borrows the real one's rendered clips.
+ *
+ * The gesture check needs the real profile for one reason only: the clips live
+ * in it, and she is offered nothing she has not rendered. Pointing the check at
+ * the real folder to get them meant everything else it did landed there too —
+ * it pinned closeness to 70% and restored it afterwards on a path that was not a
+ * `finally`, so a throw anywhere in between would have left somebody's own
+ * relationship parked at a number a test chose. It also generated a picture into
+ * their gallery and counted turns against their day.
+ *
+ * Copying the avatar folder is a better answer than restoring carefully. There is
+ * nothing to restore: the real profile is never opened, so no failure — a throw, a
+ * timeout, a process killed halfway — can leave it changed. A few megabytes of
+ * clips into a temp directory buys that outright.
+ */
+async function borrowedProfile(): Promise<string> {
+  const real = loadConfig().profileDir;
+  const root = await mkdtemp(path.join(tmpdir(), 'anna-audit-profile-'));
+  await cp(path.join(real, 'avatar'), path.join(root, 'avatar'), { recursive: true });
+  return root;
 }
 
 // ---------------------------------------------------------------------------
@@ -689,7 +712,7 @@ async function main(): Promise<void> {
       async () => {
         // The real profile, because that is the one with rendered clips — and
         // she is only ever offered gestures that exist.
-        const s = await session({ profileDir: loadConfig().profileDir });
+        const s = await session({ profileDir: await borrowedProfile() });
         const offered = s.brain.avatar.readyGestures();
         if (offered.length === 0) {
           await s.dispose();
@@ -697,7 +720,7 @@ async function main(): Promise<void> {
         }
 
         /*
-         * Closeness is pinned for the duration, and restored afterwards.
+         * Closeness is pinned, on a profile nobody else is using.
          *
          * Not a way of making the test easier — a way of asking the right
          * question. The only rendered gesture is `laugh`, and at 1% she is told
@@ -707,11 +730,9 @@ async function main(): Promise<void> {
          * time, and as a stranger it moved once in two.
          *
          * What this check is for is whether she *can* choose a movement while
-         * talking, so it establishes a stage where doing so is in character.
+         * talking, so it establishes a stage where doing so is in character. And
+         * because the profile is a copy, there is nothing to put back.
          */
-        const wasPinned = s.brain.intimacy.read().pinned
-          ? s.brain.intimacy.read().score
-          : null;
         s.brain.intimacy.pin(0.7);
         await s.companion.wake();
 
@@ -743,11 +764,6 @@ async function main(): Promise<void> {
 
         const moves = [...s.moves];
         const said = s.said.join(' ');
-
-        // Whatever happens, the user's own closeness goes back where it was.
-        if (wasPinned === null) s.brain.intimacy.release();
-        else s.brain.intimacy.pin(wasPinned);
-        await s.brain.intimacy.flush();
         await s.dispose();
 
         return {

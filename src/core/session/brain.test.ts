@@ -117,3 +117,48 @@ function pngBytes(width = 512, height = 640): Buffer {
   header[25] = 6;
   return header;
 }
+
+test('a borrowed profile is a copy, so nothing a test does reaches the real one', async () => {
+  /*
+   * The shape the audit relies on. Its gesture check needs the real profile for
+   * one reason — the rendered clips live there — and it used to open the real
+   * folder to get them, then pin closeness to 70% and put it back afterwards on
+   * a path that was not a `finally`. A throw in between would have left somebody's
+   * own relationship parked at a number a test chose, and it also wrote a
+   * generated picture into their gallery.
+   *
+   * Copying the avatar folder removes the failure rather than handling it. This
+   * asserts the property that makes that true: two brains over two directories
+   * share nothing, even when one was seeded from the other.
+   */
+  const original = await fixture();
+  await original.brain.avatar.setSource(pngBytes(), 'image/png');
+  original.brain.intimacy.release();
+  await original.brain.intimacy.flush();
+
+  const borrowed = await mkdtemp(path.join(tmpdir(), 'anna-borrowed-'));
+  const { cp } = await import('node:fs/promises');
+  await cp(path.join(original.config.profileDir, 'avatar'), path.join(borrowed, 'avatar'), {
+    recursive: true,
+  });
+
+  const copy = await Brain.open(
+    loadConfig({
+      GEMINI_API_KEY: 'test-key',
+      ANNA_PROFILE: borrowed,
+      ANNA_DATA: path.join(borrowed, 'data'),
+    } as NodeJS.ProcessEnv),
+    { offline: true },
+  );
+
+  // The clips came across, which is the only reason to borrow at all.
+  assert.ok(copy.avatar.face(), 'the photograph has to survive the copy');
+
+  copy.intimacy.pin(0.7);
+  await copy.intimacy.flush();
+  assert.equal(copy.intimacy.read().percent, 70);
+
+  const reread = await Brain.open(original.config, { offline: true });
+  assert.equal(reread.intimacy.read().pinned, false, 'the real relationship is untouched');
+  assert.equal(reread.intimacy.read().percent, 1);
+});
