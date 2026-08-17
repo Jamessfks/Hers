@@ -48,6 +48,15 @@ export interface CompanionSink {
   transcript(who: 'user' | 'her', text: string, final: boolean): void;
   state(state: ConnectionState): void;
   mood(mood: MoodReadout): void;
+  /**
+   * She has just chosen her own name, during this wake.
+   *
+   * Fired rather than left to the next `ready`, because the socket that is
+   * watching her wake up connected before the choice existed. Without this she
+   * introduces herself as Maya on a page whose header still says Anna, which is
+   * the inconsistency the feature was supposed to remove.
+   */
+  named(name: string): void;
   /** Drop queued audio: she was cut off. */
   interrupted(): void;
   /** She chose to send a picture or a clip. */
@@ -181,7 +190,10 @@ export class Companion {
     // Before anything else, and before the prompt is built: she has to know what
     // she is called. At most one call, once in the life of a profile.
     const named = await brain.ensureNamed();
-    if (named) console.log(`  she chose the name ${named}`);
+    if (named) {
+      console.log(`  she chose the name ${named}`);
+      this.#sink.named(named);
+    }
 
     this.#memories = await this.#recall();
     if (isLateNight(this.situation.snapshot().hour)) brain.mood.feel('late-night');

@@ -100,6 +100,12 @@ export class CallBridge {
     }
     await this.hangUp();
 
+    // Settled before the link is built, not after. Her name travels in the
+    // fragment, and on a first-ever conversation she would otherwise choose one
+    // while joining — leaving the caller looking at a page titled with the
+    // placeholder while she answers to something else. A no-op every time after.
+    await this.#brain.ensureNamed().catch(() => null);
+
     const room = `hers-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     const caller = new AccessToken(this.#config.apiKey, this.#config.apiSecret, {
@@ -198,6 +204,9 @@ class ActiveCall {
         transcript: () => undefined,
         state: () => undefined,
         mood: () => undefined,
+        // A call has no header to relabel. The name on the caller's page came
+        // from the invite, which {@link invite} settles before minting the link.
+        named: () => undefined,
         interrupted: () => speaker.clearQueue(),
         show: () => undefined,
         // A phone call carries her voice, not her face. Rendering a gesture

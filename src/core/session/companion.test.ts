@@ -65,6 +65,7 @@ async function fixture(env: Record<string, string> = {}) {
   const shown: GalleryItem[] = [];
   const moved: string[] = [];
   const troubles: string[] = [];
+  const names: string[] = [];
 
   const companion = new Companion({
     brain,
@@ -76,6 +77,7 @@ async function fixture(env: Record<string, string> = {}) {
       transcript: (who, text, final) => transcript.push({ who, text, final }),
       state: (state) => states.push(state),
       mood: (mood) => moods.push(mood),
+      named: (name) => names.push(name),
       interrupted: () => undefined,
       show: (item) => shown.push(item),
       move: (gesture) => moved.push(gesture),
@@ -96,6 +98,7 @@ async function fixture(env: Record<string, string> = {}) {
     shown,
     moved,
     troubles,
+    names,
     socket: () => sockets.at(-1)!,
   };
 }
@@ -466,6 +469,7 @@ test('no API key is said plainly rather than thrown', async () => {
       transcript: () => undefined,
       state: () => undefined,
       mood: () => undefined,
+      named: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
       move: () => undefined,
@@ -504,6 +508,7 @@ test('memory carries between two conversations', async () => {
       transcript: () => undefined,
       state: () => undefined,
       mood: () => undefined,
+      named: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
       move: () => undefined,
@@ -791,4 +796,29 @@ test('a pinned closeness is what reaches the prompt', async () => {
   assert.match(prompt, /partner, 70%/);
   assert.match(prompt, /shared life/i);
   await f.companion.sleep();
+});
+
+test('a name she chose during this wake reaches the page that watched her wake up', async () => {
+  /*
+   * The bug this closes, seen in a browser: she answered "Maya. What were you
+   * thinking of going with?" under a header that still said Anna. `ready` is
+   * sent when the socket opens, and she chooses during the first wake — which is
+   * afterwards. A companion whose interface disagrees with the name she answers
+   * to is two people.
+   */
+  const f = await fixture();
+  const chosen = 'Mira';
+
+  // `ensureNamed` is where the model call lives; the wiring under test is what
+  // happens with its answer, so it is stubbed rather than paid for.
+  f.brain.ensureNamed = async () => chosen;
+
+  await f.companion.wake();
+  assert.deepEqual(f.names, [chosen], 'told once, on the wake that decided it');
+
+  // And not again on a later wake, because there is nothing left to decide.
+  f.brain.ensureNamed = async () => null;
+  await f.companion.sleep();
+  await f.companion.wake();
+  assert.deepEqual(f.names, [chosen]);
 });

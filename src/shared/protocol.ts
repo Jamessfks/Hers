@@ -212,6 +212,15 @@ export type ServerMessage =
    * true once the turn is closed. The UI replaces rather than appends while
    * false, or the transcript stutters.
    */
+  /**
+   * Server -> browser. She has just chosen her own name.
+   *
+   * Separate from `ready` because `ready` is sent when the socket opens, and she
+   * chooses during her first wake — which is later. Without this the page keeps
+   * the placeholder in its header while she introduces herself as something
+   * else.
+   */
+  | { t: 'name'; name: string }
   | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
   /** Her audio was cut off. Drop whatever is still queued for playback. */
   | { t: 'interrupted' }

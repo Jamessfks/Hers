@@ -171,6 +171,7 @@ export class WebBridge {
       transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
       state: (state) => this.#send({ t: 'state', state }),
       mood: (mood) => this.#send({ t: 'mood', mood }),
+      named: (name) => this.#send({ t: 'name', name }),
       interrupted: () => this.#send({ t: 'interrupted' }),
       show: (item) =>
         this.#send({

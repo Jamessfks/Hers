@@ -292,6 +292,10 @@ export class Ui {
         this.setMood(message.mood);
         return;
 
+      case 'name':
+        this.#setName(message.name);
+        return;
+
       case 'transcript':
         this.line(message.who, message.text, message.final);
         return;

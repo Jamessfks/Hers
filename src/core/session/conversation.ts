@@ -79,6 +79,8 @@ export interface Surface {
   move?(gesture: string): void;
   state?(state: ConnectionState): void;
   mood?(mood: MoodReadout): void;
+  /** She named herself. No origin: it is true everywhere at once. */
+  named?(name: string): void;
   interrupted?(): void;
   trouble?(message: string): void;
 }
@@ -231,6 +233,7 @@ export class Conversation {
           if (state === 'listening') this.#origin = null;
         },
         mood: (mood) => this.#each((surface) => surface.mood?.(mood)),
+        named: (name) => this.#each((surface) => surface.named?.(name)),
         interrupted: () => this.#each((surface) => surface.interrupted?.()),
         trouble: (message) => this.#each((surface) => surface.trouble?.(message)),
       },
