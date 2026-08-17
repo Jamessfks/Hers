@@ -443,7 +443,7 @@ export class LiveConversation {
   }
 
   /**
-   * `ANNA_DEBUG=1` prints every reconnect and why.
+   * `ANNA_DEBUG=1` prints what the session is doing behind the conversation.
    *
    * Off by default because a single reconnect is routine and not worth a line
    * in someone's terminal. On, because the alternative is what happened here:
@@ -451,8 +451,12 @@ export class LiveConversation {
    * which from the outside was indistinguishable from "she just doesn't
    * answer". The reason string is the whole diagnosis.
    */
+  #debug(message: string): void {
+    if (process.env.ANNA_DEBUG) console.error(`[live] ${message}`);
+  }
+
   #scheduleReconnect(reason: string): void {
-    if (process.env.ANNA_DEBUG) console.error(`[live] reconnecting — ${reason}`);
+    this.#debug(`reconnecting — ${reason}`);
     if (this.#closing || this.#reconnectTimer) return;
     this.#socket = null;
     this.#discardPartial();
@@ -544,7 +548,7 @@ export class LiveConversation {
     const said = content.outputTranscription?.text;
     if (said) {
       this.#annaBuffer += said;
-      this.#options.handlers.onAnnaText(this.#annaBuffer, false);
+      this.#options.handlers.onAnnaText(spoken(this.#annaBuffer), false);
       if (this.#awaitingSettle) this.#scheduleSettle();
     }
 
@@ -598,8 +602,9 @@ export class LiveConversation {
     }
     this.#userBuffer = '';
 
-    if (this.#annaBuffer.trim()) {
-      this.#options.handlers.onAnnaText(this.#annaBuffer, true);
+    const said = spoken(this.#annaBuffer);
+    if (said.trim()) {
+      this.#options.handlers.onAnnaText(said, true);
     }
     this.#annaBuffer = '';
 
@@ -617,6 +622,10 @@ export class LiveConversation {
    * *prefix* of the next thing she says, which is how "a picture of you" ended
    * up glued to the front of "I did. Playing coy on screen like that, huh?" in
    * a real conversation.
+   *
+   * ("a picture of you" was itself a thing she said out loud, not a leak from
+   * anywhere — the `show` tool used to tell her to *say* that phrase when it
+   * meant pass it as an argument. Two separate faults, one sentence.)
    */
   #discardPartial(): void {
     if (this.#settleTimer) clearTimeout(this.#settleTimer);
@@ -628,13 +637,34 @@ export class LiveConversation {
   }
 
   /**
-   * Tool results go back in one message.
+   * Tool results go back in one message, to the socket that asked for them.
    *
    * Every call gets a response even when the handler throws, because a model
    * waiting on a function response that never arrives simply stops talking, and
    * from the outside that is indistinguishable from Anna ignoring you.
+   *
+   * ## Why the socket is captured rather than read at the end
+   *
+   * Responses are matched to calls by `id` — that is the documented mechanism,
+   * and an id is only meaningful to the session that issued it. This handler is
+   * async, and some of the tools behind it are slow: `show` lists a directory,
+   * embeds every caption and can generate a picture. Reconnects, meanwhile, are
+   * routine rather than exceptional; a session carrying video is capped at about
+   * two minutes.
+   *
+   * So the window between a call arriving and its answer being ready regularly
+   * contains a socket swap, and reading `this.#socket` at the end delivered the
+   * answer to a session that had never asked the question. This is what that
+   * looked like in a real transcript, glued to the front of the sentence she
+   * actually said:
+   *
+   *     "response:feel{now:calm,ok:true…"
+   *
+   * Dropping the answer is right: the new session never asked it, and whatever
+   * the tool *did* — the mood moved, the picture was sent — already happened.
    */
   async #runTools(calls: readonly { id?: string; name?: string; args?: Record<string, unknown> }[]) {
+    const socket = this.#socket;
     const responses = await Promise.all(
       calls.map(async (call) => {
         let response: unknown;
@@ -654,12 +684,46 @@ export class LiveConversation {
       }),
     );
     if (responses.length === 0) return;
-    this.#guard(() => this.#socket?.sendToolResponse({ functionResponses: responses }));
+    if (!socket || this.#socket !== socket) {
+      this.#debug(`dropped ${responses.length} tool response(s): the session moved on`);
+      return;
+    }
+    this.#guard(() => socket.sendToolResponse({ functionResponses: responses }));
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Machinery filed off the front of a line before anyone reads it.
+ *
+ * A last line of defence, and it is here because the thing it catches is
+ * permanent: whatever comes out of a turn is written into her memory, and a
+ * transcript is not something anyone goes back and edits. This is real, from a
+ * real conversation:
+ *
+ *     "response:feel{now:calm,ok:trueThe one across your chest…"
+ *
+ * That prefix is a rendering of a function response, and it is not something a
+ * person could have said — no speech transcription produces `{`. The cause is
+ * fixed upstream (a tool answer can no longer be delivered to a session that
+ * did not ask the question, and answers no longer carry prose to read out), so
+ * this should never fire. It stays because the cost of it firing is a sentence
+ * that is slightly short, and the cost of it not being here was a permanent
+ * record of Anna saying something no one can parse.
+ *
+ * Deliberately narrow, in two ways. It only looks at the *start* of a line, so
+ * braces mid-sentence are left alone — she is allowed to talk about code. And
+ * when the fragment has no closing brace, as the real one did not, it stops at
+ * the first capital letter rather than running to the end: a rule that can eat
+ * a whole sentence is worse than the fragment it was written to remove.
+ */
+const TOOL_ARTEFACT = /^\s*\w+\s*:\s*\w*\s*\{(?:[^}]*\}|[^}A-Z]*)/;
+
+function spoken(text: string): string {
+  return text.replace(TOOL_ARTEFACT, '').trimStart();
 }
 
 /**

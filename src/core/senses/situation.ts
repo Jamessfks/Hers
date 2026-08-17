@@ -48,6 +48,19 @@ export interface SituationSnapshot {
   senses: Record<SenseName, boolean>;
   presence: Presence;
   screen: ScreenState;
+  /**
+   * Whether pictures are actually arriving, per source.
+   *
+   * Deliberately not the same question as `senses`. A sense is a switch someone
+   * flipped; this is whether anything has come through it lately. They come
+   * apart constantly — a browser tab in the background, a call whose video
+   * track has not started, a Telegram conversation with no camera at all — and
+   * the gap between them is not academic. Told "you can see them" on the
+   * strength of the switch alone, with no frame to look at, she reached for the
+   * only labelled picture in the session and described her own photograph back
+   * to the user as though they were wearing it.
+   */
+  seeing: { camera: boolean; screen: boolean };
   /** Milliseconds since the user last said or typed anything. Infinity if never. */
   sinceUserSpokeMs: number;
   /** Milliseconds since Anna last finished a turn. Infinity if never. */
@@ -63,10 +76,21 @@ export interface SituationSnapshot {
 /** Past this with no report, the browser is not talking to us any more. */
 const SCREEN_STALE_MS = SCREEN_REPORT_INTERVAL_MS * 3;
 
+/**
+ * How recently a frame must have arrived for her to still be looking at it.
+ *
+ * Frames come at one a second from a camera and one every two from a screen, so
+ * anything inside this window means the picture is live. Outside it, whatever
+ * she last saw has aged out of the model's context anyway.
+ */
+const FRAME_FRESH_MS = 15_000;
+
 export class Situation {
   readonly #now: () => number;
   #senses: Record<SenseName, boolean> = { hearing: false, sight: false, screen: false };
   #presence: Presence = { idleSeconds: 0, tabVisible: true, at: 0 };
+  #sawCameraAt = 0;
+  #sawScreenAt = 0;
   #screenActivity: ScreenActivity = 'still';
   #screenStillSeconds = 0;
   #screenAt = 0;
@@ -124,6 +148,12 @@ export class Situation {
     if (activity === 'switched') this.#switchedAt = now;
   }
 
+  /** A picture actually arrived and went to the model. */
+  noteFrame(kind: 'camera' | 'screen'): void {
+    if (kind === 'camera') this.#sawCameraAt = this.#now();
+    else this.#sawScreenAt = this.#now();
+  }
+
   noteUserSpoke(): void {
     this.#userSpokeAt = this.#now();
     this.#turns += 1;
@@ -170,6 +200,10 @@ export class Situation {
         sinceSwitchMs: this.#switchedAt ? now - this.#switchedAt : Number.POSITIVE_INFINITY,
         at: this.#screenAt,
       },
+      seeing: {
+        camera: this.#senses.sight && fresh(this.#sawCameraAt, now),
+        screen: this.#senses.screen && fresh(this.#sawScreenAt, now),
+      },
       sinceUserSpokeMs: this.#userSpokeAt ? now - this.#userSpokeAt : Number.POSITIVE_INFINITY,
       sinceAnnaSpokeMs: this.#annaSpokeAt ? now - this.#annaSpokeAt : Number.POSITIVE_INFINITY,
       turns: this.#turns,
@@ -177,6 +211,10 @@ export class Situation {
       localTime: formatLocalTime(when),
     };
   }
+}
+
+function fresh(at: number, now: number): boolean {
+  return at > 0 && now - at <= FRAME_FRESH_MS;
 }
 
 /**

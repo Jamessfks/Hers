@@ -124,9 +124,11 @@ export const ANNA_TOOLS: FunctionDeclaration[] = [
       'a sentence. Describe what you want and the closest thing you have is sent; if ' +
       'nothing fits and it is worth it, a new one is made. Keep talking either way; do ' +
       'not announce it or wait for it. When they just want to see you — "what do you ' +
-      'look like", "send me a picture of you" — say only "a picture of you" and nothing ' +
-      'about where you are or what you are doing; that sends your actual photograph ' +
-      'rather than a new one. Describe a scene only when the scene is the point.',
+      'look like", "send me a picture of you" — pass exactly `a picture of you` as the ' +
+      'description, with nothing about where you are or what you are doing; that sends ' +
+      'your actual photograph rather than a new one. Describe a scene only when the ' +
+      'scene is the point. Never read the description out loud: it is an argument to ' +
+      'this tool, not a line of dialogue.',
     parameters: {
       type: Type.OBJECT,
       properties: {

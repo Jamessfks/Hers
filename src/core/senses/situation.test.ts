@@ -120,3 +120,50 @@ test('late night is the small hours, not the evening', () => {
   assert.equal(isLateNight(3), true);
   assert.equal(isLateNight(5), false);
 });
+
+// -- what she can actually see ----------------------------------------------
+
+test('a switch being on is not the same fact as a picture arriving', () => {
+  const time = clock();
+  const situation = new Situation(time.now);
+  situation.setSense('sight', true);
+  situation.setSense('screen', true);
+
+  assert.deepEqual(
+    situation.snapshot().seeing,
+    { camera: false, screen: false },
+    'the switch is on and nothing has come through it',
+  );
+
+  situation.noteFrame('camera');
+  assert.deepEqual(situation.snapshot().seeing, { camera: true, screen: false });
+});
+
+test('what she can see goes stale when the frames stop', () => {
+  const time = clock();
+  const situation = new Situation(time.now);
+  situation.setSense('sight', true);
+  situation.noteFrame('camera');
+
+  time.advance(10_000);
+  assert.equal(situation.snapshot().seeing.camera, true, 'frames come every second');
+
+  time.advance(20_000);
+  assert.equal(
+    situation.snapshot().seeing.camera,
+    false,
+    'half a minute of nothing is not a live picture',
+  );
+});
+
+test('a frame through a sense that is off does not count', () => {
+  const situation = new Situation(clock().now);
+  situation.noteFrame('camera');
+  assert.equal(situation.snapshot().seeing.camera, false);
+
+  situation.setSense('sight', true);
+  assert.equal(situation.snapshot().seeing.camera, true, 'the frame is still recent');
+
+  situation.setSense('sight', false);
+  assert.equal(situation.snapshot().seeing.camera, false, 'and it stops counting immediately');
+});

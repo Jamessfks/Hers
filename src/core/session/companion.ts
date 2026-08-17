@@ -178,7 +178,6 @@ export class Companion {
 
     this.#live = live;
     await live.start();
-    await this.#showHerself();
     this.#initiative.start();
     this.#emitMood(true);
   }
@@ -220,27 +219,33 @@ export class Companion {
     })();
   }
 
-  /**
-   * Shows her her own face, once, at the start of the conversation.
+  /*
+   * Her photograph is deliberately *not* put into the conversation.
    *
-   * This replaces the paragraph that used to describe her. A photograph cannot
-   * disagree with itself, and the written version did — when both were in the
-   * prompt, generated pictures took the face from the photograph and the hair
-   * from the prose.
+   * It used to be, at the start of every session, so that she knew what she
+   * looked like. The cost of that was not obvious until it appeared in a real
+   * transcript. Her photograph was the only *labelled* image in the session —
+   * camera frames stream in unlabelled — so when the conversation turned to
+   * what somebody looked like, it was the only thing she had to answer from.
+   * She described her own body back to the user as though it were theirs:
    *
-   * Sent as context rather than as a realtime frame: a frame describes this
-   * moment and is meant to age out, and what she looks like should still be
-   * true an hour in.
+   *     "The one across your chest from that sports bra. Looks like you've
+   *      been spending time outside."
+   *
+   * Labelling it harder did not fix it. Measured against the live model with
+   * the label "This is a photograph of YOU, Anna … not the person you are
+   * talking to", asked "do I have a tan?", she still answered from the picture.
+   * A vivid image in context beats a sentence saying not to use it, and the
+   * documented alternatives are closed: the Live API's own SDK says of
+   * `systemInstruction` that "only text should be used in parts".
+   *
+   * So the image is gone from the session entirely, and the capability it
+   * existed for is served better by something that already worked: asked what
+   * she looks like, she sends a picture. `show` generates it from this exact
+   * photograph, so the answer is more faithful than any description would have
+   * been — and there is no longer any image of her for a question about
+   * somebody else to land on.
    */
-  async #showHerself(): Promise<void> {
-    const face = await this.#brain.avatar.sourceImage();
-    if (!face || !this.#live) return;
-    this.#live.showImage(
-      face.data,
-      face.mimeType,
-      'This is you. Not a picture of you — you. It is what you look like.',
-    );
-  }
 
   async sleep(): Promise<void> {
     this.#closed = true;
@@ -280,6 +285,7 @@ export class Companion {
     if (now - this.#lastFrameAt < 1000 / Math.max(fps, 0.01) - 20) return;
     this.#lastFrameAt = now;
     this.#lastFrame = { bytes: jpeg, kind, at: now };
+    this.situation.noteFrame(kind);
     this.#live?.sendImage(jpeg);
   }
 
@@ -415,6 +421,20 @@ export class Companion {
   // Tools
   // -------------------------------------------------------------------------
 
+  /*
+   * Tool answers are receipts, not content.
+   *
+   * They used to carry prose — the mood's label, the caption of the picture
+   * that was sent — and prose in a tool response is prose that can end up being
+   * read out. One did: "response:feel{now:calm,ok:true" appears in a real
+   * transcript, welded to the front of a sentence. None of it was needed either:
+   * she knows what she asked for, and a mood change reaches her as a ⟦context⟧
+   * line anyway. So a success is `{ok: true}` and nothing else.
+   *
+   * Failures keep their `reason`, because that one *is* needed — it is how she
+   * finds out that a gesture has not been rendered, or that nothing in the
+   * gallery fits, and adapts instead of repeating herself.
+   */
   async #onToolCall(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
       case FEEL: {
@@ -426,7 +446,7 @@ export class Companion {
         });
         this.#sink.mood(mood);
         this.#lastNotifiedMood = mood;
-        return { ok: true, now: mood.label };
+        return { ok: true };
       }
 
       case REMEMBER: {
@@ -436,10 +456,10 @@ export class Companion {
         const valid = (FACT_KINDS as readonly string[]).includes(kind)
           ? (kind as FactKind)
           : 'event';
-        const result = await this.#brain.memory.remember(valid, text, {
+        await this.#brain.memory.remember(valid, text, {
           confidence: clamp01(num(args.confidence) ?? 0.7),
         });
-        return { ok: true, result };
+        return { ok: true };
       }
 
       case MOVE: {
@@ -460,7 +480,7 @@ export class Companion {
         });
         if (!item) return { ok: false, reason: 'nothing in the gallery fits and none was made' };
         this.#sink.show(item);
-        return { ok: true, sent: item.caption };
+        return { ok: true };
       }
 
       default:
@@ -502,12 +522,20 @@ export class Companion {
     if (!this.situation.senses[sense]) return;
     if (this.#now() - frame.at > FRAME_STILL_TRUE_MS) return;
 
+    // "them" was the wrong word: in a two-party conversation there is no third
+    // person, and the model resolved it to whichever picture it had. Named
+    // outright, and paired with a reminder that the other picture is her.
     this.#live.showImage(
       frame.bytes,
       'image/jpeg',
       frame.kind === 'screen'
-        ? 'This is their screen as it is right now, this second. Anything you say about it should be about this picture and not about what was there earlier.'
-        : 'This is them right now, this second. Anything you say about how they look should be about this picture.',
+        ? 'This is the screen of the person you are talking to, as it is right now, ' +
+            'this second. Anything you say about their screen must come from this ' +
+            'picture — not from what was on it earlier, and not from the photograph ' +
+            'of yourself.'
+        : 'This is the person you are talking to, seen through your camera right now, ' +
+            'this second. Anything you say about how they look must come from this ' +
+            'picture — not from the photograph of yourself, which is you.',
     );
   }
 

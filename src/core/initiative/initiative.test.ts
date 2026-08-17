@@ -54,6 +54,7 @@ function situation(overrides: Partial<SituationSnapshot> = {}): SituationSnapsho
     senses: { hearing: true, sight: false, screen: false },
     presence: { idleSeconds: 5, tabVisible: true, at: 1 },
     screen: { activity: 'still', stillSeconds: 0, sinceSwitchMs: Infinity, at: 0 },
+    seeing: { camera: false, screen: false },
     sinceUserSpokeMs: 30_000,
     sinceAnnaSpokeMs: 30_000,
     turns: 4,
@@ -230,10 +231,12 @@ test('the reason is drawn from what is actually true right now', () => {
 
 test('what the screen is doing is a reason to speak', () => {
   const watching = { hearing: true, sight: false, screen: true };
+  const seeingScreen = { camera: false, screen: true };
 
   const switched = pickReason(
     situation({
       senses: watching,
+      seeing: seeingScreen,
       screen: { activity: 'switched', stillSeconds: 0, sinceSwitchMs: 4000, at: 1 },
     }),
   );
@@ -242,6 +245,7 @@ test('what the screen is doing is a reason to speak', () => {
   const staring = pickReason(
     situation({
       senses: watching,
+      seeing: seeingScreen,
       screen: { activity: 'still', stillSeconds: 42 * 60, sinceSwitchMs: Infinity, at: 1 },
     }),
   );
@@ -250,6 +254,7 @@ test('what the screen is doing is a reason to speak', () => {
   const working = pickReason(
     situation({
       senses: watching,
+      seeing: seeingScreen,
       screen: { activity: 'working', stillSeconds: 0, sinceSwitchMs: Infinity, at: 1 },
     }),
   );
@@ -257,12 +262,22 @@ test('what the screen is doing is a reason to speak', () => {
 });
 
 test('with eyes open, the reason is to look rather than to greet', () => {
-  const both = pickReason(situation({ senses: { hearing: true, sight: true, screen: true } }));
+  const both = pickReason(
+    situation({
+      senses: { hearing: true, sight: true, screen: true },
+      seeing: { camera: true, screen: true },
+    }),
+  );
   assert.match(both, /worth remarking on/);
   assert.match(both, /only this minute could have produced it/);
   assert.match(both, /nothing stands out/, 'she must have somewhere to go when it is a dull minute');
 
-  const eyes = pickReason(situation({ senses: { hearing: true, sight: true, screen: false } }));
+  const eyes = pickReason(
+    situation({
+      senses: { hearing: true, sight: true, screen: false },
+      seeing: { camera: true, screen: false },
+    }),
+  );
   assert.match(eyes, /concretely/);
 
   // The two ways an opener becomes wallpaper, ruled out in the instruction.
@@ -271,10 +286,52 @@ test('with eyes open, the reason is to look rather than to greet', () => {
   }
 });
 
+/**
+ * The bug this guards against is in a real transcript, and it is the worst one
+ * the project has had.
+ *
+ * Her own photograph is put into the session so she knows what she looks like,
+ * and it is the only *labelled* picture there — camera frames stream in
+ * unlabelled. A sense switch was on while no frames were arriving, so she was
+ * told "you can see them, open with something specific", and the only thing she
+ * could see was herself. She described her own body back to the user as though
+ * it were theirs: "The one across your chest from that sports bra. Looks like
+ * you've been spending time outside."
+ *
+ * A switch being on is not the same fact as a picture having arrived, and no
+ * reason may confuse the two.
+ */
+test('she is never told to describe what she sees when nothing is arriving', () => {
+  const blind = {
+    // Every switch on, and not one frame through any of them.
+    senses: { hearing: true, sight: true, screen: true },
+    seeing: { camera: false, screen: false },
+  };
+
+  for (const each of [
+    situation(blind),
+    situation({ ...blind, turns: 0 }),
+    situation({ ...blind, presence: { idleSeconds: 5, tabVisible: true, at: 1 } }),
+    situation({
+      ...blind,
+      screen: { activity: 'switched', stillSeconds: 0, sinceSwitchMs: 1000, at: 1 },
+    }),
+    situation({
+      ...blind,
+      screen: { activity: 'still', stillSeconds: 90 * 60, sinceSwitchMs: Infinity, at: 1 },
+    }),
+  ]) {
+    const reason = pickReason(each);
+    assert.doesNotMatch(reason, /you can see|can actually see|worth remarking on/i, reason);
+    assert.doesNotMatch(reason, /how they look|what they are wearing/i, reason);
+  }
+});
+
 test('a switch stops being news once it is old', () => {
   const reason = pickReason(
     situation({
       senses: { hearing: true, sight: false, screen: true },
+      seeing: { camera: false, screen: true },
       screen: { activity: 'still', stillSeconds: 300, sinceSwitchMs: 20 * 60_000, at: 1 },
     }),
   );
@@ -287,6 +344,7 @@ test('a screen nobody has reported on is not reasoned about', () => {
   const reason = pickReason(
     situation({
       senses: { hearing: true, sight: false, screen: true },
+      seeing: { camera: false, screen: true },
       screen: { activity: 'still', stillSeconds: 99 * 60, sinceSwitchMs: 1000, at: 0 },
     }),
   );
@@ -305,15 +363,23 @@ test('no reason is ever a bare greeting instruction', () => {
     situation(),
     situation({ turns: 0 }),
     situation({ hour: 3 }),
-    situation({ senses: { hearing: true, sight: true, screen: false } }),
-    situation({ senses: { hearing: true, sight: false, screen: true } }),
+    situation({
+      senses: { hearing: true, sight: true, screen: false },
+      seeing: { camera: true, screen: false },
+    }),
+    situation({
+      senses: { hearing: true, sight: false, screen: true },
+      seeing: { camera: false, screen: true },
+    }),
     situation({ presence: { idleSeconds: 3600, tabVisible: true, at: 1 } }),
     situation({
       senses: { hearing: true, sight: false, screen: true },
+      seeing: { camera: false, screen: true },
       screen: { activity: 'switched', stillSeconds: 0, sinceSwitchMs: 2000, at: 1 },
     }),
     situation({
       senses: { hearing: true, sight: false, screen: true },
+      seeing: { camera: false, screen: true },
       screen: { activity: 'still', stillSeconds: 60 * 60, sinceSwitchMs: Infinity, at: 1 },
     }),
   ];

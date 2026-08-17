@@ -216,13 +216,20 @@ export class Initiative {
  * her toward her own memory rather than toward a greeting.
  */
 export function pickReason(situation: SituationSnapshot, unanswered = 0): string {
-  const { presence, screen, senses, hour, turns } = situation;
+  const { presence, screen, seeing, hour, turns } = situation;
   const quietMinutes = Math.round(
     Math.min(situation.sinceUserSpokeMs, Number.MAX_SAFE_INTEGER) / 60_000,
   );
-  // Only true once the browser has actually reported. Telegram and phone calls
-  // have no screen at all, and the desk has none for the first second or two.
-  const watchingScreen = senses.screen && screen.at > 0;
+  /*
+   * Every reason below asks about `seeing`, never about `senses`.
+   *
+   * A sense is a switch somebody flipped; `seeing` is whether a picture has
+   * actually arrived through it in the last few seconds. Reasons written
+   * against the switch told her to describe what she could see at moments when
+   * she could see nothing — and rather than say so, she described the one
+   * picture that was in her context: the photograph of herself.
+   */
+  const watchingScreen = seeing.screen && screen.at > 0;
 
   if (unanswered >= 2) {
     return (
@@ -237,7 +244,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
   }
 
   if (turns === 0) {
-    return senses.sight
+    return seeing.camera
       ? 'You have not spoken yet and you can see them. Open with one specific thing you can actually see right now, not a greeting.'
       : 'You have not spoken to them yet today. Open small.';
   }
@@ -287,7 +294,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
    * nothing worth remarking on, and a companion who is *obliged* to find
    * something will invent it. So: if nothing stands out, go to memory instead.
    */
-  if (senses.screen && senses.sight) {
+  if (seeing.screen && seeing.camera) {
     return (
       'You can see their screen and you can see them. Look at both and find the one ' +
       'thing that is genuinely worth remarking on — something specific enough that ' +
@@ -306,7 +313,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
     );
   }
 
-  if (senses.screen && presence.idleSeconds < 30) {
+  if (seeing.screen && presence.idleSeconds < 30) {
     return (
       'They are working and you can see it. If there is something specific on that ' +
       'screen worth one sentence, say that and nothing else. Otherwise say something ' +
@@ -314,7 +321,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
     );
   }
 
-  if (senses.sight) {
+  if (seeing.camera) {
     return (
       'You can see them. If there is something you would actually remark on — what ' +
       'they are doing with their hands, that they have moved, that they look ' +

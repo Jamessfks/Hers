@@ -130,11 +130,13 @@ test('waking builds a prompt that actually contains who she is', async () => {
   await f.companion.sleep();
 });
 
-test('her photograph is put into the conversation, not described in it', async () => {
+test('no picture of her is ever put into the conversation', async () => {
   /*
-   * The whole point of deleting appearance.md. A photograph cannot disagree
-   * with itself; a paragraph beside one can, and did — generated pictures kept
-   * the face from the photograph and the hair from the prose.
+   * Measured against the live model, twice. With her photograph in the session
+   * and asked "do I have a tan?", she answered from it — describing her own
+   * body as the user's. Labelling the image "this is YOU, not the person you
+   * are talking to" did not stop it. With the image gone she says "my camera's
+   * off, so I'm seeing nothing right now", which is the truth.
    */
   const f = await fixture();
   const png = Buffer.from(
@@ -143,19 +145,17 @@ test('her photograph is put into the conversation, not described in it', async (
   );
   await f.brain.avatar.setSource(png, 'image/png');
   await f.companion.wake();
+  await settle();
 
   const sent = f.socket().content.map((entry) => JSON.stringify(entry.turns));
-  const withImage = sent.find((body) => body.includes('inlineData'));
-  assert.ok(withImage, 'she was never shown her own face');
-  assert.match(withImage, /image\/png/);
-  assert.match(withImage, /This is you/);
-
-  // Sent as context, so she absorbs it rather than answering a photograph.
-  const entry = f.socket().content.find((each) => JSON.stringify(each.turns).includes('inlineData'));
-  assert.equal(entry?.turnComplete, false);
+  assert.ok(
+    !sent.some((body) => body.includes('inlineData')),
+    'an image of her in context is one a question about the user can land on',
+  );
 
   const prompt = f.systemInstructions[0] ?? '';
-  assert.match(prompt, /shown a photograph of yourself/);
+  assert.match(prompt, /send them a picture/i, 'the capability moves to the show tool');
+  assert.match(prompt, /cannot see them/i, 'and the honest answer when blind is stated');
   assert.ok(!/eye colour|hairstyle|body type/i.test(prompt), 'the prose description is back');
   await f.companion.sleep();
 });
@@ -612,3 +612,27 @@ test('a frame from a sense that has since been switched off is not used', async 
 
   await f.companion.sleep();
 });
+
+test('the prompt gives her one honest source for how somebody looks', async () => {
+  const f = await fixture();
+  await f.brain.avatar.setSource(facePng(), 'image/png');
+  await f.companion.wake();
+
+  const prompt = f.systemInstructions.at(-1) ?? '';
+  assert.match(prompt, /comes from what your camera or/i);
+  assert.match(prompt, /never something borrowed from a picture of yourself/i);
+  await f.companion.sleep();
+});
+
+/** A PNG header the studio will accept — dimensions are read from IHDR. */
+function facePng(width = 512, height = 640): Buffer {
+  const header = Buffer.alloc(33);
+  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
+  header.writeUInt32BE(13, 8);
+  header.write('IHDR', 12);
+  header.writeUInt32BE(width, 16);
+  header.writeUInt32BE(height, 20);
+  header[24] = 8;
+  header[25] = 6;
+  return header;
+}

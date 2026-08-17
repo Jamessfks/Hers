@@ -499,3 +499,98 @@ test('a message from a socket that has been replaced is ignored', async () => {
 
   assert.equal(f.annaText.length, 0, 'a superseded socket spoke into the live conversation');
 });
+
+test('a tool answer that arrives after a reconnect is dropped, not sent to a stranger', async () => {
+  /*
+   * From a real transcript, glued to the front of the sentence she said:
+   *
+   *     "response:feel{now:calm,ok:true…"
+   *
+   * That is a tool *response*, read out loud. Responses are matched to calls by
+   * id, and an id only means something to the session that issued it. `show`
+   * can take seconds — it reads a directory and may generate a picture — and a
+   * session carrying video is capped at about two minutes, so the window
+   * between a call and its answer routinely contains a reconnect. Delivered to
+   * the new socket, the answer belonged to no call it had ever made.
+   */
+  let release: (value: unknown) => void = () => undefined;
+  const slow = new Promise((resolve) => {
+    release = resolve;
+  });
+
+  const f = fixture({
+    onToolCall: async () => {
+      await slow;
+      return { ok: true, sent: 'a picture of you' };
+    },
+  });
+  await f.live.start();
+
+  const first = f.latest();
+  first.emit({
+    toolCall: { functionCalls: [{ id: 'fc_1', name: 'show', args: {} }] },
+  } as unknown as LiveServerMessage);
+
+  // The connection dies while the gallery is still working.
+  first.fail('socket closed mid-render');
+  await settle();
+  await f.live.start();
+  const second = f.latest();
+  assert.notEqual(second, first, 'the test needs a genuinely new socket');
+
+  release(undefined);
+  await settle();
+
+  assert.equal(second.toolResponses.length, 0, 'the new session never asked this question');
+  assert.equal(first.toolResponses.length, 0, 'and the old one is gone');
+});
+
+test('a tool answer on a socket that is still current is sent as normal', async () => {
+  const f = fixture({ onToolCall: async () => ({ ok: true, now: 'calm' }) });
+  await f.live.start();
+  const socket = f.latest();
+
+  socket.emit({
+    toolCall: { functionCalls: [{ id: 'fc_1', name: 'feel', args: {} }] },
+  } as unknown as LiveServerMessage);
+  await settle();
+
+  const responses = socket.toolResponses[0] as Array<{ id: string; response: unknown }>;
+  assert.equal(responses?.length, 1);
+  assert.equal(responses[0]?.id, 'fc_1', 'the id is how the answer finds its question');
+  assert.deepEqual(responses[0]?.response, { ok: true, now: 'calm' });
+});
+
+test('a function response glued to the front of a sentence never reaches memory', async () => {
+  // Verbatim from a real transcript, and the reason it matters is that whatever
+  // comes out of a turn is written down permanently.
+  const f = fixture();
+  await f.live.start();
+  f.latest().emit({
+    serverContent: {
+      outputTranscription: {
+        text: 'response:feel{now:calm,ok:trueThe one across your chest from that sports bra.',
+      },
+      turnComplete: true,
+    },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.equal(f.annaText.at(-1)?.text, 'The one across your chest from that sports bra.');
+});
+
+test('she is still allowed to talk about code', async () => {
+  const f = fixture();
+  await f.live.start();
+  for (const line of [
+    'The fix is `{ ok: true }` and nothing else.',
+    'Try width: {100} in the config.',
+    'ok: sure, I will look.',
+  ]) {
+    f.latest().emit({
+      serverContent: { outputTranscription: { text: line }, turnComplete: true },
+    } as unknown as LiveServerMessage);
+    await settled();
+    assert.equal(f.annaText.at(-1)?.text, line, line);
+  }
+});
