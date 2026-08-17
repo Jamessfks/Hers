@@ -106,8 +106,6 @@ export class Companion {
   #lastNotifiedMood: MoodReadout | null = null;
   #memories: string[] = [];
   #closed = false;
-  /** Guards the opening picture: one per conversation, not one per message. */
-  #greeted = false;
 
   constructor(options: CompanionOptions) {
     this.#brain = options.brain;
@@ -182,42 +180,19 @@ export class Companion {
     this.#emitMood(true);
   }
 
-  /**
-   * The picture she opens with.
+  /*
+   * She no longer opens with a picture of herself.
    *
-   * Generated fresh every conversation rather than picked from the gallery —
-   * the point is that it is *new*, so reaching for something on disk would
-   * defeat it. It is built from the avatar photograph when there is one, which
-   * the gallery arranges for every generation rather than this one; a greeting
-   * is a picture of her in a place, so unlike "show me you" it has a scene and
-   * has to be made.
+   * Every conversation used to begin with a freshly generated portrait, on the
+   * first thing the user said. It was a nice trick exactly once. After that it
+   * was a photograph arriving before the hello, every time, whether or not
+   * anyone wanted one — and it cost about four cents a conversation to do it.
    *
-   * Fired and never awaited. It takes several seconds, and a companion who says
-   * nothing until her portrait finishes rendering is a companion who feels
-   * broken. Her words go out immediately; the picture catches up.
+   * A picture is worth something when it is chosen. So the only two ways one
+   * arrives now are the two that mean something: she reaches for `show`
+   * because it fits what is being said, or the user asks — in conversation, or
+   * with /me for the photograph they uploaded and /photo for a new one.
    */
-  #greet(): void {
-    if (this.#greeted || !this.#brain.config.greetingImage) return;
-    if (!this.#brain.config.geminiApiKey) return;
-    this.#greeted = true;
-
-    void (async () => {
-      try {
-        const mood = this.#brain.mood.read();
-        const snapshot = this.situation.snapshot();
-        const item = await this.#brain.gallery.generate(
-          `${describeSetting(snapshot.hour)}, ${mood.label}, looking at the camera`,
-          {
-            apiKey: this.#brain.config.geminiApiKey,
-            },
-        );
-        if (item && !this.#closed) this.#sink.show(item);
-      } catch {
-        // A greeting that does not arrive costs a picture. It must not cost the
-        // conversation it was greeting.
-      }
-    })();
-  }
 
   /*
    * Her photograph is deliberately *not* put into the conversation.
@@ -310,7 +285,6 @@ export class Companion {
     this.#brain.mood.feel('exchange');
     this.#initiative.poke();
     this.#live?.sendText(trimmed);
-    this.#greet();
   }
 
   setSense(sense: SenseName, on: boolean): void {
@@ -368,7 +342,6 @@ export class Companion {
       return;
     }
     this.#userTalking = false;
-    this.#greet();
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', text);
     this.#emitMood(false, () => this.#brain.mood.feel('exchange'));
@@ -598,15 +571,6 @@ export class Companion {
     this.#lastNotifiedMood = mood;
     if (!force) this.#live?.inject(moodUpdate(mood));
   }
-}
-
-/** Somewhere plausible for her to be, given the hour. */
-function describeSetting(hour: number): string {
-  if (hour < 5) return 'awake far too late, one lamp on';
-  if (hour < 11) return 'morning light, coffee somewhere nearby';
-  if (hour < 17) return 'afternoon, by a window';
-  if (hour < 22) return 'evening, warm indoor light';
-  return 'late evening, soft light';
 }
 
 function num(value: unknown): number | undefined {

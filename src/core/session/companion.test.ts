@@ -393,64 +393,49 @@ test('audio only flows while hearing is on', async () => {
   await f.companion.sleep();
 });
 
-test('the first thing said opens with a freshly generated picture', async () => {
+test('saying hello does not cost a picture', async () => {
+  /*
+   * Every conversation used to open with a freshly generated portrait, fired on
+   * the first thing the user said. It was a nice trick exactly once, and after
+   * that it was a photograph arriving before the hello — every time, wanted or
+   * not, at about four cents each. A picture is worth something when it is
+   * chosen, so now it is only ever chosen: by her through `show`, or by them
+   * asking.
+   */
   const f = await fixture();
   await f.companion.wake();
 
-  // A real generation is a network call and a bill, so the gallery's generator
-  // is replaced — what is under test is *when* it fires and *what it is asked
-  // for*, not Nano Banana.
-  const asked: string[] = [];
-  f.brain.gallery.generate = async (description) => {
-    asked.push(description);
-    return {
-      name: 'greeting.jpg',
-      absolutePath: '/tmp/greeting.jpg',
-      kind: 'image' as const,
-      caption: 'greeting',
-      label: '',
-      modifiedAt: Date.now(),
-    };
-  };
-
-  f.companion.say('hey');
-  f.companion.say('you there?');
-  await new Promise((resolve) => setTimeout(resolve, 200));
-
-  assert.equal(asked.length, 1, 'one picture per conversation, not one per message');
-  assert.match(asked[0] ?? '', /looking at the camera/);
-  assert.equal(f.shown.at(0)?.name, 'greeting.jpg');
-  await f.companion.sleep();
-});
-
-test('the greeting picture can be switched off', async () => {
-  const f = await fixture({ ANNA_GREETING_IMAGE: '0' });
-  await f.companion.wake();
-
-  let called = 0;
+  let generated = 0;
   f.brain.gallery.generate = async () => {
-    called += 1;
+    generated += 1;
     return null;
   };
 
   f.companion.say('hey');
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  assert.equal(called, 0);
+  f.companion.say('you there?');
+  await settle();
+
+  assert.equal(generated, 0, 'nothing was asked for and nothing should have been made');
+  assert.equal(f.shown.length, 0);
+  assert.equal(f.brain.memory.liveTranscript(5).at(-1)?.text, 'you there?', 'the turns still landed');
   await f.companion.sleep();
 });
 
-test('a greeting that fails costs a picture, not the conversation', async () => {
+test('she can still send a picture when she reaches for one', async () => {
   const f = await fixture();
+  // "a picture of you" is answered with the photograph itself rather than a
+  // generation, so there has to be one on disk for there to be anything to send.
+  await f.brain.avatar.setSource(facePng(), 'image/png');
   await f.companion.wake();
-  f.brain.gallery.generate = async () => {
-    throw new Error('the image model refused');
-  };
 
-  f.companion.say('hey');
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  f.socket().emit({
+    toolCall: {
+      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you' } }],
+    },
+  } as unknown as LiveServerMessage);
+  await settle();
 
-  assert.equal(f.shown.length, 0);
-  assert.equal(f.brain.memory.liveTranscript(5).at(-1)?.text, 'hey', 'the turn still landed');
+  assert.equal(f.shown.length, 1, 'the tool is how a picture is meant to arrive');
   await f.companion.sleep();
 });
 

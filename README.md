@@ -87,13 +87,12 @@ fact she holds, under **Memory**.
 **She has the face you gave her.** Upload any photograph and it becomes her. It
 is the fixed point every generated picture and every movement starts from.
 
-**She opens with a new picture of herself.** The first thing you say, she
-answers with a portrait generated right then — built from your photograph so it
-is her, and reflecting the hour and the mood she is actually in.
-`ANNA_GREETING_IMAGE=0` turns it off; it costs about $0.04 a conversation.
-
-**She can send you pictures.** Anything in `anna-profile/gallery/` is hers to
-send when it fits, and she can make new ones.
+**She sends pictures when there is a reason to.** Anything in
+`anna-profile/gallery/` is hers to send when it fits what you are talking about,
+and she can make new ones. Two ways one arrives, and no others: she reaches for
+it herself, or you ask — in conversation, or with `/me` for the photograph you
+uploaded and `/photo` for a new one. She does not open a conversation with an
+unasked-for portrait.
 
 ---
 
@@ -158,11 +157,17 @@ photograph.
 She asks for one. On a fresh install the interface offers **Give her a face**
 before anything else.
 
-At the start of every conversation the photograph itself goes into her context,
-so she can describe what is actually in it rather than reciting adjectives.
-There used to be an `appearance.md` beside it, and when the two disagreed the
-disagreement was visible: generated pictures kept the face from the photograph
-and the hair from the prose. A photograph cannot disagree with itself.
+It is the only answer to what she looks like. There is no written description of
+her anywhere — there used to be an `appearance.md`, and when the two disagreed
+the disagreement was visible: generated pictures kept the face from the
+photograph and the hair from the prose.
+
+The photograph is *not* put into the conversation, and that is deliberate. When
+it was, it became the only labelled picture in the session — camera frames
+arrive unlabelled — so a question about how somebody looked landed on it, and
+she described her own body back to the user as though it were theirs. Ask her
+what she looks like now and she sends a picture instead, generated from this
+exact photograph. A better answer, and one that cannot be confused with you.
 
 | Where    | How                                                             |
 | -------- | --------------------------------------------------------------- |
@@ -270,7 +275,6 @@ knowing:
 | `ANNA_PROFILE`           | `anna-profile`   | Who she is                              |
 | `ANNA_DATA`              | `data`           | What she remembers                      |
 | `ANNA_MAX_SILENCE_MS`    | `180000`         | The three-minute rule's ceiling         |
-| `ANNA_GREETING_IMAGE`    | `1`              | The portrait she opens with             |
 | `HEDRA_API_KEY`          | —                | Movement. Without it, a still photograph |
 | `ANNA_HEDRA_BUDGET_USD`  | `1`              | Hard ceiling on render spend            |
 | `TELEGRAM_BOT_TOKEN`     | —                | The bot                                 |
