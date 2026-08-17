@@ -138,9 +138,31 @@ figure before every render. Raise it in `.env` if you meant to.
 
 - Is the server running? The bot is a long poll from *your machine*; nothing
   answers when she is not up.
-- Did you restart after adding `TELEGRAM_BOT_TOKEN`? It is read at startup.
+- Have you opened the chat and pressed **Start**? A token that works is not
+  finished setup. A bot may not message first, and nothing in the Bot API tells
+  it which chat is yours, so until something arrives from you there is nobody to
+  answer. Setup → **Reach her on Telegram** shows the link.
+- If you put `TELEGRAM_BOT_TOKEN` in `.env` by hand, did you restart? A token
+  saved from the website takes effect immediately; one edited into the file is
+  read at startup.
 - Is your chat id allowed? Send `/whoami`. If someone else messaged the bot
-  first, she pinned herself to them.
+  first, she is pinned to them — clear `TELEGRAM_ALLOWED_CHAT_IDS` and message
+  her yourself before anyone else does.
+
+### "Telegram says: Unauthorized"
+
+The token is wrong. It is the whole string @BotFather gave you, digits and colon
+included, and it is easy to lose a character at either end when copying out of a
+chat. Ask @BotFather for `/mybots` → your bot → **API Token** and paste it again;
+the box keeps what you typed so you can compare.
+
+### Two of her are answering, or updates go missing
+
+Only one thing may poll a bot token. Telegram hands `getUpdates` to whichever
+caller asked most recently and terminates the other, so a second copy of Hers, or
+another program on the same token, takes the conversation in half. Stop the other
+one. `npm run audit:bridges` also polls, so it will briefly interrupt a running
+server — the audit prints the conflict when it happens.
 
 ### She sends a photograph that is not the one I uploaded
 
