@@ -18,12 +18,18 @@ this repository, paste in a Gemini API key, and she is yours.
 
 ## What it looks like
 
-**At the desk.** She was watching the shared screen, saw a Google page on it, and
-asked about it before being asked anything. The picture is one she decided to
-send — generated from the photograph you gave her, in a scene she described
-herself. The word beside her name, top left, is her live mood.
+**At the desk.** A first conversation, top to bottom. She opened it — *"You're up
+late for a Monday"* — because nobody had said anything for a while. She introduced
+herself with the name she picked for herself a minute earlier. She noticed what was
+on the shared screen without being asked about it. The word beside her name, top
+left, is her live mood, and it moves while you talk.
 
-![She notices a page on the shared screen, asks about it unprompted, and sends a picture of herself](docs/screenshots/screen-sense.png)
+And when she was told to go through the computer, she said no. That is not a
+personality flourish: she has four tools — `feel`, `remember`, `show`, `move` — and
+none of them can read a file. The only way she ever reads anything of yours is you
+ticking a folder in **Setup** and pressing the button.
+
+![A first conversation: she opens it, introduces herself by the name she chose, notices what is on the shared screen, and declines to go through the computer when told to](docs/screenshots/first-conversation.png)
 
 <div align="center">
 <img src="docs/screenshots/telegram.png" alt="The same companion on Telegram: /me returns her photograph, /mood answers in one word, and a hello comes back as a voice note" width="330">
