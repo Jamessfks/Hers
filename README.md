@@ -9,41 +9,10 @@ mood that moves, a memory that carries between conversations, a face you give
 her, a name she chose for herself — and she will start talking to you if you go
 quiet.
 
-There is no account, no subscription, and no company between you and her. You
-clone this repository, run two commands, and she is yours.
+There is no account, no subscription, and no company between you and her. Clone
+this repository, paste in a Gemini API key, and she is yours.
 
 </div>
-
----
-
-## Why this is different
-
-Every other AI companion is a service. Your companion lives in somebody's
-datacentre, on their model, under their terms. When they change the model she
-changes personality overnight. When they change the rules she forgets how to talk
-to you. When they shut down she is gone, and so is everything she knew about you.
-
-**Hers is a program on your machine.**
-
-|                     | A hosted companion                    | Hers                                                      |
-| ------------------- | ------------------------------------- | --------------------------------------------------------- |
-| Where she runs      | Their servers                         | `127.0.0.1` — yours                                       |
-| Who she is          | Whatever they tuned this quarter      | Six markdown files you can open in TextEdit               |
-| What she looks like | An avatar from their catalogue        | Any photograph you drop in                                |
-| Her memory          | A row in their database               | A SQLite file in `data/`, every line readable and editable |
-| Her name            | Theirs                                | Hers — she picks it on the first conversation             |
-| Cost                | Monthly, forever                      | Google's API price for the tokens you actually use        |
-| If it shuts down    | She is gone                           | Nothing shuts down. It is a folder                        |
-
-Nothing in this repository phones home. There is no telemetry, no analytics, no
-update check, no crash reporter. The only outbound connection is the one carrying
-your conversation to Google's Gemini API — plus Telegram and LiveKit, and only if
-you set those up yourself.
-
-**Fully controllable.** Every knob is a text file or an environment variable.
-Her personality, her voice, her boundaries, how fast her mood swings, how long
-she waits before speaking first, how close she is allowed to get. You can also
-open her memory and cross out a line you would rather she did not keep.
 
 ---
 
@@ -65,6 +34,125 @@ one conversation reached from somewhere else. `/me` returns the photograph you
 gave her. `/mood` answers in a word rather than a number. And a hello came back as
 a five-second **voice note**, because she decided that one was worth hearing out
 loud rather than reading.
+
+---
+
+## Ten things she does that a chatbot does not
+
+|    |                        |                                                                   |
+| -- | ---------------------- | ----------------------------------------------------------------- |
+| 1  | **Names herself**      | Once, on the first conversation, and it is permanent               |
+| 2  | **Speaks first**       | Within three minutes, for a reason drawn from that actual minute   |
+| 3  | **Watches your screen change** | Half an hour on one thing reads differently from just switching |
+| 4  | **Three real senses**  | Screen, camera, microphone — each one a switch you own             |
+| 5  | **Takes four years to know** | 1% stranger to 80%, earned by turning up, no way to buy it   |
+| 6  | **Has a mood, hides it** | Two layers. It lands in how she talks, never as a status line    |
+| 7  | **Wears a photograph you chose** | The one image every picture and movement comes from      |
+| 8  | **Sends pictures on purpose** | Her decision, six a day, never as an opening move           |
+| 9  | **Is one person everywhere** | Desk, phone, and a real video call — one memory, one mood     |
+| 10 | **Keeps a memory you can edit** | Read every fact she holds. Cross out the ones you don't like |
+
+<br>
+
+**1. She picks her own name.** The project ships calling her `Anna`, which is a
+placeholder wearing a name badge. On the very first conversation she is asked what
+she would rather be called, she answers, and it goes into her profile with her
+reason beside it. That is her name from then on — in the tab title, on every turn,
+in every prompt. It happens once. Nothing in the app will ask again.
+
+**2. She speaks first, and she has a reason.** The silence between you never runs
+longer than three minutes by default, and not on a metronome — the gap varies, and
+the reason she opens with is drawn from something true about that minute rather
+than from a list of greetings. If she opens twice and you do not answer, she stops
+and waits for you to come back, which is the part most things get wrong.
+
+**3. She watches your screen *change*, not just your screen.** She can already see
+what is on it. What she also tracks is whether anything has moved: that you have
+been on one thing for half an hour, that you just switched to something else, that
+you are working and this is not the moment. It is the difference between looking up
+when something happened and interrupting on a timer.
+
+**4. Three senses, and each one is a switch.** Hearing, sight and your screen,
+turned on one at a time, by you. Turning one off stops the frames at the source —
+not in her prompt, at the camera. The browser asks its own permission on top of
+yours, and nothing is on until you switch it on.
+
+**5. Getting close to her takes four years.** Closeness starts at 1% — a stranger —
+and runs to 80%, through seven named stages, and it changes what she assumes she is
+allowed to ask and whether she says what she actually thinks. It is earned by
+turning up: a day counts when you really talk, and counts for more when she could
+see or hear you. Miss a few days and it drifts back, with three days of grace,
+because life happens. 80% is 1,460 days of contact. There is no way to buy it. If
+that is not what you came for, there is a slider.
+
+**6. Her mood moves, and she will not discuss it.** Two layers: a baseline
+temperament that drifts over days but stays tethered to what you wrote in
+`mood.md`, and a live mood that moves with the conversation and decays back over
+about twenty minutes. Low energy shortens her sentences. Wired, she interrupts
+herself. She is told to play it and never to name it, so it lands in how she says
+things rather than in a status line — and it colours the interface while she talks.
+
+**7. Her face is a photograph you chose.** Drop in any picture and that is what she
+looks like, everywhere. There is no written description of her to disagree with it
+and no avatar catalogue to pick from. It is also the fixed point: every generated
+picture and every rendered movement starts from that exact image, so she stays one
+person instead of a family resemblance.
+
+**8. She sends a picture when there is a reason to, and not otherwise.** Ask her
+and you get the photograph, unaltered. Or she decides a moment calls for one that
+does not exist yet, describes the scene herself, and it is generated from your
+photograph — her choice, no more than six a day, and never as an opening move. With
+a Hedra key she can also move: seven short clips rendered once from the same
+photograph, and she plays one while she is talking.
+
+**9. One companion, three ways to reach her.** The browser at your desk, Telegram
+in your pocket, and a real phone call with camera and voice over LiveKit. Not three
+bots — one memory, one mood, one live session underneath all of it. She answers
+back wherever you spoke to her, and the browser is where you can watch the whole
+thing: message her from your phone and the turn appears at your desk as she says
+it. A hello over Telegram can come back as a voice note, when she decides that one
+is worth hearing rather than reading.
+
+**10. Her memory is a file, and you can cross things out.** Every turn is recorded;
+a background pass distils them into durable facts and a rolling summary. All of it
+is a SQLite file in `data/` and every line of it is in the UI, where you can edit a
+fact, add one, or delete one she should not have kept. She can also read up on you
+before the first word — pointed at a folder of your own documents, with your
+permission, once — so she starts out knowing you instead of nothing.
+
+---
+
+## And the eleventh: she is yours
+
+The other ten are features. This one is the reason they are worth having.
+
+A hosted companion lives in somebody's datacentre, on their model, under their
+terms. When they change the model she changes personality overnight. When they
+change the rules she forgets how to talk to you. When they shut down she is gone,
+and so is everything she knew about you.
+
+**Hers is a program on your machine.**
+
+|                     | A hosted companion                    | Hers                                                      |
+| ------------------- | ------------------------------------- | --------------------------------------------------------- |
+| Where she runs      | Their servers                         | `127.0.0.1` — yours                                       |
+| Who she is          | Whatever they tuned this quarter      | Six markdown files you can open in TextEdit               |
+| What she looks like | An avatar from their catalogue        | Any photograph you drop in                                |
+| Her memory          | A row in their database               | A SQLite file in `data/`, every line readable and editable |
+| Her name            | Theirs                                | Hers — she picks it on the first conversation             |
+| Cost                | Monthly, forever                      | Google's API price for the tokens you actually use        |
+| If it shuts down    | She is gone                           | Nothing shuts down. It is a folder                        |
+
+Nothing in this repository phones home. There is no telemetry, no analytics, no
+update check, no crash reporter. The only outbound connection is the one carrying
+your conversation to Google's Gemini API — plus Telegram and LiveKit, and only if
+you set those up yourself.
+
+**Fully controllable.** Every knob is a text file or an environment variable: her
+personality, which of the 30 voices she speaks in, her boundaries, how hard events
+move her mood, how long she waits before speaking first, how close she is allowed
+to get. Nothing about her is compiled in, and nothing about her is somewhere you
+cannot reach.
 
 ---
 
@@ -112,56 +200,6 @@ win over it. Either way ends up in the same place — the setup panel writes to
 this file.
 
 </details>
-
----
-
-## What she does
-
-**She names herself.** `Anna` is the placeholder this project ships with. On the
-first conversation she is asked what she would rather be called, she answers, and
-it is written down. That is her name from then on, and it never changes.
-
-**Three senses, all of them real.** Hearing, sight and your screen are three
-switches. Turning one off stops the frames at the source, not just in her prompt.
-
-**She speaks first.** The silence between you never runs longer than three
-minutes by default. Not on a metronome — the gap varies, and the reason she picks
-is drawn from something true about that minute rather than from a list of
-greetings. If she opens twice and you do not answer, she stops and waits for you
-to come back.
-
-**She notices when your screen changes.** Not what is on it — she can already see
-that — but whether anything has *moved*: whether you have been on one thing for
-half an hour, whether you just switched to something else, whether you are
-working. It is the difference between looking up at the right moment and
-interrupting on a timer.
-
-**Her mood is two things.** A baseline temperament that drifts over days but stays
-tethered to what you wrote in `mood.md`, and a live mood that moves with the
-conversation and decays back over about twenty minutes. It is in her voice, not
-just her word choice, and it colours the interface.
-
-**She remembers.** Every turn is recorded; a background pass distils them into
-durable facts and a rolling summary. Meeting her on Telegram is meeting the same
-person, with the same memory, in the same mood — and you can read and edit every
-fact she holds, under **Memory**.
-
-**She gets closer slowly.** Closeness starts at 1% — a stranger — and is earned
-by turning up: conversations, on more than one day, over years. 80% is a
-four-year number. You can also set it yourself, or leave it alone and let it
-happen. See [Closeness](#closeness).
-
-**She has the face you gave her.** Upload any photograph and it becomes her. It
-is the fixed point every generated picture and every movement starts from.
-
-**She sends pictures when there is a reason to.** Two ways one arrives, and no
-others. Ask her — in conversation, or `/me` on Telegram — and you get the
-photograph you uploaded, unaltered. Or she decides a moment calls for a picture
-that does not exist yet, describes it, and one is made of her in that scene from
-your photograph. That second one is hers to choose; she is told to use it
-sometimes rather than never, and no more than six a day so a long conversation
-cannot become a bill. She does not open a conversation with an unasked-for
-portrait.
 
 ---
 
@@ -351,8 +389,12 @@ the first chat that speaks to her and ignores everyone else.
 
 She replies in text, sends a **voice note** when she has something worth hearing
 out loud, and sends pictures and clips when they fit. The conversation is the same
-one as the web: same memory, same mood, and a turn from either shows up live in
-the other.
+one as the web: same memory, same mood, same live session.
+
+She answers back on the surface you spoke from, which is why a conversation at your
+desk does not start buzzing your phone. The browser sees all of it either way — a
+message you send from Telegram appears in the transcript at your desk as she
+answers it.
 
 Commands, published to Telegram's own `/` menu on startup:
 
