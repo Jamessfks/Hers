@@ -20,7 +20,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -213,6 +213,7 @@ async function session(
     shows: [] as GalleryItem[],
     troubles: [] as string[],
     names: [] as string[],
+    looks: [] as string[],
     turns: 0,
     audioBytes: 0,
   };
@@ -228,6 +229,7 @@ async function session(
     state: () => undefined,
     mood: () => undefined,
     named: (name) => state.names.push(name),
+    look: (expression) => state.looks.push(expression),
     interrupted: () => undefined,
     show: (item) => state.shows.push(item),
     trouble: (message) => state.troubles.push(message),
@@ -620,6 +622,60 @@ async function main(): Promise<void> {
     );
   } else {
     skip('Gallery — image generation', '#8 media', 'costs money; run with --paid');
+  }
+
+  if (PAID) {
+    await check(
+      'Expressions — a face is generated from her photograph, and only offered once it is',
+      'avatar',
+      async () => {
+        /*
+         * This replaced Hedra, and the property worth checking is not "an image
+         * came back" but the one the whole design rests on: she is only ever
+         * offered a face that exists for the photograph in force. Offering a face
+         * made from a previous picture would put a different woman on screen.
+         */
+        const root = await mkdtemp(path.join(tmpdir(), 'hers-faces-'));
+        const brain = await Brain.open(
+          loadConfig({
+            ...process.env,
+            HERS_PROFILE: path.join(root, 'profile'),
+            HERS_DATA: path.join(root, 'data'),
+          } as NodeJS.ProcessEnv),
+        );
+
+        await brain.avatar.setSource(portraitJpeg(), 'image/jpeg');
+        const before = brain.avatar.readyFaces();
+
+        const started = Date.now();
+        const state = await brain.avatar.makeFace('smiling');
+        const seconds = ((Date.now() - started) / 1000).toFixed(1);
+        const file = brain.avatar.facePath('smiling');
+        const bytes = file && existsSync(file) ? readFileSync(file).length : 0;
+
+        // A new photograph must retire it rather than merely hide it.
+        await brain.avatar.setSource(bandsJpeg(), 'image/jpeg');
+        const afterReplacement = brain.avatar.readyFaces();
+
+        await brain.close();
+        return {
+          ok:
+            before.length === 0 &&
+            state.ready.includes('smiling') &&
+            bytes > 10_000 &&
+            afterReplacement.length === 0,
+          evidence:
+            `offered ${JSON.stringify(before)} before; made "smiling" in ${seconds}s ` +
+            `(${bytes} bytes); offered ${JSON.stringify(afterReplacement)} after a new photograph`,
+        };
+      },
+    );
+  } else {
+    skip(
+      'Expressions — a face is generated from her photograph',
+      'avatar',
+      'costs money; run with --paid',
+    );
   }
 
   // -- Avatar --------------------------------------------------------------

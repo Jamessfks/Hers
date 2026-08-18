@@ -65,6 +65,7 @@ async function fixture(env: Record<string, string> = {}) {
   const shown: GalleryItem[] = [];
   const troubles: string[] = [];
   const names: string[] = [];
+  const looks: string[] = [];
 
   const companion = new Companion({
     brain,
@@ -77,6 +78,7 @@ async function fixture(env: Record<string, string> = {}) {
       state: (state) => states.push(state),
       mood: (mood) => moods.push(mood),
       named: (name) => names.push(name),
+      look: (expression) => looks.push(expression),
       interrupted: () => undefined,
       show: (item) => shown.push(item),
       trouble: (message) => troubles.push(message),
@@ -96,6 +98,7 @@ async function fixture(env: Record<string, string> = {}) {
     shown,
     troubles,
     names,
+    looks,
     socket: () => sockets.at(-1)!,
   };
 }
@@ -467,6 +470,7 @@ test('no API key is said plainly rather than thrown', async () => {
       state: () => undefined,
       mood: () => undefined,
       named: () => undefined,
+      look: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
       trouble: (message) => troubles.push(message),
@@ -505,6 +509,7 @@ test('memory carries between two conversations', async () => {
       state: () => undefined,
       mood: () => undefined,
       named: () => undefined,
+      look: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
       trouble: () => undefined,
@@ -816,4 +821,32 @@ test('a name she chose during this wake reaches the page that watched her wake u
   await f.companion.sleep();
   await f.companion.wake();
   assert.deepEqual(f.names, [chosen]);
+});
+
+test('she can only ask for a face that exists, and a wrong name is refused', async () => {
+  /*
+   * The enum handed to the model only ever contains ready faces, so a bad name
+   * should be impossible — which is exactly why it is checked. A tool call is a
+   * string from a model, and believing this one puts a 404 in her portrait.
+   */
+  const f = await fixture();
+  await f.companion.wake();
+  const socket = f.socket();
+
+  // No faces have been generated, so the tool is not even offered.
+  const declared = f.systemInstructions.at(-1) ?? '';
+  assert.doesNotMatch(declared, /^look /m, 'not offered when none exist');
+
+  const ask = (expression: string) =>
+    socket.emit({
+      toolCall: { functionCalls: [{ id: '1', name: 'look', args: { expression } }] },
+    } as unknown as LiveServerMessage);
+
+  ask('sneering');
+  await settle();
+  assert.deepEqual(f.looks, [], 'a name that is not an expression changes nothing');
+
+  ask('smiling');
+  await settle();
+  assert.deepEqual(f.looks, [], 'nor one that exists but has not been generated');
 });

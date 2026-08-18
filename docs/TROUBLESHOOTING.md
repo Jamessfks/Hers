@@ -111,6 +111,17 @@ smaller. Turn the screen sense off to send the camera full-frame.
 
 ## Pictures
 
+### An expression will not generate
+
+Image models decline to draw a photorealistic person often enough that this is an
+ordinary outcome rather than a fault. It is retried three times before you are told, and
+trying again a minute later usually works. Each attempt is a paid image, which is why it
+does not retry forever.
+
+If it never works, check that her photograph is actually a photograph of a person — the
+model is being asked to reproduce a real face, and it will refuse on some inputs and not
+others.
+
 ### She will not generate a picture of herself
 
 She has no photograph yet. Every generated picture starts from the one you

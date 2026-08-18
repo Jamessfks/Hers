@@ -17,7 +17,7 @@ import path from 'node:path';
 import { AvatarStudio } from '../avatar/studio.ts';
 import { Gallery } from '../gallery/gallery.ts';
 import { Intimacy } from '../intimacy/intimacy.ts';
-import { createGeminiDistiller } from '../gemini/text.ts';
+import { createGeminiDistiller, generatePortrait } from '../gemini/text.ts';
 import { createGoogleEmbedder, createLexicalEmbedder } from '../memory/embedder.ts';
 import { Memory } from '../memory/memory.ts';
 import { MemoryStore } from '../memory/store.ts';
@@ -265,7 +265,20 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
   const intimacy = new Intimacy({ dir: config.profileDir });
   await intimacy.restore();
 
-  const avatar = new AvatarStudio({ dir: path.join(config.profileDir, 'avatar') });
+  /*
+   * The painter is the seam. Without a key the studio still holds her
+   * photograph — it simply cannot make a new face, which `makeFace` says in as
+   * many words rather than failing obscurely.
+   */
+  const avatar = new AvatarStudio({
+    dir: path.join(config.profileDir, 'avatar'),
+    ...(remote
+      ? {
+          paint: (prompt, reference) =>
+            generatePortrait({ apiKey: config.geminiApiKey, prompt, reference }),
+        }
+      : {}),
+  });
   await avatar.load();
 
   return {

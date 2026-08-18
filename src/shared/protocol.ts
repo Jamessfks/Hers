@@ -113,6 +113,13 @@ export type ClientMessage =
   | { t: 'profile.load' }
   /** Ask for the current avatar state. */
   | { t: 'avatar.load' }
+  /**
+   * Browser -> server. Make one of her faces.
+   *
+   * One expression per request rather than a batch: each is a paid image, and a
+   * button that quietly spends six of them is a button nobody should have.
+   */
+  | { t: 'avatar.make'; expression: string }
   /** Ask for everything she remembers. */
   | { t: 'memory.load' }
   /** Change the wording of one thing she remembers. */
@@ -236,6 +243,8 @@ export type ServerMessage =
    * else.
    */
   /** Server -> browser. The bot, as far as the page is allowed to know. */
+  /** Server -> browser. Put this face on screen for a moment. */
+  | { t: 'look'; expression: string }
   | { t: 'telegram'; telegram: TelegramView }
   | { t: 'name'; name: string }
   | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
@@ -306,6 +315,12 @@ export interface RememberedFact {
 /** The avatar, as the browser needs to draw it. */
 export interface AvatarView {
   hasSource: boolean;
+  /** Expressions that exist for the photograph in force. */
+  ready: string[];
+  /** Every expression that could be made. */
+  all: string[];
+  /** Being generated right now. */
+  making: string[];
   /** Content-hashed, so replacing the photograph busts the cache. */
   sourceUrl: string | null;
   width: number;

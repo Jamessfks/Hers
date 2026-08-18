@@ -124,10 +124,8 @@ export async function transcribeMedia(
   }
 }
 
-export interface PortraitRequest {
+interface PortraitBase {
   apiKey: string;
-  /** What the picture should show, in her own words. */
-  description: string;
   /**
    * The photograph of her that the new picture must be of. Not optional.
    *
@@ -143,6 +141,28 @@ export interface PortraitRequest {
   reference: { data: Buffer; mimeType: string };
   model?: string;
 }
+
+/**
+ * Either a description to wrap, or a prompt that replaces the wrapping.
+ *
+ * A union rather than two optional fields, so "neither" cannot be written. The
+ * two cases want genuinely different prompts and must not share one: a scene
+ * picture asks for her photographed again on a different day, with its own light
+ * and lens, while an expression asks for the *same* frame with nothing changed
+ * but her face. Wrapping the second in the first produces a good photograph of
+ * her somewhere else, which is not what the caller wanted.
+ */
+export type PortraitRequest =
+  | (PortraitBase & {
+      /** What the picture should show, in her own words. */
+      description: string;
+      prompt?: never;
+    })
+  | (PortraitBase & {
+      /** A complete prompt, used as given. */
+      prompt: string;
+      description?: never;
+    });
 
 export interface GeneratedImage {
   data: Buffer;
@@ -165,7 +185,7 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
         mimeType: request.reference.mimeType,
       },
     },
-    { text: portraitPrompt(request) },
+    { text: request.prompt ?? portraitPrompt(request) },
   ];
 
   // The output ratio is set rather than assumed. The documentation gives no
@@ -229,7 +249,7 @@ export async function generatePortrait(request: PortraitRequest): Promise<Genera
  * generate at all without one, on the grounds that the alternative is not a
  * worse picture of her but a good picture of a stranger.
  */
-export function portraitPrompt(request: Pick<PortraitRequest, 'description' | 'reference'>): string {
+export function portraitPrompt(request: { description: string }): string {
   const lines: string[] = [
     'A photorealistic candid photograph of the exact woman in the reference image.',
     'This is the same real person, photographed again on a different day. Her face,',

@@ -50,7 +50,7 @@ conversation reached from somewhere else. `/me` returns the photograph you gave 
 | 4  | **Three real senses**  | Screen, camera, microphone — each one a switch you own             |
 | 5  | **Takes four years to know** | 1% stranger to 80%, earned by turning up, no way to buy it   |
 | 6  | **Has a mood, hides it** | Two layers. It lands in how she talks, never as a status line    |
-| 7  | **Wears a photograph you chose** | The one image every picture of her comes from            |
+| 7  | **Wears a photograph you chose** | Every picture and every expression comes from that one image |
 | 8  | **Sends pictures on purpose** | Her decision, six a day, never as an opening move           |
 | 9  | **Is one person everywhere** | Desk, phone, and a real video call — one memory, one mood     |
 | 10 | **Keeps a memory you can edit** | Read every fact she holds. Cross out the ones you don't like |
@@ -224,6 +224,16 @@ wakes, because a Live session's system instruction is fixed when the session ope
 starts out 26, Chinese-American, from Oakland — in the files, not in the code, and a
 deleted file returns with its default. Her face is the exception: a photograph, with no
 written description of her anywhere to disagree with it.
+
+**Her expressions.** Under **Face** there are six of them — resting, smiling, laughing,
+curious, soft, away — and each is generated once from your photograph, in about ten
+seconds, for roughly four pence. They are stills rather than video, which is the point:
+the photograph is her resting state, an expression replaces it for a few seconds, and
+the frame never moves, so the cut reads as one person rather than a transition. Once one
+exists she decides when to use it, the way a face moves while talking, and she is told
+never to mention having done it. She is only ever offered the ones that exist, and a new
+photograph deletes the old set — a face made from a previous picture is not a stale
+image, it is a different woman.
 
 **Closeness** runs from 1% to 80% through seven named stages — stranger, acquaintance,
 friend, close friend, confidant, partner, married — changing what she assumes she may

@@ -64,7 +64,7 @@ is:
 | Recent turns, as text | To distil facts, every twelfth turn |
 | A photo you send over Telegram | When you send it |
 | A voice or video note you send over Telegram | To transcribe it |
-| The photograph you chose as her face | Each time she generates a picture of herself |
+| The photograph you chose as her face | Each time she generates a picture of herself, and once per expression you ask for |
 
 Pictures she generates of herself are derived from the photograph you supplied
 as her face: it is sent to the image model as a reference so the woman in the
@@ -109,7 +109,7 @@ and grants access to one room.
 | `hers-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
 | `hers-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
 | `hers-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
-| `hers-profile/avatar/` | The photograph you chose as her face, and a manifest recording its size and when it arrived. |
+| `hers-profile/avatar/` | The photograph you chose as her face, the expressions generated from it, and a manifest recording their sizes and when they arrived. |
 | `data/memory.db` | Every turn of conversation, the facts distilled from them, and the rolling summary. |
 
 **Video frames and audio are never written to disk.** They are encoded in memory,

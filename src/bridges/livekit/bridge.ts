@@ -207,6 +207,8 @@ class ActiveCall {
         // A call has no header to relabel. The name on the caller's page came
         // from the invite, which {@link invite} settles before minting the link.
         named: () => undefined,
+        // A caller hears her; there is no portrait on a phone call to change.
+        look: () => undefined,
         interrupted: () => speaker.clearQueue(),
         show: () => undefined,
         trouble: (message) => console.warn(`call: ${message}`),

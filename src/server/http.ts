@@ -10,6 +10,7 @@
  *   POST /api/reset    delete everything and start over
  *   GET  /api/status   what is configured, for a person or a health check
  *   GET  /avatar/source
+ *   GET  /avatar/face/<expression>
  *   GET  /gallery/<name>
  *   GET  anything else the built site, with a single-page fallback
  *
@@ -30,6 +31,7 @@ import { stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 
+import { isExpression } from '../core/avatar/expressions.ts';
 import type { AvatarStudio } from '../core/avatar/studio.ts';
 import { AvatarError, IMAGE_LIMITS } from '../core/avatar/studio.ts';
 import type { Gallery } from '../core/gallery/gallery.ts';
@@ -158,6 +160,19 @@ export function createRequestHandler(options: StaticOptions) {
 
     if (pathname === '/avatar/source') {
       await serveAvatarSource(options.avatar(), response);
+      return;
+    }
+
+    /*
+     * Her faces, by name rather than by path.
+     *
+     * The name is checked against the studio's own list before anything is
+     * opened, so this route cannot be talked into reading a file the studio does
+     * not know about — the same property the gallery route has, and for the same
+     * reason.
+     */
+    if (pathname.startsWith('/avatar/face/')) {
+      await serveAvatarFace(options.avatar(), pathname.slice('/avatar/face/'.length), response);
       return;
     }
 
@@ -401,6 +416,30 @@ async function readJson(
     send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'That request was not readable.' }));
     return null;
   }
+}
+
+async function serveAvatarFace(
+  avatar: AvatarStudio,
+  name: string,
+  response: ServerResponse,
+): Promise<void> {
+  if (!isExpression(name)) {
+    send(response, 404, 'text/plain; charset=utf-8', 'No such expression');
+    return;
+  }
+  const file = avatar.facePath(name);
+  if (!file || !existsSync(file)) {
+    send(response, 404, 'text/plain; charset=utf-8', 'That face has not been made');
+    return;
+  }
+  const { size } = await stat(file);
+  response.writeHead(200, {
+    'content-type': avatar.faceMimeType(name),
+    'content-length': size,
+    // Named for the source it was made from, so what is behind it never changes.
+    'cache-control': 'private, max-age=86400, immutable',
+  });
+  createReadStream(file).pipe(response);
 }
 
 async function serveAvatarSource(avatar: AvatarStudio, response: ServerResponse): Promise<void> {

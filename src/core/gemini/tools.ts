@@ -21,8 +21,46 @@ import type { FunctionDeclaration } from '@google/genai';
 export const FEEL = 'feel';
 export const REMEMBER = 'remember';
 export const SHOW = 'show';
+export const LOOK = 'look';
 
-export const HERS_TOOLS: FunctionDeclaration[] = [
+/**
+ * Her tools, given the faces that exist right now.
+ *
+ * A function rather than a constant because `look` may only offer expressions
+ * that have been generated for the photograph in force. Offering one that does
+ * not exist produces a tool call the server has to refuse, which she experiences
+ * as her own face not working.
+ */
+export function hersTools(readyFaces: readonly string[] = []): FunctionDeclaration[] {
+  return [
+    ...BASE_TOOLS,
+    ...(readyFaces.length > 0
+      ? [
+          {
+            name: LOOK,
+            description:
+              'Change your expression, so they can see it. Use it the way a face moves ' +
+              'while talking — when something is funny, when you are curious, when you ' +
+              'have gone quiet and are thinking. Say nothing about having done it; it is ' +
+              'not something a person announces. Only the listed expressions exist.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                expression: {
+                  type: Type.STRING,
+                  enum: [...readyFaces],
+                  description: 'Which face to show.',
+                },
+              },
+              required: ['expression'],
+            },
+          } satisfies FunctionDeclaration,
+        ]
+      : []),
+  ];
+}
+
+const BASE_TOOLS: FunctionDeclaration[] = [
   {
     name: FEEL,
     description:

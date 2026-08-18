@@ -559,3 +559,43 @@ button { font: inherit; color: inherit; cursor: pointer; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Her expressions
+ *
+ * A chip per face, dim until it exists. Deliberately plain: the interesting
+ * thing in this dialog is the photograph, and six buttons competing with it
+ * would be six buttons too many.
+ * ------------------------------------------------------------------------- */
+
+.faces { margin-top: 22px; }
+.faces h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+
+.face-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.face-chip {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.face-chip:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.face-chip:disabled { opacity: 0.55; cursor: default; }
+
+/* It exists, so she can use it. */
+.face-chip[data-ready='true'] {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--line));
+  background: var(--accent-wash);
+  color: var(--ink);
+}

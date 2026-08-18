@@ -37,6 +37,7 @@ import type {
   TelegramView,
 } from '../shared/protocol.ts';
 import type { Conversation, Origin } from '../core/session/conversation.ts';
+import { isExpression } from '../core/avatar/expressions.ts';
 import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
@@ -184,6 +185,7 @@ export class WebBridge {
       state: (state) => this.#send({ t: 'state', state }),
       mood: (mood) => this.#send({ t: 'mood', mood }),
       named: (name) => this.#send({ t: 'name', name }),
+      look: (expression) => this.#send({ t: 'look', expression }),
       interrupted: () => this.#send({ t: 'interrupted' }),
       show: (item) =>
         this.#send({
@@ -376,6 +378,10 @@ export class WebBridge {
         sendJson(socket, { t: 'avatar', avatar: this.#options.brain.avatar.state() });
         return;
 
+      case 'avatar.make':
+        void this.#makeFace(socket, message.expression);
+        return;
+
       case 'profile.load':
         sendJson(socket, {
           t: 'profile',
@@ -431,6 +437,35 @@ export class WebBridge {
    * finishes outside the browser: somebody opens the link on a phone and presses
    * Start, and the page they left open at their desk should say so by itself.
    */
+  /**
+   * Generates one of her faces, and tells everyone how it went.
+   *
+   * Announced to every page rather than answered to the one that asked: the face
+   * belongs to her, not to a tab, and a second window with the Face dialog open
+   * should see it arrive. Failures are spoken in the words a person would use —
+   * an image model refusing to draw a photorealistic person is an ordinary
+   * outcome here, not an exception.
+   */
+  async #makeFace(socket: WebSocket, expression: string): Promise<void> {
+    const avatar = this.#options.brain.avatar;
+    if (!isExpression(expression)) {
+      sendJson(socket, { t: 'trouble', message: 'No such expression.' });
+      return;
+    }
+
+    this.announceAvatar();
+    try {
+      await avatar.makeFace(expression);
+      sendJson(socket, { t: 'trouble', message: `She can look ${expression} now.` });
+    } catch (error) {
+      sendJson(socket, {
+        t: 'trouble',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    this.announceAvatar();
+  }
+
   announceTelegram(view: TelegramView): void {
     this.#send({ t: 'telegram', telegram: view });
   }

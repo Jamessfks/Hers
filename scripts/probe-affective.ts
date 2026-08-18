@@ -24,7 +24,7 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { DEFAULT_LIVE_MODEL } from '../src/core/gemini/models.ts';
-import { HERS_TOOLS } from '../src/core/gemini/tools.ts';
+import { hersTools } from '../src/core/gemini/tools.ts';
 import { loadConfig, loadDotEnv } from '../src/server/config.ts';
 
 /** The SDK's connect promise does not settle when setup is rejected. */
@@ -47,7 +47,7 @@ async function attempt(
           responseModalities: [Modality.AUDIO],
           systemInstruction: 'Answer in one short sentence.',
           enableAffectiveDialog: true,
-          ...(withTools ? { tools: [{ functionDeclarations: HERS_TOOLS }] } : {}),
+          ...(withTools ? { tools: [{ functionDeclarations: hersTools() }] } : {}),
         },
         callbacks: {
           onopen: () => notes.push('opened'),

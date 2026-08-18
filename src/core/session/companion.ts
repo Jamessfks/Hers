@@ -33,7 +33,8 @@ import type {
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { FACT_KINDS, FEEL, HERS_TOOLS, REMEMBER, SHOW } from '../gemini/tools.ts';
+import { FACT_KINDS, FEEL, LOOK, REMEMBER, SHOW, hersTools } from '../gemini/tools.ts';
+import { isExpression } from '../avatar/expressions.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import type { FactKind } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
@@ -60,6 +61,13 @@ export interface CompanionSink {
   interrupted(): void;
   /** She chose to send a picture or a clip. */
   show(item: GalleryItem): void;
+  /**
+   * She changed her expression.
+   *
+   * The name of a face that has been generated for the photograph in force —
+   * never one that has not, because the tool is only ever offered the ready ones.
+   */
+  look(expression: string): void;
   trouble(message: string): void;
 }
 
@@ -200,7 +208,8 @@ export class Companion {
       model: brain.config.model,
       voice: brain.profile.voice.voice,
       languageCode: brain.profile.voice.languageCode,
-      tools: HERS_TOOLS,
+      // Only the faces that exist, so she cannot ask for one that is not there.
+      tools: hersTools(this.#brain.avatar.readyFaces()),
       // Rebuilt rather than captured, so a reconnect picks up her current mood
       // and the senses that are on now rather than the ones that were on when
       // the conversation started.
@@ -526,6 +535,21 @@ export class Companion {
         return { ok: true };
       }
 
+      case LOOK: {
+        /*
+         * Refused rather than trusted, even though the enum given to the model
+         * only ever contains ready faces. A tool call is a string from a model,
+         * and the cost of believing this one is a 404 in the portrait.
+         */
+        const expression = String(args.expression ?? '').trim();
+        if (!isExpression(expression)) return { ok: false, reason: 'no such expression' };
+        if (!this.#brain.avatar.readyFaces().includes(expression)) {
+          return { ok: false, reason: 'that face has not been made yet' };
+        }
+        this.#sink.look(expression);
+        return { ok: true };
+      }
+
       case SHOW: {
         const description = String(args.description ?? '').trim();
         if (!description) return { ok: false, reason: 'no description' };
@@ -639,6 +663,7 @@ export class Companion {
       channel: this.#channel,
       returning: this.#brain.hasHistory,
       hasFace: this.#brain.avatar.face() !== null,
+      faces: this.#brain.avatar.readyFaces(),
       intimacy: this.#brain.intimacy.read(),
     });
   }

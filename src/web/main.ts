@@ -74,6 +74,7 @@ const ui = new Ui({
     }
   },
   onSaveKey: (key) => post('/api/key', { key }),
+  onMakeFace: (expression) => connection.send({ t: 'avatar.make', expression }),
   onSaveBotToken: async (token) => {
     // Unlike the other setup posts, the interesting part of the answer is the
     // body: the page needs the bot's username to build the link the user opens.

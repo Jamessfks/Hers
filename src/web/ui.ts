@@ -19,6 +19,15 @@ import type {
 } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
 
+/**
+ * How long one of her faces stays up.
+ *
+ * Long enough to be seen and short enough that she is not stuck wearing it. She
+ * calls `look` about as often as a person changes expression, so overlapping
+ * calls are normal — each one restarts this rather than queueing.
+ */
+const LOOK_MS = 4200;
+
 function need<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`missing #${id}`);
@@ -48,6 +57,8 @@ export interface UiHandlers {
    * is not in it.
    */
   onSaveBotToken(token: string): Promise<{ error?: string; username?: string; link?: string }>;
+  /** Generate one of her expressions from the photograph. */
+  onMakeFace(expression: string): void;
   /** Delete everything. Resolves to null on success, or to why not. */
   onReset(confirm: string): Promise<string | null>;
   /** Put closeness where the user wants it, 0-1. */
@@ -103,6 +114,13 @@ export class Ui {
   readonly #orb = need('orb');
   readonly #portrait = need('portrait');
   readonly #still = need<HTMLImageElement>('portrait-still');
+  readonly #faceList = need('face-list');
+  readonly #faceStatus = need('face-status');
+  /** The photograph, so a shown expression can be put back. */
+  #sourceUrl: string | null = null;
+  #lookTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The face this page asked for, so its own line can be resolved. */
+  #asked: string | null = null;
   readonly #face = need<HTMLDialogElement>('face');
   readonly #dropzone = need<HTMLLabelElement>('dropzone');
   readonly #facePreview = need<HTMLImageElement>('face-preview');
@@ -326,6 +344,10 @@ export class Ui {
         this.setAvatar(message.avatar);
         return;
 
+      case 'look':
+        this.showLook(message.expression);
+        return;
+
       case 'memory':
         this.setMemory(message.facts, message.summary);
         return;
@@ -470,6 +492,67 @@ export class Ui {
     }, duration);
   }
 
+  /**
+   * Puts one of her faces on screen, then puts the photograph back.
+   *
+   * A timed swap rather than a state she stays in, because the alternative is a
+   * portrait frozen mid-laugh for the rest of the conversation. The photograph is
+   * the resting state and everything returns to it, which is also what makes the
+   * cut read as one person: the frame never moves.
+   */
+  showLook(expression: string): void {
+    if (!this.#sourceUrl) return;
+    if (this.#lookTimer) clearTimeout(this.#lookTimer);
+
+    this.#still.src = `/avatar/face/${encodeURIComponent(expression)}`;
+    this.#lookTimer = setTimeout(() => {
+      if (this.#sourceUrl) this.#still.src = this.#sourceUrl;
+      this.#lookTimer = null;
+    }, LOOK_MS);
+  }
+
+  #renderFaceList(avatar: AvatarView): void {
+    /*
+     * Resolve this page's own line before redrawing.
+     *
+     * The success toast goes to every page, which is right — the face belongs to
+     * her. But the "Making…" line belongs to the tab that clicked, and without
+     * this it sits there indefinitely looking like the request never finished.
+     */
+    if (this.#asked && !avatar.making.includes(this.#asked)) {
+      const done = avatar.ready.includes(this.#asked);
+      this.#status(
+        this.#faceStatus,
+        done ? `She can look ${this.#asked} now.` : `${this.#asked} did not come back. Try again.`,
+        done ? 'good' : 'bad',
+      );
+      this.#asked = null;
+    }
+
+    this.#faceList.replaceChildren();
+    if (!avatar.hasSource) return;
+
+    for (const name of avatar.all) {
+      const ready = avatar.ready.includes(name);
+      const making = avatar.making.includes(name);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'face-chip';
+      button.textContent = making ? `${name}…` : name;
+      button.dataset.ready = String(ready);
+      button.disabled = making;
+      button.title = ready
+        ? `${name} exists — click to make it again`
+        : `Generate ${name} from her photograph`;
+      button.addEventListener('click', () => {
+        this.#asked = name;
+        this.#status(this.#faceStatus, `Making ${name}… this takes about ten seconds.`, 'working');
+        this.#handlers.onMakeFace(name);
+      });
+      this.#faceList.append(button);
+    }
+  }
+
   /** Her photograph, or the orb when there is not one yet. */
   setAvatar(avatar: AvatarView): void {
     const hasSource = avatar.hasSource && Boolean(avatar.sourceUrl);
@@ -478,7 +561,10 @@ export class Ui {
     this.#orb.hidden = hasSource;
     this.#giveFace.hidden = hasSource;
 
+    this.#renderFaceList(avatar);
+
     if (hasSource && avatar.sourceUrl) {
+      this.#sourceUrl = avatar.sourceUrl;
       if (this.#still.getAttribute('src') !== avatar.sourceUrl) {
         this.#still.src = avatar.sourceUrl;
         this.#facePreview.src = avatar.sourceUrl;

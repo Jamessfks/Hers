@@ -76,6 +76,8 @@ export interface Surface {
   transcript(who: 'user' | 'her', text: string, final: boolean, origin: Origin): void;
   audio?(pcm: Buffer, origin: Origin): void;
   show?(item: GalleryItem, origin: Origin): void;
+  /** She changed her expression. No origin: her face is not addressed to anyone. */
+  look?(expression: string): void;
   state?(state: ConnectionState): void;
   mood?(mood: MoodReadout): void;
   /** She named herself. No origin: it is true everywhere at once. */
@@ -232,6 +234,7 @@ export class Conversation {
         },
         mood: (mood) => this.#each((surface) => surface.mood?.(mood)),
         named: (name) => this.#each((surface) => surface.named?.(name)),
+        look: (expression) => this.#each((surface) => surface.look?.(expression)),
         interrupted: () => this.#each((surface) => surface.interrupted?.()),
         trouble: (message) => this.#each((surface) => surface.trouble?.(message)),
       },

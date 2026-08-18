@@ -44,6 +44,14 @@ export interface PromptInput {
   returning: boolean;
   /** Whether a photograph of her exists and has been put into context. */
   hasFace: boolean;
+  /**
+   * Expressions she can actually show, if any.
+   *
+   * Empty is the normal case on a fresh install — each face is a generated image
+   * somebody has to ask for — and the section is omitted entirely rather than
+   * telling her about a tool she has not been given.
+   */
+  faces?: readonly string[];
   /** How close they are, and how long that took. */
   intimacy: IntimacyReadout;
 }
@@ -59,7 +67,7 @@ export function buildSystemInstruction(input: PromptInput): string {
     intimacySection(input),
     sensesSection(input),
     channelSection(input),
-    toolsSection(),
+    toolsSection(input),
     input.profile.prose.boundaries ?? '',
     nowSection(input),
   ];
@@ -314,13 +322,20 @@ function channelSection({ channel }: PromptInput): string {
   ].join('\n');
 }
 
-function toolsSection(): string {
+function toolsSection(input: PromptInput): string {
+  const faces = input.faces ?? [];
   return [
     'THINGS YOU CAN DO',
     '',
     'feel      When something genuinely moves you. Not every turn.',
     'remember  When you learn something about them worth keeping for months.',
     'show      When a picture or a clip of you fits what you are talking about.',
+    ...(faces.length > 0
+      ? [
+          `look      Change your expression. You can be: ${faces.join(', ')}.`,
+          '          Use it the way a face moves while talking, and never mention it.',
+        ]
+      : []),
     '',
     'Use them mid-sentence and keep talking. Never narrate using one — do not say',
     '"let me remember that" or "I\'m sending you a photo". Never describe your own',
