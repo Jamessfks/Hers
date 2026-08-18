@@ -109,7 +109,7 @@ smaller. Turn the screen sense off to send the camera full-frame.
 
 ---
 
-## Pictures and movements
+## Pictures
 
 ### She will not generate a picture of herself
 
@@ -118,17 +118,6 @@ uploaded, and without it she declines rather than inventing a stranger — that 
 deliberate, and it is what stops her face drifting.
 
 **Face → Give her a face**, then ask again.
-
-### A render is stuck at "rendering"
-
-Hedra's queue is measured in minutes, and a two-second clip is a real job. Leave
-it. If it fails, she says so and the money is not spent twice — but note that
-quitting the server mid-render abandons a job you have already paid for.
-
-### "Budget reached"
-
-`HERS_HEDRA_BUDGET_USD` is a hard ceiling checked against Hedra's own usage
-figure before every render. Raise it in `.env` if you meant to.
 
 ---
 
@@ -191,8 +180,8 @@ minute or two after that.
 ## Starting over
 
 **Setup → Start over**, type `start over`, and everything she has accumulated is
-deleted: memory, conversations on every surface, mood, profile, gallery,
-photograph and clips. Your API keys survive.
+deleted: memory, conversations on every surface, mood, profile, gallery and
+photograph. Your API keys survive.
 
 If it refuses with *"Refusing to delete …"*, `HERS_PROFILE` or `HERS_DATA` points
 somewhere too dangerous to remove — your home directory, the root of a disk, or

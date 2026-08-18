@@ -1,6 +1,10 @@
 /**
  * Which Live model can do what.
  *
+ * The default is `gemini-3.1-flash-live-preview` and is meant to stay that way:
+ * it is the only model here that takes function declarations alongside audio
+ * input, and her tools are how she feels, remembers, and sends a picture.
+ *
  * Sending a config field a model does not accept is not a soft failure — the
  * setup is rejected and the socket closes, which looks to a user exactly like
  * "the app is broken". So capabilities are declared here and the session strips
@@ -63,6 +67,17 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
     toolsWithAudio: false,
   },
   'gemini-3.1-flash-live-preview': {
+    /*
+     * Wanted, asked for, and measured as impossible — twice, on 2026-08-17, with
+     * tools attached and without:
+     *
+     *     opened, then close 1011 "Internal error encountered."
+     *
+     * So this is not a preference recorded as `false`; the field is refused and
+     * the session would have no voice path at all. `npm run probe:affective`
+     * re-asks in one command, and the day it prints CONNECTED this line is the
+     * only thing that has to change.
+     */
     affectiveDialog: false,
     proactiveAudio: false,
     nativeAudio: true,

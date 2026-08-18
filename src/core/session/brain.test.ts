@@ -122,15 +122,14 @@ function pngBytes(width = 512, height = 640): Buffer {
 
 test('a borrowed profile is a copy, so nothing a test does reaches the real one', async () => {
   /*
-   * The shape the audit relies on. Its gesture check needs the real profile for
-   * one reason — the rendered clips live there — and it used to open the real
-   * folder to get them, then pin closeness to 70% and put it back afterwards on
-   * a path that was not a `finally`. A throw in between would have left somebody's
-   * own relationship parked at a number a test chose, and it also wrote a
-   * generated picture into their gallery.
+   * The property that makes it safe to seed a throwaway profile from a real one.
    *
-   * Copying the avatar folder removes the failure rather than handling it. This
-   * asserts the property that makes that true: two brains over two directories
+   * A check that wanted somebody's uploaded photograph used to open the real
+   * folder to get it, pin closeness to 70%, and put it back afterwards on a path
+   * that was not a `finally`. A throw in between would have left somebody's own
+   * relationship parked at a number a test chose, and it also wrote a generated
+   * picture into their gallery. Copying removes the failure rather than handling
+   * it, and this asserts what makes that work: two brains over two directories
    * share nothing, even when one was seeded from the other.
    */
   const original = await fixture();
@@ -153,7 +152,7 @@ test('a borrowed profile is a copy, so nothing a test does reaches the real one'
     { offline: true },
   );
 
-  // The clips came across, which is the only reason to borrow at all.
+  // The photograph came across, which is the only reason to borrow at all.
   assert.ok(copy.avatar.face(), 'the photograph has to survive the copy');
 
   copy.intimacy.pin(0.7);

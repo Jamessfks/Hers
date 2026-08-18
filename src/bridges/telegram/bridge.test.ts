@@ -156,7 +156,7 @@ test('the command menu is published on startup', async () => {
   await pump(f.bridge);
   const names = f.api.commands.map((command) => command.command);
   assert.ok(names.includes('face'), 'the whole point of a menu is that /face is in it');
-  assert.ok(names.includes('render'));
+  assert.ok(names.includes('me'), 'and that /me is, since it is how she is asked for her photograph');
   for (const command of f.api.commands) {
     assert.match(command.command, /^[a-z0-9_]{1,32}$/, `${command.command} is not a legal name`);
     assert.ok(command.description.length >= 1 && command.description.length <= 256);
@@ -257,20 +257,6 @@ test('/me says so when there is no face yet', async () => {
   await pump(f.bridge);
   assert.equal(f.api.photos.length, 0);
   assert.match(f.api.sent[0]?.text ?? '', /given me a face/);
-});
-
-test('/gestures asks for a face before offering to render one', async () => {
-  const f = await fixture([100]);
-  f.api.queue([textMessage(100, '/gestures', 1)]);
-  await pump(f.bridge);
-  assert.match(f.api.sent[0]?.text ?? '', /Give me a face first/);
-});
-
-test('/render refuses a gesture that is not one', async () => {
-  const f = await fixture([100]);
-  f.api.queue([textMessage(100, '/render backflip', 1)]);
-  await pump(f.bridge);
-  assert.match(f.api.sent[0]?.text ?? '', /Which one\?/);
 });
 
 test('with an allowlist, only those chats are answered', async () => {

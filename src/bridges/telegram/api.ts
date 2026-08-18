@@ -67,8 +67,8 @@ export const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
  * the `photo` field only as "available sizes of the photo" and says nothing
  * anywhere about their order — so `photo.at(-1)` is an assumption that happens
  * to hold, not a rule. For a thumbnail that would be a cosmetic bug; for the
- * picture that becomes her face and gets sent to a paid renderer, it is the
- * difference between a portrait and a 90-pixel preview.
+ * picture that becomes her face and is the reference for every picture generated
+ * of her, it is the difference between a portrait and a 90-pixel preview.
  */
 export function largestPhoto(sizes: readonly TelegramPhotoSize[]): TelegramPhotoSize | null {
   let best: TelegramPhotoSize | null = null;

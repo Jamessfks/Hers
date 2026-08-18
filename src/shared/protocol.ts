@@ -111,8 +111,6 @@ export type ClientMessage =
   | { t: 'profile.save'; files: Record<string, string> }
   /** Ask for the profile folder as it is on disk. */
   | { t: 'profile.load' }
-  /** Render one gesture clip from the avatar photograph. Costs money. */
-  | { t: 'avatar.render'; gesture: string; seconds?: number }
   /** Ask for the current avatar state. */
   | { t: 'avatar.load' }
   /** Ask for everything she remembers. */
@@ -249,15 +247,8 @@ export type ServerMessage =
   /** A picture or clip she chose to show. Served from /gallery. */
   | { t: 'show'; url: string; kind: 'image' | 'clip'; caption?: string }
   | { t: 'profile'; files: Record<string, string> }
-  /** The photograph and which gestures have been rendered from it. */
+  /** Her photograph, as the page needs to draw it. */
   | { t: 'avatar'; avatar: AvatarView }
-  /**
-   * Play a gesture clip now, then return to the still.
-   *
-   * Only ever sent for a gesture the UI has been told is ready — a request to
-   * play a clip that does not exist would show a broken video element.
-   */
-  | { t: 'move'; gesture: string }
   | { t: 'memory'; facts: RememberedFact[]; summary: string }
   /**
    * How close she is, for the one control that shows it.
@@ -319,13 +310,6 @@ export interface AvatarView {
   sourceUrl: string | null;
   width: number;
   height: number;
-  ready: string[];
-  rendering: string[];
-  all: string[];
-  spentUsd: number;
-  budgetUsd: number;
-  /** False when there is no Hedra key: the still works, nothing moves. */
-  configured: boolean;
 }
 
 // ---------------------------------------------------------------------------

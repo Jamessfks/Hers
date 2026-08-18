@@ -31,7 +31,6 @@
         <div class="presence">
           <div class="portrait" id="portrait" hidden>
             <img id="portrait-still" alt="Anna" />
-            <video id="portrait-clip" muted playsinline preload="auto"></video>
           </div>
           <div class="orb" id="orb">
             <div class="orb-core"></div>
@@ -113,9 +112,9 @@
         <button class="ghost" value="close" aria-label="Close">Close</button>
       </form>
       <p class="settings-note">
-        Give her a photograph. It is the starting point every movement is generated
-        from — so every clip begins and ends on this exact picture, and the interface
-        can cut between them without a jump.
+        Give her a photograph. It is what she looks like — the interface shows it, she
+        sends it when you ask to see her, and every picture she generates of herself
+        starts from it.
       </p>
 
       <div class="face-body">
@@ -124,18 +123,6 @@
           <img id="face-preview" alt="" hidden />
           <span id="dropzone-label">Drop a picture here, or click to choose one</span>
         </label>
-
-        <div class="gestures">
-          <p class="gestures-head">
-            Movements
-            <span class="spend" id="spend"></span>
-          </p>
-          <p class="gestures-note" id="gestures-note">
-            Each one is rendered once, from the picture, and costs money. Start with
-            <strong>idle</strong> — it is the one she rests in between the others.
-          </p>
-          <div class="gesture-list" id="gesture-list"></div>
-        </div>
       </div>
     </dialog>
 
@@ -271,7 +258,7 @@
           <p class="settings-note">
             Everything she has: what she remembers, this conversation and every
             conversation on Telegram, her mood, her profile, her photograph and every
-            movement rendered from it. All of it deleted, and she meets you as a
+            picture generated from it. All of it deleted, and she meets you as a
             stranger with a new face. Your API keys are not touched.
           </p>
           <div class="setup-row">

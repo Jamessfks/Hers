@@ -200,13 +200,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
       hsl(var(--mood-hue) 70% 62% / calc(0.14 + var(--level, 0) * 0.32));
 }
 
-.portrait img, .portrait video {
+.portrait img {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   object-fit: cover; display: block;
 }
-.portrait video { opacity: 0; }
-.portrait[data-moving='true'] video { opacity: 1; }
 .app[data-state='asleep'] .portrait img { filter: saturate(0.55) contrast(0.96); transition: filter 700ms ease; }
 
 /* Stands in until there is a photograph. */
@@ -489,8 +487,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* -- Her face -------------------------------------------------------------- */
 
-.face-body { display: grid; grid-template-columns: minmax(180px, 230px) 1fr; gap: 22px; padding: 16px 22px 20px; align-items: start; }
-@media (max-width: 640px) { .face-body { grid-template-columns: 1fr; } }
+/* One column, and a narrow one: the dropzone is 3:4, so letting it take the
+   820px dialog would make it 1093px tall and taller than the viewport. */
+.face-body { display: grid; grid-template-columns: minmax(180px, 230px); padding: 16px 22px 20px; }
 
 .dropzone {
   position: relative; display: grid; place-items: center;
@@ -504,24 +503,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dropzone:hover, .dropzone[data-over='true'] { border-color: var(--accent); color: var(--ink-soft); }
 .dropzone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dropzone img[hidden] { display: none; }
-
-.gestures-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 4px; font-size: 14px; font-weight: 600; }
-.spend { color: var(--ink-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
-.gestures-note { margin: 0 0 12px; color: var(--ink-faint); font-size: 12.5px; line-height: 1.55; }
-.gesture-list { display: flex; flex-wrap: wrap; gap: 6px; }
-
-.gesture {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: 999px; padding: 6px 13px; font-size: 13px; color: var(--ink-soft);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
-}
-.gesture:hover:not(:disabled) { border-color: var(--accent-edge); color: var(--ink); }
-.gesture:disabled { cursor: default; opacity: 0.5; }
-.gesture[data-ready='true'] { background: var(--accent-wash); border-color: var(--accent-edge); color: var(--ink); opacity: 1; }
-.gesture .mark { font-size: 11px; color: var(--ink-faint); }
-.gesture[data-ready='true'] .mark { color: var(--accent); }
-.gesture[data-rendering='true'] .mark { animation: pulse 1.2s ease-in-out infinite; }
 
 /* -- Memory ---------------------------------------------------------------- */
 /* Every memory surface is inspectable and editable — the principle OpenClaw

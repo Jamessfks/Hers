@@ -76,7 +76,6 @@ export interface Surface {
   transcript(who: 'user' | 'her', text: string, final: boolean, origin: Origin): void;
   audio?(pcm: Buffer, origin: Origin): void;
   show?(item: GalleryItem, origin: Origin): void;
-  move?(gesture: string): void;
   state?(state: ConnectionState): void;
   mood?(mood: MoodReadout): void;
   /** She named herself. No origin: it is true everywhere at once. */
@@ -219,7 +218,6 @@ export class Conversation {
           this.#each((surface, origin) => surface.transcript(who, text, final, origin));
         },
         show: (item) => this.#each((surface, origin) => surface.show?.(item, origin)),
-        move: (gesture) => this.#each((surface) => surface.move?.(gesture)),
         state: (state) => {
           this.#each((surface) => surface.state?.(state));
           /*

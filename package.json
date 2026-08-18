@@ -2,7 +2,7 @@
   "name": "hers",
   "version": "1.0.0",
   "private": true,
-  "description": "Hers — a fully customizable AI companion that runs entirely on your own computer. She sees your screen, sees you, hears you, remembers, and speaks first.",
+  "description": "Hers \u2014 a fully customizable AI companion that runs entirely on your own computer. She sees your screen, sees you, hears you, remembers, and speaks first.",
   "author": "Zicheng Zhao",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,8 @@
     "check": "npm run typecheck && npm run test",
     "doctor": "node src/server/doctor.ts",
     "audit": "node scripts/audit.ts",
-    "audit:bridges": "node scripts/audit-bridges.ts"
+    "audit:bridges": "node scripts/audit-bridges.ts",
+    "probe:affective": "node scripts/probe-affective.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

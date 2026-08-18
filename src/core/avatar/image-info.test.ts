@@ -10,9 +10,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { aspectMismatch, nearestAspectRatio, sniffImage } from './image-info.ts';
-
-const HEDRA_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '9:21', '21:9'] as const;
+import { sniffImage } from './image-info.ts';
 
 // ---------------------------------------------------------------------------
 // Sniffing
@@ -122,40 +120,4 @@ test('a JPEG that calls itself a PNG is read as a JPEG', () => {
   assert.equal(info.mimeType, 'image/jpeg');
   assert.equal(info.width, 1024);
   assert.equal(info.height, 1024);
-});
-
-// ---------------------------------------------------------------------------
-// Aspect ratio
-// ---------------------------------------------------------------------------
-
-test('a square photograph picks 1:1, not the portrait default', () => {
-  // The bug this prevents: a hardcoded 9:16 default, chosen because the panel
-  // is portrait, applied to a 1024x1024 source.
-  assert.equal(nearestAspectRatio(1024, 1024, HEDRA_RATIOS), '1:1');
-});
-
-test('ratios are compared in log space, so a square is not dragged towards 9:21', () => {
-  // Linearly, |21/9 - 1| = 1.33 and |9/21 - 1| = 0.57, so a naive comparison
-  // prefers the tall one for a square image. It should prefer neither.
-  const chosen = nearestAspectRatio(1000, 1001, HEDRA_RATIOS);
-  assert.equal(chosen, '1:1');
-});
-
-test('obvious shapes pick the obvious ratio', () => {
-  assert.equal(nearestAspectRatio(1080, 1920, HEDRA_RATIOS), '9:16');
-  assert.equal(nearestAspectRatio(1920, 1080, HEDRA_RATIOS), '16:9');
-  assert.equal(nearestAspectRatio(1200, 1600, HEDRA_RATIOS), '3:4');
-  assert.equal(nearestAspectRatio(1600, 1200, HEDRA_RATIOS), '4:3');
-});
-
-test('a model offering only one ratio returns it whatever the photograph is', () => {
-  assert.equal(nearestAspectRatio(1024, 1024, ['16:9']), '16:9');
-});
-
-test('mismatch is zero for an exact match and grows with the error', () => {
-  assert.equal(aspectMismatch(1024, 1024, '1:1'), 0);
-  // A square forced into 16:9 is a large mismatch, and should be reportable as
-  // "this will crop her" rather than silently accepted.
-  assert.ok(aspectMismatch(1024, 1024, '16:9') > 0.5);
-  assert.ok(aspectMismatch(1920, 1080, '16:9') < 0.01);
 });

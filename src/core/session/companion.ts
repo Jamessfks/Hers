@@ -33,12 +33,11 @@ import type {
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { FACT_KINDS, FEEL, MOVE, REMEMBER, SHOW, companionTools } from '../gemini/tools.ts';
+import { FACT_KINDS, FEEL, HERS_TOOLS, REMEMBER, SHOW } from '../gemini/tools.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import type { FactKind } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
 import { asksToSeeHer } from '../gallery/gallery.ts';
-import { isGesture } from '../avatar/studio.ts';
 import { Situation, isLateNight } from '../senses/situation.ts';
 import type { Brain } from './brain.ts';
 
@@ -61,8 +60,6 @@ export interface CompanionSink {
   interrupted(): void;
   /** She chose to send a picture or a clip. */
   show(item: GalleryItem): void;
-  /** Play a gesture clip. Only ever called with one that has been rendered. */
-  move(gesture: string): void;
   trouble(message: string): void;
 }
 
@@ -203,7 +200,7 @@ export class Companion {
       model: brain.config.model,
       voice: brain.profile.voice.voice,
       languageCode: brain.profile.voice.languageCode,
-      tools: companionTools(this.#brain.avatar.readyGestures()),
+      tools: HERS_TOOLS,
       // Rebuilt rather than captured, so a reconnect picks up her current mood
       // and the senses that are on now rather than the ones that were on when
       // the conversation started.
@@ -499,8 +496,8 @@ export class Companion {
    * line anyway. So a success is `{ok: true}` and nothing else.
    *
    * Failures keep their `reason`, because that one *is* needed — it is how she
-   * finds out that a gesture has not been rendered, or that nothing in the
-   * gallery fits, and adapts instead of repeating herself.
+   * finds out that nothing in the gallery fits, and adapts instead of repeating
+   * herself.
    */
   async #onToolCall(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
@@ -526,15 +523,6 @@ export class Companion {
         await this.#brain.memory.remember(valid, text, {
           confidence: clamp01(num(args.confidence) ?? 0.7),
         });
-        return { ok: true };
-      }
-
-      case MOVE: {
-        const gesture = String(args.gesture ?? '');
-        if (!isGesture(gesture) || !this.#brain.avatar.has(gesture)) {
-          return { ok: false, reason: 'that one has not been rendered' };
-        }
-        this.#sink.move(gesture);
         return { ok: true };
       }
 
@@ -650,9 +638,6 @@ export class Companion {
       localTime: snapshot.localTime,
       channel: this.#channel,
       returning: this.#brain.hasHistory,
-      // Only the desktop shows a face; a phone call and Telegram have nowhere
-      // to put one, and offering her a movement nobody can see is noise.
-      gestures: this.#channel === 'desktop' ? this.#brain.avatar.readyGestures() : [],
       hasFace: this.#brain.avatar.face() !== null,
       intimacy: this.#brain.intimacy.read(),
     });

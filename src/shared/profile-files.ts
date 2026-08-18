@@ -11,9 +11,9 @@
  * changes who she is.
  *
  * There is no `appearance` entry, deliberately. What she looks like is the
- * photograph the user uploaded — the same one the interface shows and gesture
- * clips render from — and a written description beside it is a second answer to
- * a question that already has one. When the two disagreed, they disagreed
+ * photograph the user uploaded — the same one the interface shows and every
+ * generated picture of her starts from — and a written description beside it is
+ * a second answer to a question that already has one. When the two disagreed,
  * visibly: generated pictures kept the face from the photograph and the hair
  * from the prose.
  */

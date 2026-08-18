@@ -25,7 +25,7 @@ import { chmod, readFile, writeFile } from 'node:fs/promises';
 /**
  * What may appear in a value written from here.
  *
- * Gemini keys are `AIza…`, Hedra's are `k_live_…:sk_…`, LiveKit URLs have
+ * Gemini keys are `AIza…`, Telegram tokens are `1234:AA…`, LiveKit URLs have
  * slashes and dots. Everything this program stores fits.
  */
 const SAFE_VALUE = /^[A-Za-z0-9_\-.:/@+]+$/;

@@ -233,8 +233,8 @@ export class Gallery {
    * A request that names only *her* — "a picture of you", "what do you look
    * like", "your face" — is answered with the photograph the user uploaded,
    * before the folder is searched and before anything is generated. It is the
-   * same image the web shows as her face and the same one every clip is
-   * rendered from, so all three agree.
+   * same image the web shows as her face and the same one every generated
+   * picture of her starts from, so all three agree.
    *
    * The alternative, generating a new one, was what this used to do, and it is
    * wrong for this case specifically: every generation is a re-draw, and a

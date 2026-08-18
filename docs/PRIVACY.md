@@ -76,17 +76,6 @@ tier, note that Google's free tier terms allow human review and training on your
 data; the paid tier does not. That is a decision you make when you choose a key,
 not one this app can make for you.
 
-### To Hedra — only if you configure it, and only when you click
-
-The photograph you chose as her face, plus a short silent audio track, once per
-movement you render. Hedra's retention applies to what you upload; the presigned
-handles they return expire after an hour.
-
-Nothing is sent automatically. A render happens when you click a movement and at
-no other time, and every one is gated on Hedra's own reported spend before it is
-submitted. **The photograph is not of you unless you make it of you** — it is
-her face, and the camera sense is a separate thing that never goes here.
-
 ### To Telegram — only if you configure it
 
 Your messages to the bot and hers to you, as Telegram messages. Telegram sees
@@ -120,7 +109,7 @@ and grants access to one room.
 | `hers-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
 | `hers-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
 | `hers-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
-| `hers-profile/avatar/` | The photograph you chose as her face, the movement clips rendered from it, and a manifest recording what each one cost. |
+| `hers-profile/avatar/` | The photograph you chose as her face, and a manifest recording its size and when it arrived. |
 | `data/memory.db` | Every turn of conversation, the facts distilled from them, and the rolling summary. |
 
 **Video frames and audio are never written to disk.** They are encoded in memory,
@@ -222,7 +211,7 @@ of `../` reaches anything. Also tested.
 
 And one thing it does do, which belongs on this page: **Setup → Start over**
 deletes every trace of her — memory, transcripts on every surface, mood,
-profile, gallery, photograph and rendered clips — by removing the two
+profile, gallery and photograph — by removing the two
 directories they live in. Nothing is kept back, and nothing is recoverable.
 
 ---

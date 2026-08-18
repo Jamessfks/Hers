@@ -83,7 +83,6 @@ export async function main(): Promise<void> {
         keyHint: maskKey(config.geminiApiKey),
         telegram: Boolean(config.telegram),
         livekit: Boolean(config.livekit),
-        hedra: Boolean(config.hedra),
         profileDir: config.profileDir,
         warnings: config.warnings,
       }),
@@ -286,7 +285,6 @@ export async function main(): Promise<void> {
   console.log(`  profile   ${config.profileDir}`);
   console.log(`  memory    ${path.join(config.dataDir, 'memory.db')}`);
   console.log(`  model     ${config.model}`);
-  console.log(`  avatar    ${config.hedra ? `on, budget $${config.hedra.budgetUsd.toFixed(2)}` : 'still only (no HEDRA_API_KEY)'}`);
   console.log(`  telegram  ${config.telegram ? 'on' : 'off'}`);
   console.log(`  calls     ${config.livekit ? 'on' : 'off'}\n`);
 

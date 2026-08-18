@@ -1,23 +1,14 @@
 /**
  * What a photograph actually is, read from its bytes.
  *
- * Two things about the source image have to be right before a single clip is
- * rendered, and neither can be taken on trust from the file name:
- *
- *  1. **The format.** The first photograph handed to this app was named
- *     a `.png` name and contained JPEG bytes — `ffd8ffe0`, JFIF, baseline.
- *     That is not an exotic case, it is what happens every time someone renames
- *     a file or saves one out of a tool that ignores the extension. Hedra sniffs
- *     the bytes and ignores both the filename and the declared Content-Type, so
- *     an upload still works; what breaks is everything *local* that believed the
- *     extension, starting with the `<img>` the still is displayed in.
- *  2. **The shape.** The clip's `aspect_ratio` is a request parameter with a
- *     fixed enum, and asking for a ratio the photograph is not produces a clip
- *     that is either cropped or padded — in both cases its first frame is no
- *     longer the photograph, which is the one property the entire loop-closing
- *     design in prompts.ts and seam.ts depends on. That first photograph is
- *     1024x1024, so the sensible-sounding 9:16 default would have quietly cost
- *     the seam on every clip in the library.
+ * The format and the shape both have to be read from the bytes, and neither can
+ * be taken on trust from the file name. The first photograph handed to this app
+ * had a `.png` name and contained JPEG bytes — `ffd8ffe0`, JFIF, baseline. That
+ * is not an exotic case, it is what happens every time someone renames a file or
+ * saves one out of a tool that ignores the extension, and everything local that
+ * believes the extension breaks on it, starting with the `<img>` the photograph
+ * is displayed in. The dimensions are needed for the same reason: the interface
+ * sizes her portrait from them, and a wrong pair is a visibly wrong shape.
  *
  * Parsing headers by hand rather than adding an image library: this reads a few
  * dozen bytes from the front of three formats, it runs in main with no DOM, and
@@ -139,67 +130,4 @@ function readWebp(bytes: Uint8Array): ImageInfo | null {
     return { mimeType: 'image/webp', width: dimension(24), height: dimension(27) };
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Aspect ratio
-// ---------------------------------------------------------------------------
-
-/**
- * Picks the supported ratio closest to the photograph's own.
- *
- * Compared in log space, so that being wrong by the same *factor* costs the same
- * whether the image is wide or tall. Compared linearly, 21:9 sits 12.3 away from
- * 1:1 while 9:21 sits 0.57 away, and a nearly-square image would be dragged
- * towards the portrait end of the list for no reason but arithmetic.
- *
- * There is no tolerance and no "close enough" case on purpose: the enum is what
- * the API accepts, so one of them is going to be used regardless. What the
- * caller may want to know is *how far off* the choice is, which is what
- * {@link aspectMismatch} reports.
- */
-export function nearestAspectRatio(
-  width: number,
-  height: number,
-  allowed: readonly string[],
-): string {
-  if (allowed.length === 0) throw new Error('No aspect ratios to choose from.');
-  const wanted = Math.log(width / height);
-
-  let best = allowed[0]!;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const candidate of allowed) {
-    const value = parseRatio(candidate);
-    if (value === null) continue;
-    const distance = Math.abs(Math.log(value) - wanted);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-/**
- * How much of the frame a ratio choice would crop or pad, as a fraction.
- *
- * Worth surfacing rather than hiding: at more than a few percent the generated
- * clip's first frame is visibly not the photograph any more, and the seam check
- * will fail on every clip in the library for a reason that has nothing to do
- * with the model.
- */
-export function aspectMismatch(width: number, height: number, ratio: string): number {
-  const value = parseRatio(ratio);
-  if (value === null) return 0;
-  const actual = width / height;
-  return Math.abs(Math.log(actual / value));
-}
-
-function parseRatio(ratio: string): number | null {
-  const parts = ratio.split(':');
-  if (parts.length !== 2) return null;
-  const width = Number(parts[0]);
-  const height = Number(parts[1]);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || height === 0) return null;
-  return width / height;
 }

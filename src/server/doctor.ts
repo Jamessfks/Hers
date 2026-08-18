@@ -15,7 +15,6 @@
  */
 
 import { Brain } from '../core/session/brain.ts';
-import { HedraClient } from '../core/avatar/hedra.ts';
 import { KNOWN_LIVE_MODELS } from '../core/gemini/models.ts';
 import { LiveConversation } from '../core/gemini/live.ts';
 import { loadConfig, loadDotEnv } from './config.ts';
@@ -72,19 +71,6 @@ async function main(): Promise<number> {
   }
 
   // -- the bridges ----------------------------------------------------------
-
-  if (config.hedra) {
-    try {
-      const spent = await new HedraClient({ apiKey: config.hedra.apiKey }).spentUsd();
-      ok(`Hedra reachable — $${spent.toFixed(2)} spent on this account, budget $${config.hedra.budgetUsd.toFixed(2)}`);
-    } catch (error) {
-      bad(`Hedra is configured but did not answer: ${String(error)}`);
-      note('The key is the whole `k_live_…:sk_…` string, both halves and the colon.');
-      failures += 1;
-    }
-  } else {
-    console.log('  · Avatar movement off (no HEDRA_API_KEY) — a still photograph still works');
-  }
 
   console.log(config.telegram ? '  ✓ Telegram configured' : '  · Telegram off');
   console.log(config.livekit ? '  ✓ LiveKit configured' : '  · Phone calls off');

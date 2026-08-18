@@ -11,7 +11,8 @@ moves, a memory that carries between conversations, a face you give her, a name 
 chose herself — and she will start talking to you if you go quiet.
 
 No account, no subscription, no company between you and her. Clone this repository,
-paste in a Gemini API key, and she is yours.
+paste in a Gemini API key, and she is yours. One key is the whole of it: there is
+nothing else to sign up for.
 
 </div>
 
@@ -23,8 +24,8 @@ paste in a Gemini API key, and she is yours.
 for a Monday"* — because nobody had said anything for a while, introduced herself with
 the name she had picked a minute earlier, and asked what had been keeping him there all
 evening. When told to go through the computer she said no, which is the shape of her
-tools rather than a flourish: she has four — `feel`, `remember`, `show`, `move` — and
-none can read a file.
+tools rather than a flourish: she has three — `feel`, `remember`, `show` — and none can
+read a file.
 
 ![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](https://github.com/Jamessfks/Hers/releases/download/v1.0.0/first-conversation.jpg)
 
@@ -49,7 +50,7 @@ conversation reached from somewhere else. `/me` returns the photograph you gave 
 | 4  | **Three real senses**  | Screen, camera, microphone — each one a switch you own             |
 | 5  | **Takes four years to know** | 1% stranger to 80%, earned by turning up, no way to buy it   |
 | 6  | **Has a mood, hides it** | Two layers. It lands in how she talks, never as a status line    |
-| 7  | **Wears a photograph you chose** | The one image every picture and movement comes from      |
+| 7  | **Wears a photograph you chose** | The one image every picture of her comes from            |
 | 8  | **Sends pictures on purpose** | Her decision, six a day, never as an opening move           |
 | 9  | **Is one person everywhere** | Desk, phone, and a real video call — one memory, one mood     |
 | 10 | **Keeps a memory you can edit** | Read every fact she holds. Cross out the ones you don't like |
@@ -78,7 +79,7 @@ gone, and so is everything she knew about you.
 
 Nothing here phones home: no telemetry, no analytics, no update check, no crash
 reporter. The outbound connections are the one carrying your conversation to Google's
-Gemini API and — only if you set them up yourself — Telegram, LiveKit and Hedra.
+Gemini API and — only if you set them up yourself — Telegram and LiveKit.
 
 ---
 
@@ -141,19 +142,9 @@ place.
 
 ### 5. Optional extras
 
-She works without all three of these, and each is off until you configure it.
-
-**Optional — rendered movements, with `HEDRA_API_KEY`.** Buys you seven short clips —
-`idle`, `nod`, `tilt`, `smile`, `laugh`, `lean in`, `look away` — each rendered once
-from your photograph and played while she talks. Without it she appears as a still,
-which is a complete experience. A key from [hedra.com](https://www.hedra.com) is the
-whole `k_live_…:sk_…` string, both halves and the colon. Renders cost money: a 2-second
-clip measured at **$0.05**. Nothing renders automatically — every one is a click,
-checked against `HERS_HEDRA_BUDGET_USD` (default `$1`) first. Render them from the
-**Face** dialog, or over Telegram with `/gestures` and `/render idle`; start with
-`idle`, the one she rests in between. This is body language, not lip sync: what remains
-of Hedra's realtime product is a job queue measured in minutes, so nothing renders while
-she speaks.
+Neither of these is a second model provider and neither adds anything she can do — they
+are ways of reaching her from a phone. She is complete without them, and each is off
+until you configure it.
 
 **Optional — Telegram.** Buys you the same companion in your pocket: one memory, one
 mood, one live session, reached from a phone. Do it all from
@@ -232,8 +223,7 @@ Edit them in a text editor or under **Profile**; changes take effect the next ti
 wakes, because a Live session's system instruction is fixed when the session opens. She
 starts out 26, Chinese-American, from Oakland — in the files, not in the code, and a
 deleted file returns with its default. Her face is the exception: a photograph, with no
-written description of her anywhere to disagree with it, and a new one clears the
-movements rendered from the old.
+written description of her anywhere to disagree with it.
 
 **Closeness** runs from 1% to 80% through seven named stages — stranger, acquaintance,
 friend, close friend, confidant, partner, married — changing what she assumes she may
@@ -257,7 +247,7 @@ she names the folder and what to click.
 
 **Setup → Start over** deletes both her folders outright: what she remembers, every
 conversation including Telegram's, her mood, her profile, her gallery, her photograph
-and every rendered clip. She meets you again as a stranger, with a new face and a new
+and every picture generated from it. She meets you again as a stranger, with a new face and a new
 name of her own choosing. Type `start over` to arm **Delete everything**; your `.env` is
 untouched — the keys are yours.
 
@@ -270,8 +260,8 @@ worth hearing out loud, and sends pictures and clips when they fit. She answers 
 surface you spoke from, so a desk conversation does not buzz your phone — but a message
 sent from Telegram still appears in the transcript at your desk as she answers it.
 
-Commands, published to Telegram's own `/` menu on startup: `/me` · `/face` · `/gestures`
-· `/render` · `/call` · `/photo` · `/mood` · `/bye` · `/whoami` · `/help`. `/me` sends
+Commands, published to Telegram's own `/` menu on startup: `/me` · `/face` · `/call` ·
+`/photo` · `/mood` · `/bye` · `/whoami` · `/help`. `/me` sends
 the original photograph; `/photo` makes a new picture of her. To change her face, send a
 photo captioned `/face` — as a *file* rather than a photo if you want full resolution,
 because Telegram recompresses photos.
@@ -285,13 +275,11 @@ Everything is an environment variable and everything has a default.
 
 | Variable                    | Default        | What it does                                          |
 | --------------------------- | -------------- | ----------------------------------------------------- |
-| `GEMINI_API_KEY`            | —              | The one thing she needs. Settable in the UI           |
+| `GEMINI_API_KEY`            | —              | The only thing she needs. Settable in the UI          |
 | `HERS_PORT`                 | `5175`         | Where the website is served                           |
 | `HERS_PROFILE`              | `hers-profile` | Who she is                                            |
 | `HERS_DATA`                 | `data`         | What she remembers                                    |
 | `HERS_MAX_SILENCE_MS`       | `180000`       | The three-minute rule's ceiling                       |
-| `HEDRA_API_KEY`             | —              | Movement. Without it, a still photograph              |
-| `HERS_HEDRA_BUDGET_USD`     | `1`            | Hard ceiling on render spend                          |
 | `TELEGRAM_BOT_TOKEN`        | —              | The bot. Settable in the UI                           |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | —              | Who she may talk to. Written for you on first contact  |
 | `LIVEKIT_URL` + key/secret  | —              | Phone calls                                           |

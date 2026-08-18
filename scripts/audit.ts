@@ -7,8 +7,8 @@
  * **the tests prove the code does what it was written to do, not that Gemini
  * does what it was read to do.** This closes that.
  *
- * It costs money. Not much — the whole run is a few cents of Gemini, plus one
- * optional Hedra render — but it is real, so nothing here runs by accident.
+ * It costs money. Not much — the whole run is a few cents of Gemini — but it is
+ * real, so nothing here runs by accident.
  *
  *   npm run audit                everything except the paid image generation
  *   npm run audit -- --paid      including it
@@ -159,29 +159,6 @@ function portraitJpeg(): Buffer {
   return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
 }
 
-/**
- * A throwaway profile that borrows the real one's rendered clips.
- *
- * The gesture check needs the real profile for one reason only: the clips live
- * in it, and she is offered nothing she has not rendered. Pointing the check at
- * the real folder to get them meant everything else it did landed there too —
- * it pinned closeness to 70% and restored it afterwards on a path that was not a
- * `finally`, so a throw anywhere in between would have left somebody's own
- * relationship parked at a number a test chose. It also generated a picture into
- * their gallery and counted turns against their day.
- *
- * Copying the avatar folder is a better answer than restoring carefully. There is
- * nothing to restore: the real profile is never opened, so no failure — a throw, a
- * timeout, a process killed halfway — can leave it changed. A few megabytes of
- * clips into a temp directory buys that outright.
- */
-async function borrowedProfile(): Promise<string> {
-  const real = loadConfig().profileDir;
-  const root = await mkdtemp(path.join(tmpdir(), 'hers-audit-profile-'));
-  await cp(path.join(real, 'avatar'), path.join(root, 'avatar'), { recursive: true });
-  return root;
-}
-
 // ---------------------------------------------------------------------------
 // A companion wired to collectors
 // ---------------------------------------------------------------------------
@@ -192,7 +169,6 @@ interface Session {
   heard: string[];
   said: string[];
   tools: Array<{ name: string; args: Record<string, unknown> }>;
-  moves: string[];
   shows: GalleryItem[];
   turns: number;
   audioBytes: number;
@@ -203,7 +179,6 @@ interface Session {
 async function session(
   options: {
     dir?: string;
-    /** Use an existing profile — the one with rendered avatar clips in it. */
     profileDir?: string;
     env?: Record<string, string>;
     senses?: Record<string, boolean>;
@@ -235,7 +210,6 @@ async function session(
   const state = {
     heard: [] as string[],
     said: [] as string[],
-    moves: [] as string[],
     shows: [] as GalleryItem[],
     troubles: [] as string[],
     names: [] as string[],
@@ -256,7 +230,6 @@ async function session(
     named: (name) => state.names.push(name),
     interrupted: () => undefined,
     show: (item) => state.shows.push(item),
-    move: (gesture) => state.moves.push(gesture),
     trouble: (message) => state.troubles.push(message),
   };
 
@@ -279,9 +252,6 @@ async function session(
     },
     get said() {
       return state.said;
-    },
-    get moves() {
-      return state.moves;
     },
     get shows() {
       return state.shows;
@@ -345,7 +315,7 @@ async function main(): Promise<void> {
 
   console.log('\n══ Hers — live audit ══');
   console.log(`   model    ${config.model}`);
-  console.log(`   paid     ${PAID ? 'yes (image generation and a Hedra render)' : 'no'}`);
+  console.log(`   paid     ${PAID ? 'yes (image generation)' : 'no'}`);
   console.log(`   quick    ${QUICK ? 'yes (skipping endurance)' : 'no'}`);
 
   const scratch = await mkdtemp(path.join(tmpdir(), 'hers-audit-fx-'));
@@ -654,7 +624,7 @@ async function main(): Promise<void> {
 
   // -- Avatar --------------------------------------------------------------
   await check(
-    'Avatar — an uploaded picture becomes the source that gestures render from',
+    'Avatar — an uploaded picture becomes the source she is generated from',
     'avatar',
     async () => {
       const root = await mkdtemp(path.join(tmpdir(), 'hers-face-'));
@@ -684,102 +654,11 @@ async function main(): Promise<void> {
           first.hasSource &&
           second.hasSource &&
           first.sourceUrl !== second.sourceUrl &&
-          reference !== null &&
-          second.all.length > 0 &&
-          second.ready.length === 0,
-        evidence: `uploaded ${first.width}x${first.height}, replaced with ${second.width}x${second.height}; ${second.all.length} gestures render from it, ${second.ready.length} stale clips carried over`,
+          reference !== null,
+        evidence: `uploaded ${first.width}x${first.height}, replaced with ${second.width}x${second.height}; the url changed with it`,
       };
     },
   );
-  await check(
-    'Avatar — she is offered exactly the movements that exist',
-    'avatar',
-    async () => {
-      const config = loadConfig();
-      const brain = await Brain.open(config, { offline: true });
-      const ready = brain.avatar.readyGestures();
-      const state = brain.avatar.state();
-      await brain.close();
-      return {
-        ok: ready.every((gesture) => state.ready.includes(gesture)),
-        evidence: `rendered: ${JSON.stringify(ready)}; spent $${state.spentUsd.toFixed(2)} of $${state.budgetUsd.toFixed(2)}`,
-      };
-    },
-  );
-
-  if (loadConfig().hedra && ready0()) {
-    await check(
-      'Avatar — she plays a movement while talking',
-      'avatar',
-      async () => {
-        // The real profile, because that is the one with rendered clips — and
-        // she is only ever offered gestures that exist.
-        const s = await session({ profileDir: await borrowedProfile() });
-        const offered = s.brain.avatar.readyGestures();
-        if (offered.length === 0) {
-          await s.dispose();
-          return { ok: false, evidence: 'no clips were offered to her at all' };
-        }
-
-        /*
-         * Closeness is pinned, on a profile nobody else is using.
-         *
-         * Not a way of making the test easier — a way of asking the right
-         * question. The only rendered gesture is `laugh`, and at 1% she is told
-         * outright that she has not earned the right to tease, so a stranger
-         * declining to laugh at you is the intimacy system working rather than
-         * the `move` tool failing. Measured: pinned to partner it moved every
-         * time, and as a stranger it moved once in two.
-         *
-         * What this check is for is whether she *can* choose a movement while
-         * talking, so it establishes a stage where doing so is in character. And
-         * because the profile is a copy, there is nothing to put back.
-         */
-        s.brain.intimacy.pin(0.7);
-        await s.companion.wake();
-
-        /*
-         * Several turns, and she has to move on at least one of them.
-         *
-         * Asking once and demanding a gesture measured the wrong thing. Moving
-         * is meant to be occasional — her own tool description says "on a
-         * reaction, on the turn of a thought, not on every sentence" — so a
-         * flat answer with no gesture is correct behaviour, and this check
-         * failed it three times in five. What the product actually claims is
-         * that she *can* choose a movement while talking, so that is what is
-         * asked: give her a handful of openings and see whether any of them
-         * moves her. A run where she never moves across all of them is a real
-         * failure; a run where she declines one is her working as designed.
-         */
-        const openings = [
-          'Quick one: do you agree that coffee is better than tea?',
-          'Okay, tell me the funniest thing that happened to you this week.',
-          'I just tripped over absolutely nothing in front of everyone.',
-        ];
-        for (const opening of openings) {
-          const before = s.said.length;
-          s.companion.say(opening);
-          await untilSpoke(s, before);
-          await wait(1500);
-          if (s.moves.length > 0) break;
-        }
-
-        const moves = [...s.moves];
-        const said = s.said.join(' ');
-        await s.dispose();
-
-        return {
-          ok: moves.length > 0,
-          evidence: moves.length
-            ? `at partner stage, played ${moves.join(', ')} while saying "${said.slice(-80)}"`
-            : `never moved across ${openings.length} openings; offered ${offered.join(', ')}`,
-        };
-      },
-    );
-  } else {
-    skip('Avatar — playing a movement', 'avatar', 'no rendered clips in the default profile');
-  }
-
   // -- Report --------------------------------------------------------------
   await rm(scratch, { recursive: true, force: true });
 
@@ -796,18 +675,5 @@ async function main(): Promise<void> {
   process.exit(failed.length === 0 ? 0 : 1);
 }
 
-/** True when the default profile already has at least one rendered clip. */
-function ready0(): boolean {
-  try {
-    const config = loadConfig();
-    const manifest = path.join(config.profileDir, 'avatar', 'manifest.json');
-    const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
-      clips?: Record<string, unknown>;
-    };
-    return Object.keys(parsed.clips ?? {}).length > 0;
-  } catch {
-    return false;
-  }
-}
 
 await main();

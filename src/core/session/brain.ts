@@ -15,7 +15,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { AvatarStudio } from '../avatar/studio.ts';
-import { HedraClient } from '../avatar/hedra.ts';
 import { Gallery } from '../gallery/gallery.ts';
 import { Intimacy } from '../intimacy/intimacy.ts';
 import { createGeminiDistiller } from '../gemini/text.ts';
@@ -128,10 +127,10 @@ export class Brain {
    * Forgets everything and starts again as a stranger.
    *
    * Deletes both directories outright rather than emptying them file by file:
-   * memory, its write-ahead log, the mood on disk, the profile, the gallery,
-   * the photograph and every rendered clip are all under one of the two, and a
-   * list of things to delete is a list that grows a hole every time something
-   * new is written. `assemble` puts the defaults back.
+   * memory, its write-ahead log, the mood on disk, the profile, the gallery and
+   * the photograph are all under one of the two, and a list of things to delete
+   * is a list that grows a hole every time something new is written. `assemble`
+   * puts the defaults back.
    *
    * What survives is `.env` — the keys are the user's, not hers.
    */
@@ -266,12 +265,7 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
   const intimacy = new Intimacy({ dir: config.profileDir });
   await intimacy.restore();
 
-  const avatar = new AvatarStudio({
-    dir: path.join(config.profileDir, 'avatar'),
-    client:
-      config.hedra && !options.offline ? new HedraClient({ apiKey: config.hedra.apiKey }) : null,
-    budgetUsd: config.hedra?.budgetUsd ?? 0,
-  });
+  const avatar = new AvatarStudio({ dir: path.join(config.profileDir, 'avatar') });
   await avatar.load();
 
   return {

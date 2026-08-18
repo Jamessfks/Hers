@@ -2,14 +2,14 @@
  * Everything the server answers over plain HTTP: the website, her gallery, her
  * photograph, and the two requests that set her up.
  *
- * Small on purpose. There is no framework here because there are eight routes,
+ * Small on purpose. There is no framework here because there are seven routes,
  * and a router would be more code than the routes.
  *
  *   POST /api/avatar   the photograph, as raw bytes
  *   POST /api/key      a pasted Gemini key
  *   POST /api/reset    delete everything and start over
  *   GET  /api/status   what is configured, for a person or a health check
- *   GET  /avatar/source, /avatar/clips/<gesture>
+ *   GET  /avatar/source
  *   GET  /gallery/<name>
  *   GET  anything else the built site, with a single-page fallback
  *
@@ -30,8 +30,8 @@ import { stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 
-import type { AvatarStudio, Gesture } from '../core/avatar/studio.ts';
-import { AvatarError, IMAGE_LIMITS, isGesture } from '../core/avatar/studio.ts';
+import type { AvatarStudio } from '../core/avatar/studio.ts';
+import { AvatarError, IMAGE_LIMITS } from '../core/avatar/studio.ts';
 import type { Gallery } from '../core/gallery/gallery.ts';
 import { mimeFor } from '../core/gallery/gallery.ts';
 
@@ -158,11 +158,6 @@ export function createRequestHandler(options: StaticOptions) {
 
     if (pathname === '/avatar/source') {
       await serveAvatarSource(options.avatar(), response);
-      return;
-    }
-
-    if (pathname.startsWith('/avatar/clips/')) {
-      await serveAvatarClip(options.avatar(), pathname.slice('/avatar/clips/'.length), response);
       return;
     }
 
@@ -420,28 +415,6 @@ async function serveAvatarSource(avatar: AvatarStudio, response: ServerResponse)
     'content-length': size,
     // The URL carries a content hash, so what is behind it never changes.
     'cache-control': 'private, max-age=86400, immutable',
-  });
-  createReadStream(file).pipe(response);
-}
-
-async function serveAvatarClip(
-  avatar: AvatarStudio,
-  name: string,
-  response: ServerResponse,
-): Promise<void> {
-  // Only a name from the fixed vocabulary reaches the filesystem. `clipPath`
-  // resolves it from the manifest, so nothing a caller spells can escape.
-  const gesture: Gesture | null = isGesture(name) ? name : null;
-  const file = gesture ? avatar.clipPath(gesture) : null;
-  if (!file || !existsSync(file)) {
-    send(response, 404, 'text/plain; charset=utf-8', 'Not rendered');
-    return;
-  }
-  const { size } = await stat(file);
-  response.writeHead(200, {
-    'content-type': 'video/mp4',
-    'content-length': size,
-    'cache-control': 'private, max-age=3600',
   });
   createReadStream(file).pipe(response);
 }

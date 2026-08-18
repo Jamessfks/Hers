@@ -63,7 +63,6 @@ async function fixture(env: Record<string, string> = {}) {
   const states: ConnectionState[] = [];
   const moods: MoodReadout[] = [];
   const shown: GalleryItem[] = [];
-  const moved: string[] = [];
   const troubles: string[] = [];
   const names: string[] = [];
 
@@ -80,7 +79,6 @@ async function fixture(env: Record<string, string> = {}) {
       named: (name) => names.push(name),
       interrupted: () => undefined,
       show: (item) => shown.push(item),
-      move: (gesture) => moved.push(gesture),
       trouble: (message) => troubles.push(message),
     },
   });
@@ -96,7 +94,6 @@ async function fixture(env: Record<string, string> = {}) {
     states,
     moods,
     shown,
-    moved,
     troubles,
     names,
     socket: () => sockets.at(-1)!,
@@ -472,7 +469,6 @@ test('no API key is said plainly rather than thrown', async () => {
       named: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
-      move: () => undefined,
       trouble: (message) => troubles.push(message),
     },
   });
@@ -511,7 +507,6 @@ test('memory carries between two conversations', async () => {
       named: () => undefined,
       interrupted: () => undefined,
       show: () => undefined,
-      move: () => undefined,
       trouble: () => undefined,
     },
   });

@@ -38,11 +38,7 @@ async function serve() {
   await writeFile(path.join(galleryDir, '..', 'mood.state.json'), '{"secret":true}');
 
   const gallery = new Gallery(galleryDir);
-  const avatar = new AvatarStudio({
-    dir: path.join(root, 'avatar'),
-    client: null,
-    budgetUsd: 0,
-  });
+  const avatar = new AvatarStudio({ dir: path.join(root, 'avatar') });
 
   const keys: string[] = [];
   const resets: number[] = [];

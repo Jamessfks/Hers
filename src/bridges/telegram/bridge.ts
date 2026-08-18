@@ -38,7 +38,7 @@ import { mimeFor } from '../../core/gallery/gallery.ts';
 import type { Conversation, Origin } from '../../core/session/conversation.ts';
 import type { Brain } from '../../core/session/brain.ts';
 import type { CallBridge } from '../livekit/bridge.ts';
-import { AvatarError, GESTURE_NAMES, isGesture } from '../../core/avatar/studio.ts';
+import { AvatarError } from '../../core/avatar/studio.ts';
 import { TelegramApi, largestPhoto } from './api.ts';
 import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from './api.ts';
 
@@ -52,8 +52,6 @@ import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from
 const COMMANDS: BotCommand[] = [
   { command: 'me', description: 'Her actual photo — the one you gave her' },
   { command: 'face', description: 'Send a photo to become her face' },
-  { command: 'gestures', description: 'Which movements she has, and what they cost' },
-  { command: 'render', description: 'Render a movement — /render nod' },
   { command: 'call', description: 'Ring her, with your camera and voice' },
   { command: 'photo', description: 'Ask her for a picture' },
   { command: 'mood', description: 'How she is' },
@@ -261,7 +259,6 @@ export class TelegramBridge {
       return;
     }
 
-    const had = this.#brain.avatar.readyGestures();
     try {
       await this.#brain.avatar.setSource(bytes, document?.mime_type ?? 'image/jpeg');
     } catch (error) {
@@ -272,16 +269,7 @@ export class TelegramBridge {
       return;
     }
 
-    const lines = ["That's me now."];
-    if (had.length > 0) {
-      // Every clip started from the old photograph, so none of them are of this
-      // person any more. Saying so beats them noticing a stranger nodding.
-      lines.push(
-        `The ${had.length} movement${had.length === 1 ? '' : 's'} I had were of the old picture, so they're gone.`,
-      );
-    }
-    lines.push('', 'Use /render idle to bring this one to life. /gestures lists the rest.');
-    await this.#api.sendMessage(chatId, lines.join('\n'));
+    await this.#api.sendMessage(chatId, "That's me now. /me sends it back, /photo makes a new one.");
   }
 
   async #deliver(chatId: number, message: TelegramMessage, text: string): Promise<void> {
@@ -347,8 +335,6 @@ export class TelegramBridge {
             '',
             '/me       my actual photo, the one you gave me',
             '/face     send a photo to become my face',
-            '/gestures which movements I have',
-            '/render   render one — /render nod',
             '/call     ring me, with your camera and your voice',
             '/photo    ask me for a picture',
             '/mood     how I am',
@@ -374,75 +360,8 @@ export class TelegramBridge {
             '',
             'JPEG, PNG or WebP. At least 256 pixels on the short side, at most 12 MB.',
             'Send it as a file rather than a photo if you want the full resolution.',
-            current.ready.length > 0
-              ? `Heads up: my ${current.ready.length} rendered movement(s) start from the current picture, so a new one clears them.`
-              : '',
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        );
-        return;
-      }
-
-      case '/gestures': {
-        const state = this.#brain.avatar.state();
-        if (!state.hasSource) {
-          await this.#api.sendMessage(chatId, 'Give me a face first — /face.');
-          return;
-        }
-        const lines = state.all.map((gesture) => {
-          const mark = state.ready.includes(gesture)
-            ? '●'
-            : state.rendering.includes(gesture)
-              ? '…'
-              : '○';
-          return `${mark} ${gesture.replace('_', ' ')}`;
-        });
-        await this.#api.sendMessage(
-          chatId,
-          [
-            '● rendered   ○ not yet   … rendering',
-            '',
-            ...lines,
-            '',
-            state.configured
-              ? `$${state.spentUsd.toFixed(2)} of $${state.budgetUsd.toFixed(2)} spent. /render idle`
-              : 'No Hedra key on the machine I run on, so nothing can be rendered.',
           ].join('\n'),
         );
-        return;
-      }
-
-      case '/render': {
-        const wanted = argument.toLowerCase().replace(/[\s-]+/g, '_');
-        if (!isGesture(wanted)) {
-          await this.#api.sendMessage(
-            chatId,
-            `Which one? ${GESTURE_NAMES.join(', ')}. For example: /render idle`,
-          );
-          return;
-        }
-        if (this.#brain.avatar.has(wanted)) {
-          await this.#api.sendMessage(chatId, `I already have ${wanted.replace('_', ' ')}.`);
-          return;
-        }
-        await this.#api.sendMessage(
-          chatId,
-          `Rendering ${wanted.replace('_', ' ')}. Takes a few minutes — I'll say when it lands.`,
-        );
-        // Not awaited: a render is minutes long and the bot has to stay
-        // responsive, including for the message that says it failed.
-        void this.#brain.avatar
-          .render(wanted)
-          .then(() =>
-            this.#api.sendMessage(chatId, `Done — I can ${wanted.replace('_', ' ')} now.`),
-          )
-          .catch((error: unknown) =>
-            this.#api.sendMessage(
-              chatId,
-              error instanceof AvatarError ? error.message : `That render failed: ${String(error)}`,
-            ),
-          );
         return;
       }
 

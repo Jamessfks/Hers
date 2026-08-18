@@ -32,7 +32,6 @@ export interface UiHandlers {
   onLoadProfile(): void;
   onSaveProfile(files: Record<string, string>): void;
   onUploadFace(file: File): void;
-  onRenderGesture(gesture: string): void;
   /** Take the conversation back from whichever tab has it. */
   onClaim(): void;
   onLoadMemory(): void;
@@ -104,13 +103,10 @@ export class Ui {
   readonly #orb = need('orb');
   readonly #portrait = need('portrait');
   readonly #still = need<HTMLImageElement>('portrait-still');
-  readonly #clip = need<HTMLVideoElement>('portrait-clip');
   readonly #face = need<HTMLDialogElement>('face');
   readonly #dropzone = need<HTMLLabelElement>('dropzone');
   readonly #facePreview = need<HTMLImageElement>('face-preview');
   readonly #dropzoneLabel = need('dropzone-label');
-  readonly #gestureList = need('gesture-list');
-  readonly #spend = need('spend');
   readonly #giveFace = need<HTMLButtonElement>('give-face');
   readonly #takeover = need('takeover');
   readonly #setup = need<HTMLDialogElement>('setup');
@@ -148,13 +144,10 @@ export class Ui {
   /** Written by two independent meters; the louder wins. */
   #micLevel = 0;
   #herLevel = 0;
-  #avatar: AvatarView | null = null;
   /** So a reconnect on an unconfigured server does not reopen the dialog. */
   #offeredSetup = false;
   /** Whatever she calls herself. The markup ships with a placeholder. */
   #herName = 'Anna';
-  /** Queued so two gestures in quick succession play in order, not on top. */
-  #moving = false;
 
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
@@ -273,15 +266,6 @@ export class Ui {
       if (file) this.#handlers.onUploadFace(file);
     });
 
-    // A clip that has ended, stalled or failed all mean the same thing here:
-    // stop showing it and let the still back through.
-    for (const event of ['ended', 'error', 'stalled'] as const) {
-      this.#clip.addEventListener(event, () => this.#settle());
-    }
-    this.#clip.addEventListener('playing', () => {
-      this.#portrait.dataset.moving = 'true';
-    });
-
     this.#editor.addEventListener('input', () => {
       this.#profileFiles[this.#openFile] = this.#editor.value;
       this.#saved.textContent = '';
@@ -352,10 +336,6 @@ export class Ui {
 
       case 'history':
         this.setHistory(message.turns);
-        return;
-
-      case 'move':
-        this.move(message.gesture);
         return;
 
       case 'interrupted':
@@ -490,9 +470,8 @@ export class Ui {
     }, duration);
   }
 
-  /** The photograph and which movements exist. */
+  /** Her photograph, or the orb when there is not one yet. */
   setAvatar(avatar: AvatarView): void {
-    this.#avatar = avatar;
     const hasSource = avatar.hasSource && Boolean(avatar.sourceUrl);
 
     this.#portrait.hidden = !hasSource;
@@ -516,19 +495,6 @@ export class Ui {
       this.#facePreview.hidden = true;
       this.#dropzoneLabel.hidden = false;
     }
-
-    this.#spend.textContent = avatar.configured
-      ? `$${avatar.spentUsd.toFixed(2)} of $${avatar.budgetUsd.toFixed(2)}`
-      : 'no Hedra key';
-    this.#renderGestureList(avatar);
-  }
-
-  /** Cuts to a gesture clip, then back to the still when it finishes. */
-  move(gesture: string): void {
-    if (!this.#avatar?.ready.includes(gesture) || this.#moving) return;
-    this.#moving = true;
-    this.#clip.src = `/avatar/clips/${encodeURIComponent(gesture)}`;
-    void this.#clip.play().catch(() => this.#settle());
   }
 
   /**
@@ -655,11 +621,6 @@ export class Ui {
   }
 
   // -------------------------------------------------------------------------
-
-  #settle(): void {
-    this.#portrait.dataset.moving = 'false';
-    this.#moving = false;
-  }
 
   /**
    * Sends the key and reports what happened, in place.
@@ -893,35 +854,6 @@ export class Ui {
   #status(element: HTMLElement, message: string, kind: 'working' | 'good' | 'bad'): void {
     element.textContent = message;
     element.dataset.kind = kind;
-  }
-
-  #renderGestureList(avatar: AvatarView): void {
-    this.#gestureList.replaceChildren();
-    for (const gesture of avatar.all) {
-      const ready = avatar.ready.includes(gesture);
-      const rendering = avatar.rendering.includes(gesture);
-
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'gesture';
-      button.dataset.ready = String(ready);
-      button.dataset.rendering = String(rendering);
-      button.disabled = ready || rendering || !avatar.configured;
-      button.innerHTML = `<span>${gesture.replace('_', ' ')}</span><span class="mark"></span>`;
-      const mark = button.querySelector('.mark');
-      if (mark) mark.textContent = ready ? '●' : rendering ? 'rendering' : 'render';
-
-      if (ready) {
-        // A rendered gesture is worth being able to look at.
-        button.disabled = false;
-        button.addEventListener('click', () => this.move(gesture));
-        button.title = 'Play it';
-      } else if (!button.disabled) {
-        button.addEventListener('click', () => this.#handlers.onRenderGesture(gesture));
-        button.title = 'Render this one — takes a few minutes and costs money';
-      }
-      this.#gestureList.append(button);
-    }
   }
 
   #paintLevel(): void {

@@ -21,38 +21,6 @@ import type { FunctionDeclaration } from '@google/genai';
 export const FEEL = 'feel';
 export const REMEMBER = 'remember';
 export const SHOW = 'show';
-export const MOVE = 'move';
-
-/**
- * Built per session, because the gesture list is whatever has actually been
- * rendered. Offering her a gesture with no clip behind it produces a call that
- * moves nothing, and she has no way to tell the difference.
- */
-export function companionTools(readyGestures: readonly string[] = []): FunctionDeclaration[] {
-  if (readyGestures.length === 0) return HERS_TOOLS;
-  return [
-    ...HERS_TOOLS,
-    {
-      name: MOVE,
-      description:
-        'Move your face and body. Use it the way a person moves while talking — on a ' +
-        'reaction, on the turn of a thought, not on every sentence. Keep talking; it ' +
-        'happens alongside your words and takes no time. Never mention doing it and ' +
-        'never describe your own movement in words.',
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          gesture: {
-            type: Type.STRING,
-            description: `One of: ${readyGestures.join(', ')}.`,
-            enum: [...readyGestures],
-          },
-        },
-        required: ['gesture'],
-      },
-    },
-  ];
-}
 
 export const HERS_TOOLS: FunctionDeclaration[] = [
   {

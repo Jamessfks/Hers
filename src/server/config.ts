@@ -34,8 +34,6 @@ export interface Config {
   /** Frames per second sent to Gemini. The API accepts at most one. */
   cameraFps: number;
   screenFps: number;
-  /** Avatar rendering. Null when there is no key; the still image still works. */
-  hedra: { apiKey: string; budgetUsd: number } | null;
   telegram: { token: string; allowedChatIds: number[] } | null;
   livekit: { url: string; apiKey: string; apiSecret: string; callPageUrl: string } | null;
   warnings: string[];
@@ -124,10 +122,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const minSilence = setting(env, 'MIN_SILENCE_MS');
   const cameraFps = setting(env, 'CAMERA_FPS');
   const screenFps = setting(env, 'SCREEN_FPS');
-  const hedraBudget = setting(env, 'HEDRA_BUDGET_USD');
   const callPage = setting(env, 'CALL_PAGE_URL');
 
-  const hedraKey = str(env.HEDRA_API_KEY, '');
   const telegramToken = str(env.TELEGRAM_BOT_TOKEN, '');
   const livekitUrl = str(env.LIVEKIT_URL, '');
   const livekitKey = str(env.LIVEKIT_API_KEY, '');
@@ -167,9 +163,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // of them, so the ceiling here is the API's, not a preference.
     cameraFps: rate(cameraFps.value, 1, cameraFps.name, warnings),
     screenFps: rate(screenFps.value, 0.5, screenFps.name, warnings),
-    hedra: hedraKey
-      ? { apiKey: hedraKey, budgetUsd: money(hedraBudget.value, 1, hedraBudget.name, warnings) }
-      : null,
     telegram: telegramToken
       ? { token: telegramToken, allowedChatIds: chatIds(env.TELEGRAM_ALLOWED_CHAT_IDS, warnings) }
       : null,
@@ -190,12 +183,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       `${minSilence.name} (${config.minSilenceMs}) is above ${maxSilence.name} (${config.maxSilenceMs}); using the ceiling for both.`,
     );
     config.minSilenceMs = config.maxSilenceMs;
-  }
-
-  if (hedraKey && !hedraKey.includes(':')) {
-    warnings.push(
-      'HEDRA_API_KEY looks wrong. Hedra keys are the whole `k_live_…:sk_…` string, both halves and the colon.',
-    );
   }
 
   if (config.telegram && config.telegram.allowedChatIds.length === 0) {
@@ -268,32 +255,6 @@ function rate(value: string | undefined, fallback: number, name: string, warning
   if (parsed > 1) {
     warnings.push(`${name}=${parsed} is above the Live API's limit of 1 frame per second; using 1.`);
     return 1;
-  }
-  return parsed;
-}
-
-/**
- * A budget in dollars.
- *
- * Clamped to something sane rather than trusted: this number is the only thing
- * between a typo and a bill, and `HERS_HEDRA_BUDGET_USD=1000` is far more likely
- * to be a slip than an intention.
- */
-function money(
-  value: string | undefined,
-  fallback: number,
-  name: string,
-  warnings: string[],
-): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number.parseFloat(value.trim().replace(',', '.').replace(/^\$/, ''));
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    warnings.push(`${name}="${value}" is not an amount; using $${fallback}.`);
-    return fallback;
-  }
-  if (parsed > 100) {
-    warnings.push(`${name}=$${parsed} is very high; capping at $100.`);
-    return 100;
   }
   return parsed;
 }

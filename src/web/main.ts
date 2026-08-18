@@ -49,10 +49,6 @@ const ui = new Ui({
   onEditMemory: (id, text) => connection.send({ t: 'memory.edit', id, text }),
   onForgetMemory: (id) => connection.send({ t: 'memory.forget', id }),
   onAddMemory: (text) => connection.send({ t: 'memory.add', text }),
-  onRenderGesture: (gesture) => {
-    connection.send({ t: 'avatar.render', gesture });
-    ui.toast(`Rendering ${gesture.replace('_', ' ')}. This takes a few minutes.`, 6000);
-  },
   onPinIntimacy: (score) => connection.send({ t: 'intimacy.pin', score }),
   onAutoIntimacy: () => connection.send({ t: 'intimacy.auto' }),
   onLoadKnowledge: async () => {
@@ -158,7 +154,7 @@ async function uploadFace(file: File): Promise<void> {
     }
     // The server announces the new state over the socket, so there is one path
     // that updates the interface rather than two that can disagree.
-    ui.toast('That is her now. Render "idle" to bring her to life.', 6000);
+    ui.toast('That is her now.', 6000);
   } catch (error) {
     ui.toast(`The upload failed: ${error instanceof Error ? error.message : String(error)}`);
   }
