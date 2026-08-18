@@ -6,13 +6,11 @@
 
 **An Ambient Embodied AI companion who lives on your computer. Not on someone's server.**
 
-She sees your screen, sees you through your camera, and hears you. She has a mood that
-moves, a memory that carries between conversations, a face you give her, a name she
-chose herself — and she will start talking to you if you go quiet.
+Hers sees your screen, sees you through your camera, and hears you. Hers has a mood that
+moves, a memory that carries between conversations, a face you give her, a name Hers
+chose herself, and Hers will start talking to you if you go quiet.
 
-No account, no subscription, no company between you and her. Clone this repository,
-paste in a Gemini API key, and she is yours. One key is the whole of it: there is
-nothing else to sign up for.
+Hers is all yours, full control.
 
 </div>
 
