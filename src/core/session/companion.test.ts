@@ -351,9 +351,17 @@ test('a question with nothing behind it comes back empty, not with the nearest f
 });
 
 test('what comes back is a handful, not everything she knows', async () => {
-  // The query is deliberately greedy — it names seven of the eleven facts — because
-  // the cap is what is under test. The answer arrives while she is mid-turn, and a
-  // dozen sentences landing there is a paragraph to read out, not a memory.
+  /*
+   * The query is deliberately greedy — it names seven of the eleven facts — because
+   * the cap is what is under test. The answer arrives while she is mid-turn, and a
+   * dozen sentences landing there is a paragraph to read out, not a memory.
+   *
+   * The cap was five and is now eight, and the number moved for a measured reason
+   * rather than a preference: asked live why he had been walking everywhere, the
+   * fact that answered it sat seventh and was cut before she saw it, and she guessed
+   * instead. Eight is what would have included it, and it is the same budget the
+   * wake-time recall already spends, so the prompt is known to tolerate it.
+   */
   const f = await fixture();
   await seedNineFacts(f.brain);
   await f.companion.wake();
@@ -363,7 +371,8 @@ test('what comes back is a handful, not everything she knows', async () => {
 
   const facts = recalled(f.socket()).facts ?? [];
   assert.ok(facts.length > 1, 'it should have found several');
-  assert.ok(facts.length <= 5, `handed back ${facts.length} facts`);
+  assert.ok(facts.length <= 8, `handed back ${facts.length} facts`);
+  assert.ok(facts.length < 11, 'and it is a cap, not everything in the store');
   await f.companion.sleep();
 });
 

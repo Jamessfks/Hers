@@ -290,6 +290,38 @@ test('relaunching mid-conversation resumes it rather than forgetting', () => {
   assert.deepEqual(third.liveTranscript(), []);
 });
 
+test('a gap long enough to start a new session does not make her a stranger', () => {
+  /*
+   * The bug this is here for: `hasHistory` counted turns in the *current*
+   * session, which at wake — before anybody has spoken — is zero by
+   * construction. So the conversation after a long gap was "the beginning", in
+   * the same prompt that listed eight facts about the person.
+   */
+  let clock = 1_000_000;
+  const store = new MemoryStore({ path: ':memory:' });
+  const first = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+  first.record('user', 'my sister is called Mei');
+  first.record('her', 'Mei. I will remember that.');
+  assert.equal(first.hasHistory, true);
+
+  clock += 60 * 24 * 60 * 60 * 1000; // two months later
+  const second = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+
+  assert.equal(second.turnCount(), 0, 'the session about to start really is empty');
+  assert.equal(second.runningSummary(), undefined, 'and consolidation never produced a summary');
+  assert.equal(second.hasHistory, true, 'but they have met, and she must be told so');
+});
+
+test('facts alone are enough to have met, with the transcript gone', async () => {
+  const { store, memory } = fixture();
+  assert.equal(memory.hasHistory, false, 'an empty store is a stranger, and should say so');
+
+  await memory.remember('identity', 'Their sister is called Mei.');
+
+  assert.equal(store.countTurns(), 0, 'nothing was ever said in front of this store');
+  assert.equal(memory.hasHistory, true, 'and she still knows something about them');
+});
+
 // -- a reply that ran out of room -------------------------------------------
 
 test('a fact cut off mid-sentence is not kept', () => {

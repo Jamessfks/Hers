@@ -27,6 +27,20 @@ import { PLACEHOLDER_NAME, chooseName } from '../profile/naming.ts';
 import type { Profile } from '../profile/types.ts';
 import type { Config } from '../../server/config.ts';
 
+export interface BrainOptions {
+  /** Keeps every network-backed part of memory out of the picture. Tests only. */
+  offline?: boolean;
+  /**
+   * Asks her what she would like to be called.
+   *
+   * A seam for the same reason `AvatarStudio` takes its painter and `Companion`
+   * takes its connector: the interesting behaviour around this call is the
+   * read-write path and the guard against two callers racing it, and none of that
+   * is testable if the only way to reach it is a live model.
+   */
+  chooseName?: typeof chooseName;
+}
+
 interface Parts {
   profile: Profile;
   memory: Memory;
@@ -38,10 +52,25 @@ interface Parts {
 
 export class Brain {
   #config: Config;
-  readonly #options: { offline?: boolean };
+  readonly #options: BrainOptions;
   #parts: Parts;
+  /**
+   * The naming call, while it is in the air.
+   *
+   * Two callers reach {@link ensureNamed}: a wake, and minting a call invite. They
+   * can overlap — `/call` on Telegram while the browser is waking her — and both
+   * read `#parts.profile`, an in-memory snapshot, so both see the placeholder and
+   * both spend a naming call. Observed: she announced "Casey" to the browser and
+   * `identity.md` was written four seconds later saying "Mei". The name she said
+   * was not the name she has, which is the one thing this feature promises.
+   *
+   * Guarding the read is not enough, because the gap is the network call between
+   * reading and writing. So the second caller waits on the first one's promise and
+   * they agree by construction.
+   */
+  #naming: Promise<string | null> | null = null;
 
-  private constructor(config: Config, options: { offline?: boolean }, parts: Parts) {
+  private constructor(config: Config, options: BrainOptions, parts: Parts) {
     this.#config = config;
     this.#options = options;
     this.#parts = parts;
@@ -54,7 +83,7 @@ export class Brain {
    * the consolidation model are chosen, so without a seam here a test with a
    * fake API key makes real requests to Google and waits on them.
    */
-  static async open(config: Config, options: { offline?: boolean } = {}): Promise<Brain> {
+  static async open(config: Config, options: BrainOptions = {}): Promise<Brain> {
     return new Brain(config, options, await assemble(config, options));
   }
 
@@ -182,12 +211,24 @@ export class Brain {
    * smaller problem than committing a bad name for good.
    */
   async ensureNamed(): Promise<string | null> {
+    // Whoever got here first is already asking. Two answers to "what is your
+    // name" is worse than a slow one.
+    this.#naming ??= this.#chooseAndRecordName();
+    try {
+      return await this.#naming;
+    } finally {
+      this.#naming = null;
+    }
+  }
+
+  async #chooseAndRecordName(): Promise<string | null> {
     const identity = this.#parts.profile.identity;
     if (identity.named === 'self') return null;
     if (identity.name !== PLACEHOLDER_NAME) return null;
     if (!this.#config.geminiApiKey || this.#options.offline) return null;
 
-    const chosen = await chooseName(this.#config.geminiApiKey, {
+    const ask = this.#options.chooseName ?? chooseName;
+    const chosen = await ask(this.#config.geminiApiKey, {
       age: identity.age,
       gender: identity.gender,
       ethnicity: identity.ethnicity,
@@ -212,9 +253,20 @@ export class Brain {
     return this.#parts.profile.identity.name === chosen.name ? chosen.name : null;
   }
 
-  /** True when the store already holds a conversation from before today. */
+  /**
+   * True when the store holds anything at all from before this conversation.
+   *
+   * Delegated rather than assembled here: the question is entirely about what
+   * is in memory, and it has to be asked of the whole store rather than of the
+   * session about to start. `turnCount()` is session-scoped and a session has
+   * no turns until somebody speaks, so at wake — the only moment this is read —
+   * it was always zero. A returning user with no rolling summary yet was
+   * therefore told "This is the beginning" in the same prompt that listed eight
+   * facts about them. Found by measurement, on a store with twenty facts and no
+   * summary. See {@link Memory.hasHistory}.
+   */
   get hasHistory(): boolean {
-    return this.memory.turnCount() > 0 || Boolean(this.memory.runningSummary());
+    return this.memory.hasHistory;
   }
 
   /**

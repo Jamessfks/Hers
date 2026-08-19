@@ -312,6 +312,18 @@ export class MemoryStore {
     return Number(result.lastInsertRowid);
   }
 
+  /**
+   * How many facts there are, without paying to deserialise a single vector.
+   *
+   * `allFacts().length` would answer the same question and rebuild every stored
+   * embedding into a Float32Array to do it, which is a lot of work for a caller
+   * that only wants to know whether the number is zero.
+   */
+  countFacts(): number {
+    const row = this.#db.prepare('SELECT COUNT(*) AS n FROM facts').get() as unknown as { n: number };
+    return row.n;
+  }
+
   allFacts(kinds?: readonly FactKind[]): Fact[] {
     const rows = (
       kinds?.length

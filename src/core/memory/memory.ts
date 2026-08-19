@@ -142,8 +142,49 @@ export class Memory {
     return this.#store.countTurnsInSession(this.#sessionId);
   }
 
+  /**
+   * Every turn ever recorded, across all sessions.
+   *
+   * Distinct from {@link turnCount}, which is this session only and is therefore
+   * zero at wake by construction. Anything asking "have we met before?" wants
+   * this one; `hasHistory` asked the other and told a returning user of two months
+   * that this was the beginning.
+   */
+  totalTurnCount(): number {
+    return this.#store.countTurns();
+  }
+
   runningSummary(): string | undefined {
     return this.#store.latestSummary()?.text;
+  }
+
+  /**
+   * Whether the two of them have a past — asked of the store, not of the
+   * session about to start.
+   *
+   * Which is the whole point. {@link turnCount} is session-scoped, and the one
+   * caller reads this at wake, before the first turn of the new session exists,
+   * so it was always zero on any conversation that is genuinely new — including
+   * the one after a long gap with a database full of somebody's life in it.
+   * Measured on a store holding twenty facts and eight turns from a prior
+   * conversation: she was told "This is the beginning" in the same prompt that
+   * listed eight things she knew about the person.
+   *
+   * A rolling summary was the old fallback and it is not enough on its own —
+   * consolidation may not have run yet, and a store can hold turns and facts
+   * with no summary anywhere in it. Facts count as well as turns, because a
+   * store can also be carried across a reset or an import with its facts intact
+   * and its transcript gone, and either one is still a memory of them.
+   */
+  get hasHistory(): boolean {
+    return this.totalTurnCount() > 0 || this.factCount() > 0 || Boolean(this.runningSummary());
+  }
+
+  /**
+   * How many facts she holds, without rebuilding a single embedding to find out.
+   */
+  factCount(): number {
+    return this.#store.countFacts();
   }
 
   /**

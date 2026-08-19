@@ -106,13 +106,29 @@ const RECALL_LIMIT = 8;
  * How wide the `recall` tool looks, and how much of it she gets back.
  *
  * Scanning further than she is shown costs nothing — the store ranks every fact
- * on one pass regardless — and it means a fact sitting seventh can still reach
- * her once the ones above it have been refused as unrelated. What she is handed
- * stays a handful, because the answer arrives mid-turn: a dozen sentences
- * arriving while she is talking is a paragraph to read, not a memory.
+ * on one pass regardless. The intent was that a fact sitting seventh could still
+ * reach her once the ones above it had been refused as unrelated.
+ *
+ * Measured live, that intent did not survive contact. `isAbout`'s absolute floor
+ * refuses nothing on the remote embedder: across six tool calls all sixty
+ * candidates scored between 0.7797 and 0.9085, because that model puts every
+ * short-sentence pair high. So nothing was ever filtered, the widening to ten was
+ * inert, and the slice took the raw top five every time.
+ *
+ * It cost a real answer. Asked why he had been walking everywhere, the fact that
+ * answered it — his bike stolen outside the library — sat seventh at 0.7875 and was
+ * cut before she saw it. She then said "did you ever tell me why?" and guessed,
+ * which are the two things the prompt tells her not to do.
+ *
+ * So she is handed eight rather than five. Eight is the number that would have
+ * included it, and it is the same budget the wake-time recall already spends, so
+ * it is a size this prompt is known to tolerate. The filter stays because it earns
+ * its place on the offline embedder, where unrelated facts really do sit below the
+ * floor — it is simply not load-bearing on the remote one, and pretending
+ * otherwise is what hid this.
  */
-const RECALL_TOOL_CANDIDATES = 10;
-const RECALL_TOOL_FACTS = 5;
+const RECALL_TOOL_CANDIDATES = 12;
+const RECALL_TOOL_FACTS = 8;
 /**
  * Below this a recalled fact is not an answer, it is the top of the pile.
  *
