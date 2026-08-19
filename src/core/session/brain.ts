@@ -57,16 +57,27 @@ export class Brain {
   /**
    * The naming call, while it is in the air.
    *
-   * Two callers reach {@link ensureNamed}: a wake, and minting a call invite. They
-   * can overlap — `/call` on Telegram while the browser is waking her — and both
-   * read `#parts.profile`, an in-memory snapshot, so both see the placeholder and
-   * both spend a naming call. Observed: she announced "Casey" to the browser and
-   * `identity.md` was written four seconds later saying "Mei". The name she said
-   * was not the name she has, which is the one thing this feature promises.
+   * Every caller reads `#parts.profile`, an in-memory snapshot that nothing
+   * updates until the first write has been read back. So two callers that overlap
+   * both see the placeholder and both spend a naming call. Observed: she announced
+   * "Casey" to the browser and `identity.md` was written four seconds later saying
+   * "Mei". The name she said was not the name she has, which is the one thing this
+   * feature promises.
+   *
+   * Two callers can overlap, and it is worth being exact about which, because the
+   * obvious pair is the wrong answer. Minting a call invite is one caller, but on
+   * the run that produced Casey-and-Mei `HERS_LIVEKIT_*` was unset, so
+   * `CallBridge` was never constructed and that line was unreachable. The pair was
+   * two wakes: `Companion#waking` guards one instance, and `Conversation.sleep`
+   * drops the instance without waiting for a wake still parked in here, so the next
+   * wake builds a second `Companion` and enters this a second time. On a fresh
+   * profile the parking spot is this very naming call — seven seconds during which
+   * the page shows nothing, which is about as long as somebody will look at a
+   * button before pressing it again.
    *
    * Guarding the read is not enough, because the gap is the network call between
    * reading and writing. So the second caller waits on the first one's promise and
-   * they agree by construction.
+   * they agree by construction — whichever pair of callers it turns out to be.
    */
   #naming: Promise<string | null> | null = null;
 
@@ -237,12 +248,14 @@ export class Brain {
     });
     if (!chosen) return null;
 
+    let recorded: Profile;
     try {
       await writeChosenName(this.#config.profileDir, chosen.name, chosen.why);
       // Re-read rather than patch in place, so the name reaching the prompt is
       // the one that is actually on disk. If the write half-failed, she keeps
       // the placeholder rather than believing a name nobody recorded.
-      this.#parts.profile = await loadProfile(this.#config.profileDir);
+      recorded = await loadProfile(this.#config.profileDir);
+      this.#parts.profile = recorded;
     } catch (error) {
       // A read-only profile folder, a full disk. Worth saying out loud, because
       // unlike a refusal this one will happen again every conversation — but not
@@ -250,7 +263,14 @@ export class Brain {
       console.warn('  could not record her chosen name:', error);
       return null;
     }
-    return this.#parts.profile.identity.name === chosen.name ? chosen.name : null;
+    // The local read, not `#parts.profile`. The field is shared, so read through
+    // it this line answers a question about whoever assigned last rather than
+    // about this call: two bodies overlapping here, the second one's check saw the
+    // first one's name, disagreed with its own, and returned null for a name that
+    // was on disk — a name she has and never told anyone about, which is the half
+    // of Casey-and-Mei that left only one line in the log. `#naming` is what stops
+    // the two bodies; this makes the line true whether or not it holds.
+    return recorded.identity.name === chosen.name ? chosen.name : null;
   }
 
   /**
