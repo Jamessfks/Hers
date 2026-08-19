@@ -124,7 +124,11 @@ const CROWDING_SIMILARITY = 0.88;
 /**
  * Takes the best `limit` facts, skipping ones that restate a fact already taken.
  *
- * The bug this fixes is not storage, it is contradiction. A model handed
+ * The bug this narrows is restatement, and it is worth being exact that it does
+ * *not* fix contradiction — measured, two facts saying opposite things about the
+ * same preference sat at 0.835, under this threshold, so both still reach one
+ * prompt. Naming a fix for something it does not do is how the next person stops
+ * looking. A model handed
  *
  *     the user has a presentation coming up at the start of the week
  *     the user recently completed a presentation they were anxious about
@@ -155,10 +159,30 @@ function crowdOut(scored: readonly RecalledFact[], limit: number): RecalledFact[
 
 /** Tunes how the four ranking signals trade off. They sum to 1. */
 export const RECALL_WEIGHTS = {
-  similarity: 0.62,
+  similarity: 0.70,
   recency: 0.18,
   confidence: 0.12,
-  usage: 0.08,
+  /*
+   * Zero, and it used to be 0.08.
+   *
+   * `usage` rewarded a fact for having been recalled before, and `markRecalled`
+   * increments the count it reads — so being chosen made a fact more likely to be
+   * chosen again, with nothing pulling the other way. The docstring on
+   * `markRecalled` explains at length why `last_seen_at` is not touched on
+   * retrieval, for exactly this reason. The same hazard came in through the back
+   * door here and was missed.
+   *
+   * Measured on a real store: across a plausible question, cosine similarity
+   * spanned 0.661 to 0.794 — a range of 0.133, so the similarity term could move
+   * the composite score by at most 0.62 × 0.133 = 0.083, while confidence and
+   * usage together could move it 0.128. Semantics was outvoted by "old,
+   * confident, recalled often". A two-word fact reading "The user", stored by a
+   * truncation bug, had reached six recalls and was ranking first on every query.
+   *
+   * Kept as a column and a field because it is worth being able to see; removed
+   * from the ranking because it was never evidence of relevance.
+   */
+  usage: 0,
 } as const;
 
 /** A fact stops getting a recency boost after this long. */

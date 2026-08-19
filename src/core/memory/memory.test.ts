@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import type { Distiller } from './types.ts';
 import { createLexicalEmbedder, similarity } from './embedder.ts';
-import { Memory, parseExtraction } from './memory.ts';
+import { Memory, parseExtraction, saysSomething } from './memory.ts';
+import { RECALL_WEIGHTS } from './store.ts';
 import { MemoryStore } from './store.ts';
 
 function fixture(options: { distiller?: Distiller; now?: () => number } = {}) {
@@ -411,4 +412,43 @@ test('a confidence the model wrote in words still yields a fact', () => {
   const [fact] = parseExtraction('FACTS\npattern | high | they run most days.\n').facts;
   assert.equal(fact?.text, 'they run most days.');
   assert.equal(fact?.confidence, 0.6);
+});
+
+// -- a fact has to say something --------------------------------------------
+
+test('a fragment that names a subject and says nothing is not stored', async () => {
+  /*
+   * From a real store: `"The user"`, written by a truncation bug, with six
+   * recalls. It was not inert — a two-word fact embeds near everything, so it
+   * ranked highly on every question, and `markRecalled` pushed it higher each
+   * time. It held the top slot of an eight-fact budget against facts that
+   * answered the question.
+   */
+  assert.equal(saysSomething('The user'), false);
+  assert.equal(saysSomething('They'), false);
+  assert.equal(saysSomething('   '), false);
+
+  assert.equal(saysSomething('Their younger sister is named Mei-Lin.'), true);
+  assert.equal(saysSomething('They hate cilantro.'), true, 'short but complete');
+  // Not claimed: a three-word fragment that happens to be long enough. Nothing
+  // short of parsing separates "the person recently" from the line above it.
+
+  const { memory } = fixture();
+  await memory.remember('pattern', 'The user');
+  await memory.remember('identity', 'Their younger sister is named Mei-Lin.');
+  assert.deepEqual(
+    memory.allFacts().map((f) => f.text),
+    ['Their younger sister is named Mei-Lin.'],
+  );
+});
+
+test('recall no longer rewards a fact for having been recalled', () => {
+  // `markRecalled` increments the count that `usage` read, so being chosen made a
+  // fact more likely to be chosen again with nothing pulling the other way — the
+  // same feedback loop `markRecalled`'s own docstring explains it avoids for
+  // recency. Measured, it let a two-word fact outrank the answer.
+  assert.equal(RECALL_WEIGHTS.usage, 0);
+  const total =
+    RECALL_WEIGHTS.similarity + RECALL_WEIGHTS.recency + RECALL_WEIGHTS.confidence + RECALL_WEIGHTS.usage;
+  assert.ok(Math.abs(total - 1) < 1e-9, `weights must still sum to 1, got ${total}`);
 });

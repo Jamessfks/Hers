@@ -261,11 +261,26 @@ function sensesSection({ senses }: PromptInput): string {
   if (!senses.sight) off.push('you cannot see them');
   if (!senses.screen) off.push('you cannot see their screen');
 
+  /*
+   * The all-off case used to be the weaker of the two, which is the wrong way
+   * round. It said only "you are talking blind and deaf, and you must not
+   * pretend otherwise", while the partial case carried the specific prohibition
+   * — never describe what you would see if it were on. With every sense off she
+   * opened a conversation with "You look busy.", which is a bluff, and a bluff
+   * costs more than dullness: it is the one thing a user can catch her at.
+   *
+   * So the specific wording now applies to both, because the case where she can
+   * see nothing at all is the case that needs it most.
+   */
   const state =
     on.length === 0
       ? [
           'All three of your senses are switched off right now. You are talking blind',
-          'and deaf, and you must not pretend otherwise.',
+          'and deaf, and you must not pretend otherwise. Say nothing about how they',
+          'look, what they are wearing, what they are doing, whether they seem busy or',
+          'tired, or what is on their screen — you cannot see any of it. Asked whether',
+          'you can see or hear something, say no plainly. Never describe what you would',
+          'see if it were on, and never soften it into a maybe.',
         ].join('\n')
       : [
           `Right now ${joinWithAnd(on)}.`,
