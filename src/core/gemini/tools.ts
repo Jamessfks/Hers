@@ -1,7 +1,7 @@
 /**
- * The three things she can do besides talk.
+ * The things she can do besides talk.
  *
- * Kept to three deliberately. A realtime model with a long tool list spends its
+ * Kept short deliberately. A realtime model with a long tool list spends its
  * attention deciding rather than talking, and the symptom is a companion who
  * pauses before every sentence. Each of these earns its place by doing
  * something that cannot be faked from the outside:
@@ -11,6 +11,13 @@
  *             participant.
  *   remember  Background consolidation catches most things eventually. This is
  *             for the moment she decides something matters, which is different.
+ *   recall    The other half of `remember`, and for a long time it was missing —
+ *             she could file a memory she had no way to look up. The facts she
+ *             starts a conversation with are chosen at wake, from a query built
+ *             before the person has said anything, and everything else she knows
+ *             stays on disk. Measured against OpenClaw over nine seeded facts:
+ *             she said she had never been told about a food he hates while that
+ *             fact sat in the store at 0.8 confidence.
  *   show      Choosing a picture that fits the conversation is a judgement about
  *             the conversation, so it belongs to whoever is in it.
  */
@@ -20,6 +27,7 @@ import type { FunctionDeclaration } from '@google/genai';
 
 export const FEEL = 'feel';
 export const REMEMBER = 'remember';
+export const RECALL = 'recall';
 export const SHOW = 'show';
 export const LOOK = 'look';
 
@@ -120,6 +128,32 @@ const BASE_TOOLS: FunctionDeclaration[] = [
         },
       },
       required: ['kind', 'text'],
+    },
+  },
+  {
+    name: RECALL,
+    description:
+      'Look something up in what you already know about them. This is the other half ' +
+      'of `remember`: that one files a thing, this one goes and fetches it. Use it ' +
+      'before you answer anything that turns on their life — a name, something they ' +
+      'like or cannot stand, a plan, someone they talk about, something that happened ' +
+      'to them — unless you are already certain of it. Ask the way you would think of ' +
+      'it: `food he hates`, `his sister`, `the interview on Thursday`.\n' +
+      'What comes back is what you know, not a line to read out. You began this ' +
+      'conversation holding only a handful of what you know, so a thing not being in ' +
+      'front of you is not the same as never having been told it — look before you say ' +
+      'you do not know, and before you guess. If the answer comes back empty, or none ' +
+      'of it fits what was asked, then you do not have it and saying so plainly is the ' +
+      'right answer.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        about: {
+          type: Type.STRING,
+          description: 'What you are trying to remember, in your own words.',
+        },
+      },
+      required: ['about'],
     },
   },
   {

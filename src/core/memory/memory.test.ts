@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import type { Distiller } from './types.ts';
 import { createLexicalEmbedder, similarity } from './embedder.ts';
-import { Memory, parseExtraction } from './memory.ts';
+import { Memory, parseExtraction, saysSomething } from './memory.ts';
+import { RECALL_WEIGHTS } from './store.ts';
 import { MemoryStore } from './store.ts';
 
 function fixture(options: { distiller?: Distiller; now?: () => number } = {}) {
@@ -289,6 +290,38 @@ test('relaunching mid-conversation resumes it rather than forgetting', () => {
   assert.deepEqual(third.liveTranscript(), []);
 });
 
+test('a gap long enough to start a new session does not make her a stranger', () => {
+  /*
+   * The bug this is here for: `hasHistory` counted turns in the *current*
+   * session, which at wake — before anybody has spoken — is zero by
+   * construction. So the conversation after a long gap was "the beginning", in
+   * the same prompt that listed eight facts about the person.
+   */
+  let clock = 1_000_000;
+  const store = new MemoryStore({ path: ':memory:' });
+  const first = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+  first.record('user', 'my sister is called Mei');
+  first.record('her', 'Mei. I will remember that.');
+  assert.equal(first.hasHistory, true);
+
+  clock += 60 * 24 * 60 * 60 * 1000; // two months later
+  const second = new Memory({ store, embedder: createLexicalEmbedder(128), now: () => clock });
+
+  assert.equal(second.turnCount(), 0, 'the session about to start really is empty');
+  assert.equal(second.runningSummary(), undefined, 'and consolidation never produced a summary');
+  assert.equal(second.hasHistory, true, 'but they have met, and she must be told so');
+});
+
+test('facts alone are enough to have met, with the transcript gone', async () => {
+  const { store, memory } = fixture();
+  assert.equal(memory.hasHistory, false, 'an empty store is a stranger, and should say so');
+
+  await memory.remember('identity', 'Their sister is called Mei.');
+
+  assert.equal(store.countTurns(), 0, 'nothing was ever said in front of this store');
+  assert.equal(memory.hasHistory, true, 'and she still knows something about them');
+});
+
 // -- a reply that ran out of room -------------------------------------------
 
 test('a fact cut off mid-sentence is not kept', () => {
@@ -411,4 +444,43 @@ test('a confidence the model wrote in words still yields a fact', () => {
   const [fact] = parseExtraction('FACTS\npattern | high | they run most days.\n').facts;
   assert.equal(fact?.text, 'they run most days.');
   assert.equal(fact?.confidence, 0.6);
+});
+
+// -- a fact has to say something --------------------------------------------
+
+test('a fragment that names a subject and says nothing is not stored', async () => {
+  /*
+   * From a real store: `"The user"`, written by a truncation bug, with six
+   * recalls. It was not inert — a two-word fact embeds near everything, so it
+   * ranked highly on every question, and `markRecalled` pushed it higher each
+   * time. It held the top slot of an eight-fact budget against facts that
+   * answered the question.
+   */
+  assert.equal(saysSomething('The user'), false);
+  assert.equal(saysSomething('They'), false);
+  assert.equal(saysSomething('   '), false);
+
+  assert.equal(saysSomething('Their younger sister is named Mei-Lin.'), true);
+  assert.equal(saysSomething('They hate cilantro.'), true, 'short but complete');
+  // Not claimed: a three-word fragment that happens to be long enough. Nothing
+  // short of parsing separates "the person recently" from the line above it.
+
+  const { memory } = fixture();
+  await memory.remember('pattern', 'The user');
+  await memory.remember('identity', 'Their younger sister is named Mei-Lin.');
+  assert.deepEqual(
+    memory.allFacts().map((f) => f.text),
+    ['Their younger sister is named Mei-Lin.'],
+  );
+});
+
+test('recall no longer rewards a fact for having been recalled', () => {
+  // `markRecalled` increments the count that `usage` read, so being chosen made a
+  // fact more likely to be chosen again with nothing pulling the other way — the
+  // same feedback loop `markRecalled`'s own docstring explains it avoids for
+  // recency. Measured, it let a two-word fact outrank the answer.
+  assert.equal(RECALL_WEIGHTS.usage, 0);
+  const total =
+    RECALL_WEIGHTS.similarity + RECALL_WEIGHTS.recency + RECALL_WEIGHTS.confidence + RECALL_WEIGHTS.usage;
+  assert.ok(Math.abs(total - 1) < 1e-9, `weights must still sum to 1, got ${total}`);
 });

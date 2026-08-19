@@ -156,6 +156,24 @@ included, and it is easy to lose a character at either end when copying out of a
 chat. Ask @BotFather for `/mybots` → your bot → **API Token** and paste it again;
 the box keeps what you typed so you can compare.
 
+### Running a second copy without stealing your bot
+
+Unsetting the variable does not work, and it is worth knowing why before you try it.
+`loadDotEnv` calls Node's `process.loadEnvFile`, and Node only skips a key that is
+already **present** in the environment. `env -u TELEGRAM_BOT_TOKEN` makes the key
+absent, so the token in `.env` is loaded and a second poller starts — the opposite of
+what you wanted. Set it to empty instead, which counts as present:
+
+```bash
+TELEGRAM_BOT_TOKEN= TELEGRAM_ALLOWED_CHAT_IDS= \
+  HERS_PORT=5180 HERS_PROFILE=/tmp/scratch/profile HERS_DATA=/tmp/scratch/data \
+  npm start
+```
+
+Empty the LiveKit variables the same way if you do not want the second copy answering
+calls. Verified: with the key absent Node returns the `.env` value; with it set to an
+empty string the empty string survives.
+
 ### Two of her are answering, or updates go missing
 
 Only one thing may poll a bot token. Telegram hands `getUpdates` to whichever

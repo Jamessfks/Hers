@@ -224,3 +224,48 @@ test('starting over means she gets to choose again', async () => {
   assert.equal(f.brain.profile.identity.name, PLACEHOLDER_NAME);
   assert.equal(f.brain.profile.identity.named, undefined);
 });
+
+test('two callers racing for her name get one name, and one model call', async () => {
+  /*
+   * Observed live: she announced "Casey" to the browser, and `identity.md` was
+   * written four seconds later saying "Mei". Two callers reach `ensureNamed` — a
+   * wake, and minting a call invite — and both read an in-memory profile snapshot,
+   * so both saw the placeholder and both spent a naming call. The name she said was
+   * not the name she has, which is the one thing this feature promises.
+   *
+   * Guarding the read cannot fix it: the gap is the network call between reading
+   * and writing. The second caller has to wait on the first one's promise.
+   */
+  const root = await mkdtemp(path.join(tmpdir(), 'hers-naming-race-'));
+  let calls = 0;
+  const brain = await Brain.open(
+    loadConfig({
+      GEMINI_API_KEY: 'test-key',
+      HERS_PROFILE: path.join(root, 'profile'),
+      HERS_DATA: path.join(root, 'data'),
+    } as NodeJS.ProcessEnv),
+    {
+      // Slow on purpose: without a delay there is no window to race in, and a
+      // test that cannot fail is not evidence.
+      chooseName: async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        return { name: `Mira${calls}`, why: 'it fits' };
+      },
+    },
+  );
+
+  const answers = await Promise.all([
+    brain.ensureNamed(),
+    brain.ensureNamed(),
+    brain.ensureNamed(),
+  ]);
+
+  assert.equal(calls, 1, 'three callers, one naming call');
+  assert.deepEqual(answers, ['Mira1', 'Mira1', 'Mira1'], 'and one answer');
+  assert.equal(brain.profile.identity.name, 'Mira1', 'which is the one on disk');
+
+  // And it is still permanent afterwards.
+  assert.equal(await brain.ensureNamed(), null);
+  assert.equal(calls, 1);
+});
