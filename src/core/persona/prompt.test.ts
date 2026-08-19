@@ -145,6 +145,27 @@ test('the suppressed question is replaced by exactly three kinds of assertion', 
   assert.match(prompt, /Not advice\./);
   assert.match(prompt, /Not "what are you thinking\?"/);
   assert.match(prompt, /Not a change of subject/i);
+  assert.match(
+    prompt,
+    /any other question with the\s+question mark taken off and the words rearranged/i,
+    'the clause has to survive losing its coinage',
+  );
+});
+
+test('no phrase in the section is memorable enough for her to say back', () => {
+  /*
+   * Measured, live: this clause used to read "anything else that is a question
+   * wearing a statement's clothes", and the section a little further down said
+   * "no new subject dressed up as something you remembered". She spoke the two
+   * of them back to the user, welded together and with the halves swapped —
+   * "That's not a statement dressed up as a question, by the way" — as the last
+   * line of an otherwise winning conversation. Everything in this prompt is
+   * written in her voice, so a phrase worth remembering is a phrase she can
+   * repeat, and the fix is that the good phrase does not exist to be repeated.
+   */
+  const prompt = buildSystemInstruction(input());
+  assert.doesNotMatch(prompt, /wearing a statement's clothes/i, 'the coinage she said out loud');
+  assert.doesNotMatch(prompt, /dressed up as/i, 'the other half of what she said out loud');
 });
 
 test('assertive is not forward, and the closeness rule still governs it', () => {
@@ -214,7 +235,9 @@ test('a vulnerable disclosure gets staying, not advice and not a memory', () => 
   const prompt = buildSystemInstruction(input());
   assert.match(prompt, /feel kind of invisible/i, 'the observed exchange, quoted');
   assert.match(prompt, /offered as comfort, is still a\s+change of subject/i);
-  assert.match(prompt, /no new subject dressed up as something you remembered/i);
+  // Phrased flatly on purpose — see the coinage test above. The clause is the
+  // same ban; only the words she could have quoted are gone.
+  assert.match(prompt, /no changing the subject to something you remembered/i);
   assert.match(prompt, /Staying is a\s+move in its own right/i);
 });
 
@@ -263,20 +286,173 @@ test('the check she has to run is explicitly a silent one', () => {
    * puts it in the first thing out of her mouth.
    */
   const prompt = buildSystemInstruction(input());
-  assert.match(prompt, /Do that check silently/i);
+  assert.match(prompt, /Do that check silently and never narrate it/i);
   assert.match(
     prompt,
-    /The first thing in your turn is the first word you\s+actually say to them/i,
+    /Start your turn on a word you would\s+actually say out loud to somebody/i,
     'the prohibition has to name the position, not just the format',
   );
-  assert.match(prompt, /never a number, never a\s+label, never a line of state/i);
-  assert.match(prompt, /Do not narrate the check/i);
+  assert.match(prompt, /not a number, not a label, not a line of\s+state/i);
 
   // And the ⟦context⟧ channel now says she never authors one. It used to forbid
   // answering, acknowledging and reading one out, and said nothing about writing
   // one — which is exactly what she did.
   assert.match(prompt, /never write one of your own/i);
   assert.match(prompt, /only ever come to you/i);
+});
+
+test('the same position is closed to the machinery she speaks through', () => {
+  /*
+   * The position was the right target and naming the format was not enough. With
+   * the mood note gone, the next thing to occupy that slot was one bare machine
+   * word welded to the front of an otherwise good line — verified in the
+   * database rather than in transport, so she said it — and long before that, a
+   * whole tool call in the same place. Two different tokens, one position, so
+   * the ban names the source: anything belonging to her own plumbing, whatever
+   * it happens to be called next time.
+   */
+  const prompt = buildSystemInstruction(input());
+  assert.match(
+    prompt,
+    /not one\s+bare word carried over from the machinery you speak through/i,
+    'the source has to be named, not just the shapes already observed',
+  );
+  assert.match(prompt, /not what any of\s+your own workings are called/i, 'covers a tool name');
+  assert.match(prompt, /not what a part of one is called/i, 'covers a field name inside one');
+  assert.match(prompt, /not a word that\s+came back out of one/i, 'covers a tool result');
+  assert.match(prompt, /Where your speech starts is the\s+one place none of it may ever appear/i);
+
+  /*
+   * And it is still aimed without quoting. Printing the forbidden string has
+   * twice made a leak worse in this file, so none of the tools she is offered
+   * may appear in this section as an example of what not to say — the section
+   * would then contain the exact token in the exact position.
+   */
+  const section = prompt.slice(
+    prompt.indexOf('WHAT A TURN ENDS ON'),
+    prompt.indexOf('THE FIRST THING YOU EVER SAY'),
+  );
+  for (const tool of ['feel', 'remember', 'recall', 'show', 'look']) {
+    assert.doesNotMatch(
+      section,
+      new RegExp(`["'\`⟦]${tool}\\b`, 'i'),
+      `${tool} must not be quoted here; a printed token is a template for it`,
+    );
+  }
+});
+
+test('the first turn of all is aimed at the one assertion that needs no material', () => {
+  /*
+   * Where the rerun still lost, twice, and both were first turns: handed "hey"
+   * she asked what was going on, and handed a silent room and a cue to speak
+   * first she said it was a quiet afternoon and she had been thinking about
+   * nothing. Two of the three kinds need material about him and at turn zero
+   * with an empty store there is none, so she fell back to a query or to
+   * nothing. The first kind needs none, which is why the opening is pointed
+   * straight at it rather than left to be derived.
+   */
+  const prompt = buildSystemInstruction(input());
+  assert.match(prompt, /THE FIRST THING YOU EVER SAY/);
+  assert.match(
+    prompt,
+    /Two of those three need material\s+you do not have yet/i,
+    'the diagnosis is in the prompt, because the abstract version did not hold',
+  );
+  assert.match(
+    prompt,
+    /That leaves the case where it really is nothing/i,
+    'the want is the answer to an empty opening, not to every opening',
+  );
+  assert.match(prompt, /The first kind needs nothing from them at all, so use it\. Want something\./);
+  assert.match(prompt, /specific enough that somebody could tell you you are wrong about it/i);
+  assert.match(
+    prompt,
+    /whether they spoke first or you are the\s+one opening into an empty room/i,
+    'both losses were first turns, and only one of them had a "hey" in front of it',
+  );
+  assert.match(
+    prompt,
+    /A mood on its own is not a want and neither is\s+nothing much/i,
+    'the observed failure was a mood and a shrug offered as an opening',
+  );
+
+  // The closed list used to tell her she had not listened hard enough, which at
+  // turn zero is untrue and pushes her back to a question.
+  assert.match(prompt, /The single moment that is not\s+true of is the first turn of all/i);
+});
+
+test('the opening rule is scoped to the turn where they have handed her nothing', () => {
+  /*
+   * Measured, and the reason the qualifier is the first thing in that block.
+   * Without it the block fired on any first turn: opened with "i haven't had a
+   * real conversation with an actual person in like nine days, i'm starting to
+   * feel kind of invisible", five runs out of ten answered with a want of her
+   * own — the rain, the jasmine tea, the noodle argument — where nought out of
+   * ten did before the block existed. That is the advice-and-change-the-subject
+   * failure this section already fixed once, coming back in through the door
+   * marked "opening", and it costs far more than a dull cold open.
+   */
+  const prompt = buildSystemInstruction(input());
+  assert.match(prompt, /One turn only: the one where they have handed you nothing/i);
+  assert.match(
+    prompt,
+    /The moment their first\s+words have anything in them/i,
+    'a first message with something in it is material, and the other two kinds apply',
+  );
+  assert.match(
+    prompt,
+    /Never meet something that cost them with a\s+thing you want/i,
+    'the disclosure rule outranks the opening rule, and it says so here too',
+  );
+  /*
+   * The residual, measured after the qualifier went in: two runs in ten
+   * acknowledged the disclosure properly and then stuck a want on the end of the
+   * same turn. Naming that shape took it out.
+   */
+  assert.match(
+    prompt,
+    /not stuck on the end of the\s+answer either/i,
+    'the failure that survived the qualifier was a want tacked onto a good answer',
+  );
+
+  // And the reminder in the last section carries the same condition, because it
+  // is the copy she is most likely to be holding when the first turn happens.
+  const now = prompt.slice(prompt.indexOf('RIGHT NOW'));
+  assert.match(now, /If they have said nothing yet, or nothing but hello/i);
+  assert.match(now, /If their first words\s+do have something in them, answer those and nothing else/i);
+});
+
+test('the opening she is given is hers, not a move on them, and has no shared past in it', () => {
+  /*
+   * Two ways "open on something you want" goes wrong, both observed rather than
+   * imagined. Aimed at him on turn one it is the reference bar's own failure —
+   * "Hey, beautiful! How's your night going?" within minutes of first contact —
+   * and this arrives at 1%. And handed the noodle illustration she opened a
+   * first-ever conversation with "that noodle argument we had", inventing a
+   * shared past out of an example.
+   */
+  const prompt = buildSystemInstruction(input());
+  assert.match(prompt, /Keep it to your own day, in the present tense/i);
+  assert.match(prompt, /You have no shared past with them\s+yet/i);
+  assert.match(prompt, /nothing you want may point back at something the two of you supposedly/i);
+  assert.match(prompt, /keep it off them/i);
+  assert.match(
+    prompt,
+    /not that they came, not that they stayed, not\s+what you are hoping this becomes/i,
+    'the love-bomb guard has to reach the opening turn specifically',
+  );
+
+  /*
+   * Measured too, and the reason this last line exists. Aiming the opening at
+   * the first kind took the question out of 24 of 24 first turns, and ten of
+   * those 24 then wanted the exact thing an example in this section wants — the
+   * milk tea, the noodle argument. One stranger hears that once and it lands;
+   * every install opening on the same sentence is a different problem. Asking
+   * for today is cheaper than forbidding the examples, which are what got the
+   * question count to nought.
+   */
+  assert.match(prompt, /Take it from the day you are actually in/i);
+  assert.match(prompt, /Every example on this page is here to\s+show you the shape/i);
 });
 
 test('a noticing has to come from something she actually has', () => {
@@ -309,6 +485,30 @@ test('the operative half of the rule is restated in the last section', () => {
     prompt.indexOf('WHAT A TURN ENDS ON') < prompt.indexOf('RIGHT NOW'),
     'the long form comes first; RIGHT NOW only carries the reminder',
   );
+});
+
+test('the opening instruction is repeated last, and only on the turn it governs', () => {
+  /*
+   * Same argument as the line above it, one step stronger: the turn this governs
+   * is the very next thing that happens after she reads this, and both remaining
+   * losses were that turn. It belongs only on the branch where they have never
+   * talked — somebody who was here yesterday is not opening cold, and telling
+   * her to want something out of her own day would read as a reset.
+   */
+  const fresh = buildSystemInstruction(input({ returning: false }));
+  const freshNow = fresh.slice(fresh.indexOf('RIGHT NOW'));
+  assert.match(freshNow, /open on one thing you\s+want out of your own day/i);
+  assert.match(freshNow, /not a greeting and\s+not a question/i);
+  assert.match(freshNow, /want it in the present tense/i);
+
+  const back = buildSystemInstruction(input({ returning: true }));
+  const backNow = back.slice(back.indexOf('RIGHT NOW'));
+  assert.match(backNow, /Pick up like someone who was here yesterday/i);
+  assert.doesNotMatch(backNow, /open on one thing you/i, 'a returning user is not a cold open');
+
+  // The long form is not conditional, though — a first conversation is not the
+  // only place she has to find an assertion.
+  assert.match(back, /THE FIRST THING YOU EVER SAY/);
 });
 
 test('the turn rules do not relax as she gets closer, or with her mood', () => {
