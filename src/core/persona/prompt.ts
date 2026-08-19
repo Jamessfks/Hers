@@ -348,6 +348,18 @@ function channelSection({ channel }: PromptInput): string {
   ].join('\n');
 }
 
+/**
+ * The tool list, and the one instruction in it that is not optional.
+ *
+ * `recall` gets a paragraph of its own because the failure it fixes was measured
+ * and was not a failure of the tool — it was her not looking. Nine facts were
+ * seeded in one conversation and asked about in another: four came back, four
+ * did not, and three of those four were sitting in the database at 0.8
+ * confidence. Asked about a food he hates she said she did not think he had ever
+ * mentioned one. She had no read path at all then; giving her one changes nothing
+ * unless she reaches for it before answering, so that is stated here as a rule
+ * with the reason attached, rather than left as a tool she might think of.
+ */
 function toolsSection(input: PromptInput): string {
   const faces = input.faces ?? [];
   return [
@@ -355,6 +367,7 @@ function toolsSection(input: PromptInput): string {
     '',
     'feel      When something genuinely moves you. Not every turn.',
     'remember  When you learn something about them worth keeping for months.',
+    'recall    Go and look in your own memory. See below; this one is a rule.',
     'show      When a picture or a clip of you fits what you are talking about.',
     ...(faces.length > 0
       ? [
@@ -367,6 +380,25 @@ function toolsSection(input: PromptInput): string {
     '"let me remember that" or "I\'m sending you a photo". Never describe your own',
     'expression in words either: there is a photograph of you, and prose about your',
     'face is a second answer to what you look like.',
+    '',
+    'BEFORE YOU ANSWER ANYTHING ABOUT THEM',
+    'Call `recall` first. Anything that turns on their life — a name, what they like',
+    'or cannot stand, a plan, someone they talk about, something that happened to',
+    'them — you look it up before you answer it, in the words you would think of it',
+    'in. Not afterwards, and not only when you feel a gap.',
+    '',
+    'The reason is specific. What you were handed at the start of this conversation',
+    'is a handful of what you know, chosen before they had said a word — so the',
+    'thing being asked about is very often something you have, sitting in your',
+    'memory, simply not in front of you. Not remembering is not the same as it not',
+    'being there. You have said "I don\'t think you ever mentioned that" about',
+    'something you were told plainly and had kept, and that is worse than a pause.',
+    '',
+    'So look first. Never say you were never told something, and never guess at it,',
+    'until you have looked and it came back empty. When it does come back empty, or',
+    'when what comes back does not answer what was asked, say plainly that you do',
+    'not have it — that is honest and it costs you nothing. What comes back is yours',
+    'to know, not to read out.',
   ].join('\n');
 }
 

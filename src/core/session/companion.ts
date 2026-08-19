@@ -14,11 +14,15 @@
  *     recorded when its transcription is final, which is after she has already
  *     said it. Recording earlier would mean recording sentences she was
  *     interrupted out of.
- *   - **Recall happens at wake, not per turn.** The Live API fixes its system
- *     instruction at setup, so the facts she starts with are the facts she has.
- *     Anything learned mid-conversation reaches her through `⟦context⟧`, which
- *     is why `remember` is a tool she can call rather than a background job she
- *     has to wait for.
+ *   - **The facts in the prompt are fixed at wake. The read path is not.** The
+ *     Live API fixes its system instruction at setup, so the handful of facts
+ *     recalled at wake are the only ones she opens with — and that query is
+ *     built from the rolling summary and a transcript that is empty by design,
+ *     which makes it a guess about a conversation nobody has had yet. `recall`
+ *     exists for that reason: it is the only route by which a fact she was not
+ *     handed at wake can reach an answer. What she learns mid-conversation
+ *     travels the other way, through `remember` and `⟦context⟧`, rather than a
+ *     background job she has to wait for.
  *   - **Video is rate-limited here as well as in the browser.** The browser
  *     throttle saves bandwidth; this one is the cost control, and it is the one
  *     that cannot be bypassed by a client that has been modified or has a bug.
@@ -33,10 +37,11 @@ import type {
 import type { GalleryItem } from '../gallery/gallery.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { FACT_KINDS, FEEL, LOOK, REMEMBER, SHOW, hersTools } from '../gemini/tools.ts';
+import { FACT_KINDS, FEEL, LOOK, RECALL, REMEMBER, SHOW, hersTools } from '../gemini/tools.ts';
 import { isExpression } from '../avatar/expressions.ts';
 import { Initiative } from '../initiative/initiative.ts';
-import type { FactKind } from '../memory/types.ts';
+import { lexicalTokens } from '../memory/embedder.ts';
+import type { FactKind, RecalledFact } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
 import { asksToSeeHer } from '../gallery/gallery.ts';
 import { Situation, isLateNight } from '../senses/situation.ts';
@@ -97,6 +102,44 @@ const FRAME_STILL_TRUE_MS = 20_000;
 const DUPLICATE_FACE_MS = 20_000;
 /** Facts pulled into the system instruction at wake. */
 const RECALL_LIMIT = 8;
+/**
+ * How wide the `recall` tool looks, and how much of it she gets back.
+ *
+ * Scanning further than she is shown costs nothing — the store ranks every fact
+ * on one pass regardless — and it means a fact sitting seventh can still reach
+ * her once the ones above it have been refused as unrelated. What she is handed
+ * stays a handful, because the answer arrives mid-turn: a dozen sentences
+ * arriving while she is talking is a paragraph to read, not a memory.
+ */
+const RECALL_TOOL_CANDIDATES = 10;
+const RECALL_TOOL_FACTS = 5;
+/**
+ * Below this a recalled fact is not an answer, it is the top of the pile.
+ *
+ * `MemoryStore.recall` always returns its best `limit` facts, however little
+ * they have to do with the question — ranking is what it is for. So a question
+ * with nothing behind it comes back holding the newest, most confident thing in
+ * the store, and handing her that is how a companion asserts a coffee
+ * preference nobody ever told her.
+ *
+ * The number comes out of the scoring: with `usage` at zero, a fact with no
+ * semantic overlap at all scores `0.18·recency + 0.12·confidence`, which tops
+ * out at 0.30 for one that is brand new and perfectly certain. Anything above
+ * 0.30 therefore has some of the question in it. Measured on the offline
+ * embedder against eleven facts stored together: every unrelated fact sat at
+ * 0.288, while "He hates cilantro." came back at 0.557 for `food he hates` and
+ * still 0.386 with the fact two months old. 0.34 sits in that gap.
+ *
+ * What it is not is a measure of relevance, and reading it as one would be a
+ * mistake in two directions. The recency term means an old fact has to clear the
+ * floor on semantics alone while this morning's barely has to try — backwards,
+ * which is what the second route in {@link isAbout} is for. And against the
+ * remote embedder it hardly bites at all: `store.ts` measured that model putting
+ * every pair of short sentences above 0.69 cosine, so most things clear 0.34 and
+ * what carries the honesty there is the ranking, plus telling her plainly that
+ * what came back may not be an answer.
+ */
+const RECALL_TOOL_FLOOR = 0.34;
 
 export class Companion {
   readonly #brain: Brain;
@@ -535,6 +578,48 @@ export class Companion {
         return { ok: true };
       }
 
+      /*
+       * The one tool whose answer is content rather than a receipt.
+       *
+       * Everything above returns `{ok: true}` precisely because prose in a tool
+       * response can end up being read out — that happened, and the note above
+       * this switch is what came of it. This one has to break that rule: a
+       * lookup whose answer is not in the answer is not a lookup. So the payload
+       * is kept to what it has to be — a few sentences she wrote herself, no
+       * ids, no scores, no embeddings — and the prompt carries the instruction
+       * that they are hers to use rather than to recite.
+       */
+      case RECALL: {
+        const about = String(args.about ?? '').trim();
+        if (!about) return { ok: false, reason: 'nothing to look up' };
+
+        let hits: RecalledFact[];
+        try {
+          hits = await this.#brain.memory.recallDetailed(about, RECALL_TOOL_CANDIDATES);
+        } catch {
+          // Told, not swallowed. An empty answer would read to her as "you were
+          // never told this", which is a different and much worse claim than
+          // "the lookup did not work".
+          return { ok: false, reason: 'your memory could not be searched just now' };
+        }
+
+        const facts = hits
+          .filter((hit) => isAbout(about, hit))
+          .slice(0, RECALL_TOOL_FACTS)
+          .map((hit) => hit.text);
+
+        if (facts.length === 0) {
+          return {
+            ok: true,
+            facts: [],
+            note:
+              'nothing you have kept came back for that. Say you do not have it, ' +
+              'plainly; do not guess at it and do not say you were never told.',
+          };
+        }
+        return { ok: true, facts };
+      }
+
       case LOOK: {
         /*
          * Refused rather than trusted, even though the enum given to the model
@@ -693,6 +778,37 @@ export class Companion {
     this.#lastNotifiedMood = mood;
     if (!force) this.#live?.inject(moodUpdate(mood));
   }
+}
+
+/**
+ * Whether a recalled fact is about what she asked for.
+ *
+ * Two ways through, and whichever says yes is enough — the same shape
+ * `gallery.ts` settled on for the same reason, that neither signal alone is
+ * right about a short sentence. The score is the ranked, semantic answer and
+ * carries the cases a keyword cannot: "how did the demo go" finding a fact
+ * written down as a presentation on Thursday. A word in common is the second
+ * opinion, and it is here because the score is contaminated by age — see
+ * {@link RECALL_TOOL_FLOOR} — so a fact from months ago that plainly names the
+ * thing being asked about ("interview" against "he is interviewing on Thursday")
+ * would otherwise be refused for being old.
+ *
+ * Tokens come from the embedder rather than from `split(' ')` so that the words
+ * being compared are the same words the vectors were built from; it stems and
+ * drops stop words, which is what keeps "his sister" from matching every fact
+ * with "his" in it.
+ *
+ * It lets some things through it should not. A query about what someone is
+ * working on will match a fact about their morning run for the word "work". That
+ * is a real cost and it is the right way round: a spare fact she can ignore is
+ * cheaper than a fact she owns and cannot find, which is the failure this whole
+ * path exists to fix.
+ */
+function isAbout(query: string, fact: RecalledFact): boolean {
+  if (fact.score >= RECALL_TOOL_FLOOR) return true;
+  const wanted = new Set(lexicalTokens(query));
+  if (wanted.size === 0) return false;
+  return lexicalTokens(fact.text).some((token) => wanted.has(token));
 }
 
 function num(value: unknown): number | undefined {

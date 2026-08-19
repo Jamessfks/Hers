@@ -8,7 +8,7 @@ import { Companion } from './companion.ts';
 import { Brain } from './brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import type { LiveConnector, LiveSocket } from '../gemini/live.ts';
-import type { LiveServerMessage } from '@google/genai';
+import type { FunctionDeclaration, LiveServerMessage } from '@google/genai';
 import type { GalleryItem } from '../gallery/gallery.ts';
 import type { ConnectionState, MoodReadout } from '../../shared/protocol.ts';
 
@@ -50,8 +50,15 @@ async function fixture(env: Record<string, string> = {}) {
 
   const sockets: FakeSocket[] = [];
   const systemInstructions: string[] = [];
+  /** What she was actually given to call, as opposed to what she was told about. */
+  const declared: FunctionDeclaration[][] = [];
   const connect: LiveConnector = async ({ config: liveConfig, callbacks }) => {
     systemInstructions.push(String(liveConfig.systemInstruction ?? ''));
+    declared.push(
+      (liveConfig.tools ?? []).flatMap(
+        (tool) => (tool as { functionDeclarations?: FunctionDeclaration[] }).functionDeclarations ?? [],
+      ),
+    );
     const socket = new FakeSocket();
     socket.emit = (message) => callbacks.onmessage(message);
     sockets.push(socket);
@@ -91,6 +98,7 @@ async function fixture(env: Record<string, string> = {}) {
     companion,
     sockets,
     systemInstructions,
+    declared,
     audio,
     transcript,
     states,
@@ -235,6 +243,163 @@ test('the remember tool writes a fact, and a bad kind does not lose it', async (
   assert.ok(
     recalled.some((fact) => fact.includes('dreading Thursday')),
     'an invalid kind must not throw the fact away',
+  );
+  await f.companion.sleep();
+});
+
+// -- the read path ----------------------------------------------------------
+
+/**
+ * The facts from the measurement that lost to OpenClaw, near enough.
+ *
+ * Cilantro is stored first and a shade less certain than the rest, which is what
+ * puts it outside the eight facts the wake query picks: nothing here has anything
+ * to do with "what matters to them", so with no semantic signal the ranking falls
+ * back to recency and confidence, ten facts at 0.9 fill the budget, and the one
+ * at 0.8 is eleventh. That is the arrangement the real failure had, reproduced
+ * rather than described.
+ */
+async function seedNineFacts(brain: Awaited<ReturnType<typeof fixture>>['brain']): Promise<void> {
+  await brain.memory.remember('preference', 'He hates cilantro.', { confidence: 0.8 });
+  for (const text of [
+    'His sister is called Mei.',
+    'He is interviewing at a robotics startup on Thursday.',
+    'He runs in the mornings before work.',
+    'He grew up in Oakland, California.',
+    'His mother had surgery in the spring.',
+    'He is learning to play the guqin.',
+    'He dislikes being asked how he slept.',
+    'He lives on the fifth floor with no lift.',
+    'His flatmate is moving out in August.',
+    'He supports Arsenal and suffers for it.',
+  ]) {
+    await brain.memory.remember('event', text, { confidence: 0.9 });
+  }
+}
+
+/** The facts one `recall` call handed back, if it handed back any. */
+function recalled(socket: FakeSocket, index = 0): { facts?: string[]; note?: string; ok?: boolean } {
+  const responses = socket.tools[index] as Array<{ response: Record<string, unknown> }>;
+  return (responses[0]?.response ?? {}) as { facts?: string[]; note?: string; ok?: boolean };
+}
+
+function askToRecall(socket: FakeSocket, about: string, id = '1'): void {
+  socket.emit({
+    toolCall: { functionCalls: [{ id, name: 'recall', args: { about } }] },
+  } as unknown as LiveServerMessage);
+}
+
+test('a fact outside the wake budget still reaches her, because she can go and get it', async () => {
+  /*
+   * The whole point of the read path, and the exact failure it is answering: she
+   * said "I don't think you've ever mentioned food you hate" about cilantro,
+   * which was in the database at 0.8 confidence. It was never a storage bug —
+   * the eight facts in her prompt are chosen at wake, from a query built before
+   * anybody has spoken, and there is no second look. Now there is.
+   */
+  const f = await fixture();
+  await seedNineFacts(f.brain);
+  await f.companion.wake();
+
+  const prompt = f.systemInstructions.at(-1) ?? '';
+  assert.doesNotMatch(prompt, /cilantro/i, 'the premise: the fact did not make the wake budget');
+
+  askToRecall(f.socket(), 'food he hates');
+  await settle();
+
+  const answer = recalled(f.socket());
+  assert.equal(answer.ok, true);
+  assert.ok(
+    (answer.facts ?? []).some((fact) => fact.includes('cilantro')),
+    'a fact she owns and was not handed has to be reachable mid-conversation',
+  );
+
+  // Addressed to the call that asked, because that is what puts it in her context
+  // for the rest of the turn. A response with the wrong id is dropped by the
+  // session, and the fact would have been fetched and thrown away.
+  const raw = f.socket().tools[0] as Array<{ id?: string; name?: string }>;
+  assert.equal(raw[0]?.id, '1');
+  assert.equal(raw[0]?.name, 'recall');
+  await f.companion.sleep();
+});
+
+test('a question with nothing behind it comes back empty, not with the nearest fact', async () => {
+  /*
+   * The other half of the same measurement was a confabulation: she asserted a
+   * coffee preference nobody had told her. `MemoryStore.recall` always returns
+   * its top few facts however unrelated they are, so a read path that passed
+   * them straight on would hand her his sister's name when asked about coffee —
+   * and make that worse rather than better.
+   */
+  const f = await fixture();
+  await seedNineFacts(f.brain);
+  await f.companion.wake();
+
+  askToRecall(f.socket(), 'his coffee order');
+  await settle();
+
+  const answer = recalled(f.socket());
+  assert.equal(answer.ok, true, 'a lookup that found nothing still worked');
+  assert.deepEqual(answer.facts, [], 'nothing in the store is about coffee');
+  assert.match(
+    String(answer.note ?? ''),
+    /do not have it/i,
+    'and she is told what to say, since the gap is where invention happens',
+  );
+  assert.doesNotMatch(JSON.stringify(answer), /Mei|Arsenal|guqin/, 'no consolation facts');
+  await f.companion.sleep();
+});
+
+test('what comes back is a handful, not everything she knows', async () => {
+  // The query is deliberately greedy — it names seven of the eleven facts — because
+  // the cap is what is under test. The answer arrives while she is mid-turn, and a
+  // dozen sentences landing there is a paragraph to read out, not a memory.
+  const f = await fixture();
+  await seedNineFacts(f.brain);
+  await f.companion.wake();
+
+  askToRecall(f.socket(), 'his sister, his mother, his flatmate, Arsenal, the guqin, Oakland, the interview');
+  await settle();
+
+  const facts = recalled(f.socket()).facts ?? [];
+  assert.ok(facts.length > 1, 'it should have found several');
+  assert.ok(facts.length <= 5, `handed back ${facts.length} facts`);
+  await f.companion.sleep();
+});
+
+test('an empty lookup is refused rather than answered with the top of the store', async () => {
+  const f = await fixture();
+  await seedNineFacts(f.brain);
+  await f.companion.wake();
+
+  askToRecall(f.socket(), '   ');
+  await settle();
+
+  const answer = recalled(f.socket());
+  assert.equal(answer.ok, false);
+  assert.deepEqual(answer.facts, undefined, 'no query is not a query about everything');
+  await f.companion.sleep();
+});
+
+test('she is given the recall tool and told to look before she answers', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  const recall = f.declared.at(-1)?.find((tool) => tool.name === 'recall');
+  assert.ok(recall, 'she cannot call a tool she was never handed');
+  assert.deepEqual(
+    Object.keys(recall?.parameters?.properties ?? {}),
+    ['about'],
+    'one parameter: what she is trying to remember, in her own words',
+  );
+
+  const prompt = f.systemInstructions.at(-1) ?? '';
+  assert.match(prompt, /^recall /m, 'the tool list has to name it');
+  assert.match(prompt, /Call `recall` first/, 'and looking has to be a rule, not an option');
+  assert.match(
+    prompt,
+    /Not remembering is not the same as it not\s+being there/,
+    'the sentence that separates a miss from an absence',
   );
   await f.companion.sleep();
 });
