@@ -128,17 +128,6 @@ export async function main(): Promise<void> {
           config = await applyBotToken(token);
           botUsername = check.username ?? '';
           startTelegram();
-
-  // A token that was already in `.env` has a username the page will want, and
-  // `getMe` is the only way to learn it. Off the critical path and forgiving: a
-  // failure here costs the link, not the bot.
-  if (config.telegram) {
-    void checkBotToken(config.telegram.token).then((check) => {
-      if (!check.ok || !check.username) return;
-      botUsername = check.username;
-      web.announceTelegram(telegramView());
-    });
-  }
           web.refresh();
           web.announceTelegram(telegramView());
           console.log(`  telegram  on, as @${botUsername || 'the bot'}`);

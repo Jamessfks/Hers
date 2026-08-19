@@ -329,7 +329,7 @@ npm run audit           # every success criterion, against the real APIs
 npm run audit:bridges   # the phone-call and Telegram paths
 ```
 
-**394 tests, no API key needed.** The interesting ones are in
+**382 tests, no API key needed.** The interesting ones are in
 `src/core/gemini/live.test.ts`, which is entirely about the connection ending, and
 `src/core/session/companion.test.ts`, where memory, mood, the prompt and the tools all
 run for real with only the socket faked. Under `src/`: `core/` is the companion,

@@ -42,7 +42,13 @@ export interface PromptInput {
   channel: 'desktop' | 'phone' | 'telegram';
   /** True when they have talked before and she should not act newly installed. */
   returning: boolean;
-  /** Whether a photograph of her exists and has been put into context. */
+  /**
+   * Whether a photograph of her exists at all.
+   *
+   * Not whether it is in the session — it deliberately is not. This only decides
+   * whether she is told she has a face and must not describe it, or told she has
+   * none yet.
+   */
   hasFace: boolean;
   /**
    * Expressions she can actually show, if any.
@@ -93,12 +99,17 @@ function identitySection({ profile }: PromptInput): string {
  * What she looks like — which is a picture, not a paragraph.
  *
  * This section used to recite height, hair, eyes and build from
- * `appearance.md`. That file is gone. The photograph the user uploaded is the
- * only answer to the question, and she is shown it directly at the start of the
- * session rather than told about it: `Companion` sends the image itself into
- * context. Prose beside a photograph is a second answer, and when the two
- * disagreed the disagreement was visible — generated pictures kept the face
- * from the photograph and the hair from the description.
+ * `appearance.md`. That file is gone: prose beside a photograph is a second
+ * answer, and when the two disagreed the disagreement was visible — generated
+ * pictures kept the face from the photograph and the hair from the description.
+ *
+ * What is left is a section that tells her she has a face and must not describe
+ * it. The photograph itself is **not** in the session, and this comment used to
+ * say it was — which mattered, because `Companion` documents at length why it
+ * was taken out: it was the only labelled image in context, so a question about
+ * how somebody looked landed on it and she described her own body back to the
+ * user as though it were theirs. A reader who believed the old comment would
+ * "fix" the code by putting it back.
  */
 function appearanceSection({ hasFace }: PromptInput): string {
   return [

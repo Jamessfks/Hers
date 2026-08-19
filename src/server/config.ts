@@ -211,13 +211,6 @@ export function loadDotEnv(file = '.env'): void {
 
 // ---------------------------------------------------------------------------
 
-/** `0`, `false`, `no` and `off` are all off; anything else present is on. */
-function flag(value: string | undefined, fallback: boolean): boolean {
-  const text = value?.trim().toLowerCase();
-  if (!text) return fallback;
-  return !['0', 'false', 'no', 'off'].includes(text);
-}
-
 function str(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
   return trimmed ? trimmed : fallback;

@@ -219,7 +219,7 @@ directories they live in. Nothing is kept back, and nothing is recoverable.
 ## Verifying any of this
 
 ```bash
-npm run check     # 283 tests, no key required
+npm run check     # 382 tests, no key required
 npm run doctor    # reports exactly what is configured and what is not
 ```
 
