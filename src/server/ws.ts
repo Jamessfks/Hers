@@ -156,16 +156,6 @@ export class WebBridge {
   }
 
   /**
-   * The conversation this page is having, made if there is not one.
-   *
-   * The companion outlives the socket on purpose — a tab reload should not end
-   * the conversation, restart the mood, or re-bill a fresh Gemini session — but
-   * it does not outlive a reset, which throws away the memory underneath it. So
-   * this is called on every inbound message and not only on connect: after a
-   * reset the page is still open and still talking, and the tab going silent
-   * until somebody reloads it is not a way to meet someone new.
-   */
-  /**
    * Registers the browser as a surface on the one conversation.
    *
    * Everything reaches it, whatever channel it came from. That is the whole
@@ -431,13 +421,6 @@ export class WebBridge {
   }
 
   /**
-   * Tells every open page about the bot.
-   *
-   * Pushed rather than polled because the interesting half of Telegram setup
-   * finishes outside the browser: somebody opens the link on a phone and presses
-   * Start, and the page they left open at their desk should say so by itself.
-   */
-  /**
    * Generates one of her faces, and tells everyone how it went.
    *
    * Announced to every page rather than answered to the one that asked: the face
@@ -466,6 +449,13 @@ export class WebBridge {
     this.announceAvatar();
   }
 
+  /**
+   * Tells every open page about the bot.
+   *
+   * Pushed rather than polled because the interesting half of Telegram setup
+   * finishes outside the browser: somebody opens the link on a phone and presses
+   * Start, and the page they left open at their desk should say so by itself.
+   */
   announceTelegram(view: TelegramView): void {
     this.#send({ t: 'telegram', telegram: view });
   }

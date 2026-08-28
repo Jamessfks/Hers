@@ -404,6 +404,31 @@ export interface ExtractedFact {
 }
 
 /**
+ * Whether a line is actually a fact, rather than the start of one.
+ *
+ * A truncation bug once stored the two-word fact `"The user"`, and it did not sit
+ * there harmlessly: it embedded near everything, so it ranked highly on every
+ * query, and being recalled pushed it higher still. Six recalls later it was
+ * occupying the top slot of an eight-fact budget on questions it had nothing to
+ * do with. The parser that produced it has been fixed; this is the guard that
+ * makes the class of mistake unstorable rather than merely unlikely.
+ *
+ * Deliberately crude, and calibrated by being wrong once. The first version asked
+ * for four words, which rejected "He hates cilantro." — a complete fact, and one
+ * an existing test was relying on. Three words and fourteen characters is the
+ * floor a real fact about a person cannot fall below.
+ *
+ * It does not claim to catch every fragment. "the person recently" passes, because
+ * nothing short of parsing tells it apart from "They hate cilantro." by shape. It
+ * catches the class actually observed — a subject with nothing said about it — and
+ * stops there rather than guessing.
+ */
+export function saysSomething(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length >= 3 && text.trim().length >= 14;
+}
+
+/**
  * Parses the extraction output defensively.
  *
  * Models add preamble, wrap things in markdown fences, and occasionally use a
@@ -440,31 +465,6 @@ export interface ExtractedFact {
  * reply ended `pattern | high | The user writes horror fiction`, with nothing
  * after it, and that one is a fragment.
  */
-/**
- * Whether a line is actually a fact, rather than the start of one.
- *
- * A truncation bug once stored the two-word fact `"The user"`, and it did not sit
- * there harmlessly: it embedded near everything, so it ranked highly on every
- * query, and being recalled pushed it higher still. Six recalls later it was
- * occupying the top slot of an eight-fact budget on questions it had nothing to
- * do with. The parser that produced it has been fixed; this is the guard that
- * makes the class of mistake unstorable rather than merely unlikely.
- *
- * Deliberately crude, and calibrated by being wrong once. The first version asked
- * for four words, which rejected "He hates cilantro." — a complete fact, and one
- * an existing test was relying on. Three words and fourteen characters is the
- * floor a real fact about a person cannot fall below.
- *
- * It does not claim to catch every fragment. "the person recently" passes, because
- * nothing short of parsing tells it apart from "They hate cilantro." by shape. It
- * catches the class actually observed — a subject with nothing said about it — and
- * stops there rather than guessing.
- */
-export function saysSomething(text: string): boolean {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  return words.length >= 3 && text.trim().length >= 14;
-}
-
 export function parseExtraction(
   raw: string,
   options: { truncated?: boolean } = {},

@@ -227,13 +227,10 @@ export type ServerMessage =
     }
   | { t: 'state'; state: ConnectionState }
   | { t: 'mood'; mood: MoodReadout }
-  /**
-   * A line of conversation.
-   *
-   * `final` is false for the running transcription of speech in progress and
-   * true once the turn is closed. The UI replaces rather than appends while
-   * false, or the transcript stutters.
-   */
+  /** Server -> browser. Put this face on screen for a moment. */
+  | { t: 'look'; expression: string }
+  /** Server -> browser. The bot, as far as the page is allowed to know. */
+  | { t: 'telegram'; telegram: TelegramView }
   /**
    * Server -> browser. She has just chosen her own name.
    *
@@ -242,11 +239,14 @@ export type ServerMessage =
    * the placeholder in its header while she introduces herself as something
    * else.
    */
-  /** Server -> browser. The bot, as far as the page is allowed to know. */
-  /** Server -> browser. Put this face on screen for a moment. */
-  | { t: 'look'; expression: string }
-  | { t: 'telegram'; telegram: TelegramView }
   | { t: 'name'; name: string }
+  /**
+   * A line of conversation.
+   *
+   * `final` is false for the running transcription of speech in progress and
+   * true once the turn is closed. The UI replaces rather than appends while
+   * false, or the transcript stutters.
+   */
   | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
   /** Her audio was cut off. Drop whatever is still queued for playback. */
   | { t: 'interrupted' }

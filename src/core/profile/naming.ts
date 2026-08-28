@@ -12,8 +12,8 @@
  * The obvious route is to let her call a `name` function during the first
  * conversation. It is the wrong route, for a reason that has already cost this
  * project a day: a tool call is something a model *may* do. She reaches for
- * `move` about half the time when the moment is right, and that is fine for a
- * gesture and useless for the one irreversible fact about her. This has to
+ * `look` some of the time when the moment is right, and that is fine for an
+ * expression and useless for the one irreversible fact about her. This has to
  * happen exactly once, before the first word, and be recorded — which makes it a
  * question with an answer, not a behaviour to hope for.
  *

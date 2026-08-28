@@ -66,7 +66,7 @@ export class Brain {
    *
    * Two callers can overlap, and it is worth being exact about which, because the
    * obvious pair is the wrong answer. Minting a call invite is one caller, but on
-   * the run that produced Casey-and-Mei `HERS_LIVEKIT_*` was unset, so
+   * the run that produced Casey-and-Mei `LIVEKIT_URL` and its key and secret were unset, so
    * `CallBridge` was never constructed and that line was unreachable. The pair was
    * two wakes: `Companion#waking` guards one instance, and `Conversation.sleep`
    * drops the instance without waiting for a wake still parked in here, so the next

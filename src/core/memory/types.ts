@@ -67,13 +67,6 @@ export interface Summary {
   createdAt: number;
 }
 
-export interface RecallQuery {
-  /** What she is about to respond to. Drives semantic retrieval. */
-  text: string;
-  limit?: number;
-  kinds?: readonly FactKind[];
-}
-
 export interface RecalledFact extends Fact {
   /** Final ranking score, for debugging the memory inspector. */
   score: number;
@@ -91,13 +84,6 @@ export interface Embedder {
 }
 
 /**
- * A one-shot text completion, used only to distil transcripts into facts.
- *
- * Narrow on purpose. Consolidation is the one place she needs a model that is
- * *not* the live conversation, and giving that job a two-method interface keeps
- * the whole of `memory/` testable without a network and without the Live API.
- */
-/**
  * What a distiller pass came back with.
  *
  * `truncated` is here because the text alone cannot be trusted to be whole. The
@@ -112,6 +98,13 @@ export interface Distillation {
   truncated: boolean;
 }
 
+/**
+ * A one-shot text completion, used only to distil transcripts into facts.
+ *
+ * Narrow on purpose. Consolidation is the one place she needs a model that is
+ * *not* the live conversation, and giving that job an interface of its own keeps
+ * the whole of `memory/` testable without a network and without the Live API.
+ */
 export interface Distiller {
   distil(system: string, transcript: string): Promise<Distillation>;
 }

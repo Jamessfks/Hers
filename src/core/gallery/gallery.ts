@@ -350,20 +350,6 @@ export class Gallery {
   }
 
   /**
-   * The picture a new one is generated from: her photograph, always.
-   *
-   * This used to be "the newest image in the gallery", and that is a feedback
-   * loop rather than a policy. Generated pictures are written into this same
-   * folder, so each generation referenced the previous generation: the second
-   * picture was of the first, the third was of the second, and after a handful
-   * of steps nothing in the folder was of the woman in the photograph any more.
-   * A fixed reference cannot drift, because there is nothing for it to drift
-   * from.
-   *
-   * The newest gallery image is kept only as the fallback for a profile that
-   * has no photograph at all, where some consistency beats none.
-   */
-  /**
    * The photograph, and nothing else.
    *
    * There used to be a fallback here: if the photograph could not be read, use

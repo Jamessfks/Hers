@@ -17,6 +17,7 @@ import type {
   ServerMessage,
   TelegramView,
 } from '../shared/protocol.ts';
+import { SENSE_NAMES } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
 
 /**
@@ -170,7 +171,7 @@ export class Ui {
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
 
-    for (const sense of ['hearing', 'sight', 'screen'] as const) {
+    for (const sense of SENSE_NAMES) {
       const button = need<HTMLButtonElement>(`sense-${sense}`);
       this.#senseButtons.set(sense, button);
       button.addEventListener('click', () => {

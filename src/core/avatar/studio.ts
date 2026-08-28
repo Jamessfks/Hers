@@ -27,14 +27,6 @@ import type { ImageInfo } from './image-info.ts';
 // ---------------------------------------------------------------------------
 
 /**
- * What may be uploaded.
- *
- * The byte ceiling is the cheap check and the dimension range is the real one:
- * a 40-megapixel photograph is not a better avatar, it is a slower upload and a
- * larger bill on every generated picture, and anything under 256px has nothing
- * for the model to work with.
- */
-/**
  * How many times one face is asked for before giving up.
  *
  * Three, because a refusal is ordinary and a paid retry is not free. Two would
@@ -43,6 +35,14 @@ import type { ImageInfo } from './image-info.ts';
  */
 const PAINT_ATTEMPTS = 3;
 
+/**
+ * What may be uploaded.
+ *
+ * The byte ceiling is the cheap check and the dimension range is the real one:
+ * a 40-megapixel photograph is not a better avatar, it is a slower upload and a
+ * larger bill on every generated picture, and anything under 256px has nothing
+ * for the model to work with.
+ */
 export const IMAGE_LIMITS = {
   maxBytes: 12 * 1024 * 1024,
   minDimension: 256,
