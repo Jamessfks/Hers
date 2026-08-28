@@ -20,17 +20,23 @@ All yours. Full control.
 
 </div>
 
-### She builds into a double-clickable application — and nothing is published yet
+### [Download her for macOS](https://github.com/Jamessfks/Hers/releases/latest) — Apple Silicon, 128 MB
 
-`npm run package` produces `Hers-1.3.0-arm64.dmg` on an Apple Silicon Mac: 127.5 MiB,
-294 MB installed. Drag her to **Applications**, double-click, and she opens her own
-window and asks for the one thing she needs — a Gemini API key, free to create.
+`Hers-1.4.0-arm64.dmg`. Open it, drag her to **Applications**, and double-click her
+there. She opens her own window and asks for the one thing she needs — a Gemini API
+key, free to create. No terminal, no Node, no git. 294 MB installed, and
+[Setup](#setup) accounts for every megabyte of it.
 
-**There is no download link, because no build has been published.** The
-[releases page](https://github.com/Jamessfks/Hers/releases) carries source tags and no
-binaries. Until one is uploaded, the way to get the application is to build it, which
-needs the clone and the four commands below anyway. Said plainly rather than linked to,
-because a download button that 404s is worse than no download button.
+**The build is not signed, and the first launch will say so.** That is not a bug and
+not something to work around quietly: there is no Apple Developer ID here and there
+will not be one until somebody pays Apple $99 and hands over their legal identity.
+[Setup](#setup) says exactly which clicks get past it, and gives the one terminal line
+that skips all of them. She is ad-hoc signed, which is a different thing — it is why
+macOS says "unidentified developer" rather than "damaged", and the difference matters
+because only one of those is recoverable advice.
+
+`npm run package` builds the same artifact yourself, on an Apple Silicon Mac, if you
+would rather not trust a download.
 
 From a clone she works today on macOS and Windows —
 [running her from a clone](#run-it-from-a-clone) is four commands and unchanged.
@@ -106,7 +112,7 @@ Gemini API and — only if you set them up yourself — Telegram and LiveKit.
 
 ### 1. Download and open her
 
-**macOS, Apple Silicon.** `npm run package` writes `Hers-1.3.0-arm64.dmg` into
+**macOS, Apple Silicon.** `npm run package` writes `Hers-1.4.0-arm64.dmg` into
 `release/`, **127.5 MiB**. Open it, drag **Hers** onto **Applications**, and double-click
 her there. She opens her own window; after that there is nothing to type into a terminal.
 
@@ -504,6 +510,11 @@ npm run package         # builds the downloadable application for this machine
 npm run doctor          # prints every path and host in use, then opens a real Gemini session
 npm run audit           # every success criterion, against the real APIs
 npm run audit:bridges   # the phone-call and Telegram paths
+
+# Two open questions about a preview model, each settled in one command rather
+# than reasoned about from a changelog. Both spend a fraction of a cent.
+npm run probe:affective       # can she carry mood in her voice yet? (no, as of 3.1)
+npm run probe:client-content  # do her mid-session notes still arrive? (yes, undocumented)
 ```
 
 `npm run package` writes to `release/` and only ever builds for the machine it runs on;

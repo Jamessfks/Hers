@@ -54,7 +54,7 @@ export interface WizardChoice {
  * picture on the day they install her, and a first run that opens with four
  * unlabelled axes is a first run about arithmetic.
  */
-export interface Temperament {
+interface Temperament {
   id: string;
   label: string;
   /** One line under the label. Describes her, not the numbers. */
@@ -120,7 +120,7 @@ export const TRAITS: readonly WizardChoice[] = [
  * other; the ten left out are variations a person cannot pick between without
  * hearing them, and there is nothing here to hear them with.
  */
-export interface VoiceChoice {
+interface VoiceChoice {
   id: string;
   label: string;
   line: string;

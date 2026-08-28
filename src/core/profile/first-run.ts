@@ -75,7 +75,7 @@ export interface FirstRunSignals {
 }
 
 /** The `met:` value that means nobody has been through the wizard. */
-export function unmetValue(): string {
+function unmetValue(): string {
   return frontmatterValue(DEFAULT_PROFILE_FILES['relationship.md'] ?? '', 'met') ?? '';
 }
 

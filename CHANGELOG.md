@@ -4,7 +4,28 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
-## Unreleased
+## v1.4.0 — 28 August 2026
+
+**Every host she can reach, and every file she writes, in a list the tests hold
+her to.** `docs/PRIVACY.md` was rewritten to be checkable rather than
+reassuring: the exact paths on each platform, every outbound hostname and what
+triggers it, what is held only in memory, and commands a reader can run to
+confirm all of it. `npm test` now fails if the program can dial a host, or write
+a file, that the document does not name — so the page is not an assertion, it is
+something the build will not pass without.
+
+That turned up `cdn.jsdelivr.net`, which the phone's call page fetches
+`livekit-client` from before a call starts. It was documented nowhere, and it is
+invisible to a network monitor on the machine Hers runs on, because that machine
+is not the one making the request.
+
+It also corrected this page's own earlier claims. The privacy document had
+promised "No access to your files", which was never true of **Setup → Let her
+read your files**; had said the two folders "are not in an application-support
+directory", which the desktop build made false; and had described the loopback
+bind as "the design, not a default to be adjusted" when `HERS_HOST` is exactly
+that. A non-loopback bind now warns loudly at startup, in the doctor, and in the
+website.
 
 **A first run that is about her.** The first time the page opens on a profile folder
 nobody has used, a wizard asks seven questions — one for each of the six files in
@@ -92,7 +113,7 @@ Install to `/Applications` — anywhere else, App Translocation runs a quarantin
 app from a randomized read-only copy of itself and the exception you granted
 does not stick.
 
-**`npm run package` produces one artifact: `Hers-1.3.0-arm64.dmg`, 127.5 MiB, 294 MB
+**`npm run package` produces one artifact: `Hers-1.4.0-arm64.dmg`, 127.5 MiB, 294 MB
 installed. It has not been published — the releases page carries source tags and no
 binaries, so there is nothing to download yet.**
 Windows and Intel Mac are configured and have never been compiled or run.

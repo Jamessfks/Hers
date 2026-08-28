@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { startupBanner } from './index.ts';
+import { VERSION, startupBanner } from './index.ts';
 import { loadConfig } from './config.ts';
 
 const env = (values: Record<string, string>) => values as NodeJS.ProcessEnv;
@@ -62,4 +64,20 @@ test('the banner reports the bridges and the model', () => {
   ).join('\n');
   assert.match(on, /telegram {2}on/);
   assert.match(on, /calls {5}on/);
+});
+
+test('VERSION agrees with package.json', async () => {
+  /*
+   * Nothing bound these together, and they drifted: `VERSION` and the artifact
+   * name both said 1.3.0 for a build carrying a wizard and a desktop
+   * application that 1.3.0 never had. The startup banner reports it, the status
+   * endpoint reports it, the privacy page states which version it covers, and
+   * the DMG is named after it — four places telling somebody the wrong thing.
+   */
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as {
+    version: string;
+  };
+
+  assert.equal(VERSION, manifest.version);
 });

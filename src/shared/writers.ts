@@ -32,7 +32,7 @@
 /** Which directory a path is relative to. */
 export type Root = 'profile' | 'data' | 'cwd' | 'app';
 
-export interface Writer {
+interface Writer {
   /** The module, relative to `src/`, exactly as the scan reports it. */
   module: string;
   root: Root;
