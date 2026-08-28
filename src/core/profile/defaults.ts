@@ -271,7 +271,8 @@ export const GALLERY_README = `# Her gallery
 
 Pictures and clips of her that she can send you, mostly over Telegram.
 
-Drop \`.jpg\`, \`.png\`, \`.webp\`, \`.mp4\` or \`.webm\` files in here. The file name is
+Drop \`.jpg\`, \`.jpeg\`, \`.png\`, \`.webp\` or \`.gif\` images in here, or
+\`.mp4\`, \`.webm\` or \`.mov\` clips. The file name is
 what she has to go on when deciding whether one fits the moment, so name them
 like captions:
 

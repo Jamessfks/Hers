@@ -65,6 +65,7 @@ is:
 | A photo you send over Telegram | When you send it |
 | A voice or video note you send over Telegram | To transcribe it |
 | The photograph you chose as her face | Each time she generates a picture of herself, and once per expression you ask for |
+| Excerpts of documents in a folder you approved | Once, when you press **Read them once**. Anything resembling a key or password is skipped first |
 
 Pictures she generates of herself are derived from the photograph you supplied
 as her face: it is sent to the image model as a reference so the woman in the
@@ -110,6 +111,8 @@ and grants access to one room.
 | `hers-profile/mood.state.json` | Her current mood and drifted baseline. Eight numbers. |
 | `hers-profile/gallery/` | Pictures of her, including any she generates. Not of you. |
 | `hers-profile/avatar/` | The photograph you chose as her face, the expressions generated from it, and a manifest recording their sizes and when they arrived. |
+| `hers-profile/intimacy.state.json` | How close she is, and the days behind it. |
+| `hers-profile/knowledge.json` | Which folders you approved for reading, as absolute paths, and when they were read. Written only if you use that feature. |
 | `data/memory.db` | Every turn of conversation, the facts distilled from them, and the rolling summary. |
 
 **Video frames and audio are never written to disk.** They are encoded in memory,
@@ -205,7 +208,10 @@ of `../` reaches anything. Also tested.
 
 - No analytics, no crash reporting, no update check, no phone home.
 - No account, no login, no cloud sync.
-- No access to your files, your email, your calendar, or your browser history.
+- No background access to your files, and none at all to your email, your
+  calendar, or your browser history. The one exception is deliberate and
+  yours: **Setup → Let her read your files** reads the folders you tick, once,
+  when you press **Read them once**. Nothing is scanned until then.
 - No control of your machine. She cannot click, type, or open anything.
 - No recording. There is no "save this conversation" and no audio archive.
 
@@ -219,7 +225,7 @@ directories they live in. Nothing is kept back, and nothing is recoverable.
 ## Verifying any of this
 
 ```bash
-npm run check     # 382 tests, no key required
+npm run check     # 414 tests, no key required
 npm run doctor    # reports exactly what is configured and what is not
 ```
 

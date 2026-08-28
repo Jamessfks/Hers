@@ -2,12 +2,11 @@
  * SQLite-backed memory store.
  *
  * Uses `node:sqlite` from the standard library rather than `better-sqlite3`.
- * The reason is deployment, not taste: a native addon has to be rebuilt against
- * Electron's ABI on every Electron bump and on every architecture we ship, and
- * a companion app that fails to launch after an auto-update because a `.node`
- * file was built for the wrong V8 is a companion the user deletes. Electron 43
- * carries Node 24, where `node:sqlite` is built in, so the dependency is zero
- * and the ABI problem does not exist. See docs/adr/0002-memory-storage.md.
+ * The reason is installation, not taste: a native addon has to be compiled on
+ * the machine it runs on, which means a toolchain, and "it failed to build" is
+ * where someone installing a companion for the first time gives up. `node:sqlite`
+ * ships with Node 22.18, which this project already requires, so there is no
+ * dependency to build and nothing to go wrong.
  *
  * Vector search is a brute-force scan. At the volume a single human generates —
  * a few thousand facts after years of use — a linear pass over normalised

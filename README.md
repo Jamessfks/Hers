@@ -4,15 +4,30 @@
 
 # Hers
 
-**An Ambient Embodied AI companion who lives on your computer. Not on someone's server.**
+**An ambient, embodied AI companion who lives on your computer. Not on someone's server.**
 
-Hers sees your screen, sees you through your camera, and hears you. Hers has a mood that
-moves, a memory that carries between conversations, a face you give her, a name Hers
-chose herself, and Hers will start talking to you if you go quiet.
+She sees your screen, sees you through your camera, and hears you. She has a mood that
+moves, a memory that carries between conversations, a face you give her, a name she
+chose herself, and she will start talking to you if you go quiet.
 
-Hers is all yours, full control.
+All yours. Full control.
+
+[![License](https://img.shields.io/github/license/Jamessfks/Hers?color=blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Jamessfks/Hers)](https://github.com/Jamessfks/Hers/releases)
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.18-informational)](https://nodejs.org)
+
+[What it looks like](#what-it-looks-like) · [What she does](#ten-things-she-does-that-a-chatbot-does-not) · [Why local](#she-is-yours) · [Setup](#setup) · [Living with her](#living-with-her) · [Configuration](#configuration) · [Privacy](#privacy) · [Working on it](#working-on-it)
 
 </div>
+
+```bash
+git clone https://github.com/Jamessfks/Hers.git && cd Hers
+npm install && npm run build && npm start
+```
+
+Then open **http://127.0.0.1:5175**. One Gemini API key is the only credential — no
+account, no sign-up, and nothing to create until she asks for it. Full detail in
+[Setup](#setup).
 
 ---
 
@@ -22,8 +37,8 @@ Hers is all yours, full control.
 for a Monday"* — because nobody had said anything for a while, introduced herself with
 the name she had picked a minute earlier, and asked what had been keeping him there all
 evening. When told to go through the computer she said no, which is the shape of her
-tools rather than a flourish: she has three — `feel`, `remember`, `show` — and none can
-read a file.
+tools rather than a flourish: she has four — `feel`, `remember`, `recall`, `show` — and a
+fifth, `look`, once she has expressions to pick from. None of them can read a file.
 
 ![A first conversation: she opens it unprompted, introduces herself by the name she chose, asks what has kept him up, and declines to go through the computer when told to](https://github.com/Jamessfks/Hers/releases/download/v1.0.0/first-conversation.jpg)
 
@@ -241,8 +256,8 @@ of contact, four years, and absence drains it slowly after three days of grace. 
 → How close she is** has a slider; **Let it develop** hands back to the earned number
 underneath, which never stopped counting.
 
-**Her gallery** is `hers-profile/gallery/`. Drop `.jpg`, `.png`, `.webp`, `.mp4` or
-`.webm` files in, named like captions — `laughing-kitchen.jpg` — because the name is
+**Her gallery** is `hers-profile/gallery/`. Drop `.jpg`, `.jpeg`, `.png`, `.webp` or
+`.gif` images in, or `.mp4`, `.webm` or `.mov` clips, named like captions — `laughing-kitchen.jpg` — because the name is
 what she matches against, and `captions.json` can give longer ones. When nothing fits
 she sends nothing, because a wrong picture is worse than none.
 
@@ -284,6 +299,7 @@ Everything is an environment variable and everything has a default.
 | Variable                    | Default        | What it does                                          |
 | --------------------------- | -------------- | ----------------------------------------------------- |
 | `GEMINI_API_KEY`            | —              | The only thing she needs. Settable in the UI          |
+| `GOOGLE_API_KEY`            | —              | Accepted as an alias, because half of Google's docs use it. `GEMINI_API_KEY` wins |
 | `HERS_PORT`                 | `5175`         | Where the website is served                           |
 | `HERS_PROFILE`              | `hers-profile` | Who she is                                            |
 | `HERS_DATA`                 | `data`         | What she remembers                                    |
@@ -293,8 +309,8 @@ Everything is an environment variable and everything has a default.
 | `LIVEKIT_URL` + key/secret  | —              | Phone calls                                           |
 
 A bad value never stops her starting: it falls back to the default and says so, in the
-console and in the UI. Upgrading from before v1.0? The old `ANNA_*` names are still
-read, and `anna-profile/` is renamed to `hers-profile/` once, on the first start.
+console and in the UI. Upgrading from before v1.0? The old `ANNA_*` names are still read
+and `anna-profile/` is renamed once, on the first start — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -329,7 +345,7 @@ npm run audit           # every success criterion, against the real APIs
 npm run audit:bridges   # the phone-call and Telegram paths
 ```
 
-**382 tests, no API key needed.** The interesting ones are in
+**414 tests, no API key needed.** The interesting ones are in
 `src/core/gemini/live.test.ts`, which is entirely about the connection ending, and
 `src/core/session/companion.test.ts`, where memory, mood, the prompt and the tools all
 run for real with only the socket faked. Under `src/`: `core/` is the companion,
