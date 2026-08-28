@@ -30,10 +30,27 @@ own permissions.
 
 ### macOS says it cannot verify the developer
 
-Expected. The builds are not signed — see the README for why, and for the exact
+Expected. The build is not signed — see the README for why, and for the exact
 clicks. In short: on macOS Sequoia and later, **System Settings → Privacy &
 Security**, scroll to **Security**, **Open Anyway**, then **Open**. On macOS 14
-and earlier, Control-click her in Applications and choose **Open**.
+and earlier, Control-click her in Applications and choose **Open**. If you would
+rather not click through any of it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Hers.app
+```
+
+That deletes the flag macOS puts on downloaded files, which is the thing all of
+this keys off. Measured here: held-forever to a window in about two seconds.
+
+### It asks again every single time I open her
+
+You are launching her from somewhere that is not `/Applications` — the disk
+image itself, or Downloads. macOS runs a quarantined application from a
+randomized read-only copy of itself unless it has been properly installed, so
+the exception you granted was granted to a path that no longer exists the next
+time. Drag her into **Applications** and launch her from there, or run the
+`xattr` line above, which removes the condition entirely.
 
 ### macOS says Hers is damaged and should be moved to the Bin
 
@@ -44,15 +61,48 @@ the ad-hoc signing step in `build/adhoc-sign.cjs` did not run.
 
 ### Windows says "Windows protected your PC"
 
-SmartScreen, for the same reason. **More info**, then **Run anyway**. If it asks
-every single launch, right-click the file → **Properties** → tick **Unblock** on
-the General tab.
+**There is no Windows build yet** — nothing has been compiled and nothing has
+been run, so if you are reading this you have built it yourself. When one
+exists: SmartScreen, for the same reason as Gatekeeper. **More info**, then
+**Run anyway**. If it asks every single launch, right-click the file →
+**Properties** → tick **Unblock** on the General tab. Everything else on this
+page about the application is written for both platforms and tested on macOS
+only.
 
 ### The icon bounced once and nothing opened
 
-Read `hers.log`. If it is empty or ends without the `Hers is at http://…` line,
-she did not finish starting and the last thing in the file is why. If there is
-no log file at all, the folder it lives in could not be created — check that
+**On macOS, and if there is no `hers.log` at all, this is Gatekeeper.** Not a
+crash, not a permissions problem. An earlier version of this page sent you to
+check whether `~/Library/Application Support` was writable, which was the wrong
+first answer and cost somebody their afternoon: when Gatekeeper holds a
+quarantined application, *zero instructions of it run*. Nothing is mapped, no
+folder is created, no log is written, and there is nothing to read because
+nothing happened. An absent log is the symptom, not a second fault.
+
+Three things do it, in order of likelihood:
+
+1. **You have not got past the unsigned warning yet.** Do that first — the
+   clicks are in [the README](../README.md#2-get-past-the-warning-because-there-will-be-one).
+2. **You are launching her from the disk image, or from Downloads.** Drag her
+   into **Applications** and launch her from there. Anywhere else, macOS may run
+   a quarantined app from a randomized read-only copy of itself — App
+   Translocation — and the permission you granted does not stick, so the same
+   refusal comes back on every launch.
+3. **Neither worked.** One line in Terminal ends it, by deleting the download
+   flag the whole mechanism keys off:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Hers.app
+   ```
+
+   Then open her normally. This is the escape hatch that cannot fail, and it is
+   also the one you should understand before running: it tells macOS to stop
+   treating this file as downloaded, so run it against *her* and not as a habit.
+
+**If `hers.log` does exist**, she got as far as running and the problem is
+inside. If it is empty or ends without the `Hers is at http://…` line, she did
+not finish starting and the last thing in the file is why. Only if the log is
+absent *and* you have ruled out all three of the above is it worth checking that
 `~/Library/Application Support` (or `%APPDATA%`) is writable.
 
 ### She started fresh and does not know me

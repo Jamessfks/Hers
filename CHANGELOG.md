@@ -7,7 +7,8 @@ model — is a breaking change and gets called out here with what to do about it
 ## Unreleased
 
 **She is a download now.** `npm run package` builds a double-clickable
-application — a `.dmg` on macOS, an NSIS installer on Windows — with Electron
+application — a `.dmg` on macOS, an NSIS installer on Windows once somebody
+runs that build — with Electron
 carrying its own Node inside it. Eleven steps became three, and the three hard
 gates went: no Node to install, no git, no terminal. The same server, the same
 page, the same everything, in a window that opens itself.
@@ -45,17 +46,23 @@ of WebRTC alongside Chromium's, registering nine Objective-C classes under names
 Chromium had already taken, which macOS warns "may cause mysterious crashes".
 Nobody who has not set up LiveKit is exposed to it now.
 
-**The builds are not signed**, and the README says which two clicks get past
-Gatekeeper and SmartScreen rather than pretending the warning is not there. They
-*are* ad-hoc signed, which is a different thing and the reason macOS says
-"unverified developer" rather than "damaged" — an unsealed bundle fails
-verification outright and that message is unrecoverable advice.
+**The build is not signed**, and the README says which two clicks get past
+Gatekeeper rather than pretending the warning is not there — plus the `xattr
+-dr com.apple.quarantine` line, which cannot fail and which the first draft of
+that page left out. It *is* ad-hoc signed, which is a different thing and the
+reason macOS says "unverified developer" rather than "damaged": an unsealed
+bundle fails verification outright, and that message is unrecoverable advice.
+Install to `/Applications` — anywhere else, App Translocation runs a quarantined
+app from a randomized read-only copy of itself and the exception you granted
+does not stick.
 
-Published builds are Apple Silicon and Windows x64. Intel Macs have no build
-yet: LiveKit's binding is a per-architecture package that `npm install` picks
-for the machine doing the installing, so each artifact has to be built on its
-own. `.github/workflows/release.yml` does that, one runner per platform, on a
-tag.
+**One artifact exists: `Hers-1.3.0-arm64.dmg`, 127.5 MiB, 294 MB installed.**
+Windows and Intel Mac are configured and have never been compiled or run.
+LiveKit's binding is a per-architecture package that `npm install` picks for the
+machine doing the installing, so each artifact has to be built on its own
+machine; a Windows installer built on a Mac would carry a macOS `.node` and fail
+on the first import. `.github/workflows/release.yml` does one runner per
+platform on a tag, and it has never run either.
 
 ## v1.3.0 — 27 August 2026
 

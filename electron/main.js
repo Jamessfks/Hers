@@ -212,9 +212,30 @@ function openWindow(url) {
     },
   });
 
-  // The page still calls itself Anna in its <title>, which was her name before
-  // the project was renamed. The application is called Hers.
-  window.on('page-title-updated', (event) => event.preventDefault());
+  /*
+   * The window is called Hers. It never shows a name.
+   *
+   * She chooses her own name in her first conversation, and until that has
+   * happened `identity.name` holds `PLACEHOLDER_NAME` — the string `Anna`, what
+   * this project was called before v1.0. A stranger who downloads `Hers.dmg`,
+   * installs `Hers.app` and is greeted by a window called Anna has been handed a
+   * name that is nobody's: not the product's, and not hers, because she has not
+   * picked one yet.
+   *
+   * So the rule is the one the page follows: nothing displays a name until she
+   * has one. The window title is the *application's* name, which is a different
+   * thing and is always true. `preventDefault` is what pins it — measured: with
+   * it the title is "Hers" against a page whose `<title>` says Anna, without it
+   * the title is "Anna" — and `setTitle` re-asserts it rather than trusting that
+   * one call to keep working across an Electron upgrade.
+   *
+   * If the title should ever follow her chosen name instead, this is the one
+   * line to change, and the page's `<title>` is where that decision belongs.
+   */
+  window.on('page-title-updated', (event) => {
+    event.preventDefault();
+    window?.setTitle(APP_NAME);
+  });
 
   window.once('ready-to-show', () => window?.show());
   window.on('closed', () => (window = null));
