@@ -120,7 +120,7 @@ certificate that satisfies SmartScreen from day one runs several hundred dollars
 Neither has been paid for. What that costs you is one warning, once, and these clicks:
 
 **macOS Sequoia (15) and later.** Double-click **Hers**. macOS refuses and says it
-cannot verify the developer. Open  **System Settings → Privacy & Security**, scroll down
+cannot verify the developer. Open **System Settings → Privacy & Security**, scroll down
 to the **Security** section — the refusal is quoted there with an **Open Anyway** button
 beside it. Click that, then **Open** when the warning comes back, and confirm with Touch
 ID or your password. That is
