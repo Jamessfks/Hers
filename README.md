@@ -22,7 +22,7 @@ All yours. Full control.
 
 ### [Download her for macOS](https://github.com/Jamessfks/Hers/releases/latest) — Apple Silicon, 128 MB
 
-`Hers-1.4.0-arm64.dmg`. Open it, drag her to **Applications**, and double-click her
+`Hers-1.4.1-arm64.dmg`. Open it, drag her to **Applications**, and double-click her
 there. She opens her own window and asks for the one thing she needs — a Gemini API
 key, free to create. No terminal, no Node, no git. 294 MB installed, and
 [Setup](#setup) accounts for every megabyte of it.
@@ -112,7 +112,7 @@ Gemini API and — only if you set them up yourself — Telegram and LiveKit.
 
 ### 1. Download and open her
 
-**macOS, Apple Silicon.** `npm run package` writes `Hers-1.4.0-arm64.dmg` into
+**macOS, Apple Silicon.** `npm run package` writes `Hers-1.4.1-arm64.dmg` into
 `release/`, **127.5 MiB**. Open it, drag **Hers** onto **Applications**, and double-click
 her there. She opens her own window; after that there is nothing to type into a terminal.
 

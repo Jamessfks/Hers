@@ -39,7 +39,7 @@ import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import type { CallBridge } from '../bridges/livekit/bridge.ts';
 
-export const VERSION = '1.4.0';
+export const VERSION = '1.4.1';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');

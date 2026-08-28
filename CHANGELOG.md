@@ -4,7 +4,7 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
-## Unreleased
+## v1.4.1 — 28 August 2026
 
 **The camera light cannot be made to lie.** The sense buttons were drawn from a
 WebSocket message, so anything that reached that socket could darken the sight
@@ -154,7 +154,7 @@ Install to `/Applications` — anywhere else, App Translocation runs a quarantin
 app from a randomized read-only copy of itself and the exception you granted
 does not stick.
 
-**`npm run package` produces one artifact: `Hers-1.4.0-arm64.dmg`, 127.5 MiB, 294 MB
+**`npm run package` produces one artifact: `Hers-1.4.1-arm64.dmg`, 127.5 MiB, 294 MB
 installed. It has not been published — the releases page carries source tags and no
 binaries, so there is nothing to download yet.**
 Windows and Intel Mac are configured and have never been compiled or run.
