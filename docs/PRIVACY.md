@@ -1,5 +1,10 @@
 # Privacy
 
+**Covers Hers v1.3.0.** This page describes the code in this repository at that
+version and nothing else. A test fails if that version stops matching
+`package.json`, so a stale copy of this document cannot ship quietly alongside a
+newer program.
+
 She can watch your screen, look at you through your camera, and listen to you.
 That only works if what she does with it is boring, bounded, and checkable — so
 this document states exactly what she can see, exactly what leaves the machine,
@@ -63,33 +68,51 @@ If you cloned into `~/hers` and run `npm start` from there:
 | Your API keys | `~/hers/.env` | `C:\Users\you\hers\.env` |
 
 If you cloned somewhere else, they are somewhere else, and you should not have
-to work it out from a document. `npm run doctor` prints all three resolved to
-absolute paths, and so does `npm start` on the first lines it writes.
-`HERS_PROFILE` and `HERS_DATA` move them.
+to work it out from a document. Both `npm run doctor` and `npm start` print all
+three resolved to absolute paths — the banner line for the third reads `keys
+/your/path/.env`, or `.env (not written yet)` before you have saved a key.
+`HERS_PROFILE` and `HERS_DATA` move the first two.
+
+That sentence was false in the first version of this page, which is worth
+recording rather than quietly correcting. The banner named the profile folder
+and the database and never mentioned `.env` at all, and `.env` is the one people
+actually go looking for. The claim is now held up by
+`src/server/banner.test.ts`, which reads what the banner returns and asserts all
+three paths are there and absolute.
 
 ### The profile folder, file by file
 
+Every path below comes from `src/shared/writers.ts`, which a test holds against
+the code that writes them. It is not a tree somebody typed out and hoped stayed
+true — the previous version of it had already lost two entries.
+
 ```
 hers-profile/
-  personality.md        how she behaves
-  identity.md           her name, age, where she is from
-  voice.md              which of the thirty voices, and how she speaks
-  mood.md               her baseline temperament and how far it drifts
-  relationship.md       what she is to you
-  boundaries.md         what she will not do, including the safety instruction
-  README.md             written on first run, explaining the above
-  mood.state.json       eight numbers and a timestamp: her mood on four axes, and the
-                        baseline it drifts back to. Written once she has felt something.
-  intimacy.state.json   how close she is, and the days behind it
-  avatar/
-    source.jpg          the photograph you gave her as her face
-    face-<name>-<id>.jpg  one per generated expression
-    manifest.json       their sizes, hashes and when they arrived
-  gallery/
-    *.jpg               pictures of her, including any she generated. Not of you.
-    captions.json       only if you write one; the app reads it and never writes it
-  knowledge.json        only if you use Setup → Let her read your files
+  personality.md                      how she behaves
+  identity.md                         her name, age, where she is from
+  voice.md                            which of the thirty voices, and how she speaks
+  mood.md                             her baseline temperament and how far it drifts
+  relationship.md                     what she is to you
+  boundaries.md                       what she will not do, incl. the safety instruction
+  README.md                           written on first run, explaining the above
+  mood.state.json                     eight numbers and a timestamp: her mood on four
+                                      axes and the baseline it drifts back to. Only
+                                      exists once something has moved her.
+  intimacy.state.json                 how close she is, and the days behind it
+  knowledge.json                      only if you use Setup → Let her read your files
+  avatar/source.jpg                   the photograph you gave her as her face
+  avatar/face-<expression>-<id>.jpg   one per generated expression
+  avatar/manifest.json                their sizes, hashes and when they arrived
+  gallery/README.md                   written on first run, explaining the folder
+  gallery/<her description>.jpg       pictures of her, including any she generated.
+                                      Never of you.
+  gallery/captions.json               only if you write one. Read, never written.
 ```
+
+`gallery/captions.json` is the one file in that tree the program will read and
+never create. It is not in `writers.ts` for exactly that reason, and it is
+mentioned here because a file you may put there is still a file you should know
+is being read.
 
 **Open any of those `.md` files in TextEdit or Notepad and change a line.** She
 reads them back — on the next reconnect for a live conversation, immediately for
@@ -169,29 +192,44 @@ encoded, sent, and dropped: there is no frame buffer, no cache, no debug dump
 and no "save this conversation". `Companion#see` hands the bytes straight to the
 live session.
 
-That is checkable rather than merely asserted. Seven files in `src/` write to
-disk and there is not an eighth:
+That is checkable rather than merely asserted, and it is checked the same way
+the host list is. Exactly ten modules under `src/` touch the filesystem:
 
-| Written by | What it writes |
-| --- | --- |
-| `core/profile/profile.ts` | the six markdown files and the two READMEs |
-| `core/mood/mood.ts` | `mood.state.json` |
-| `core/intimacy/intimacy.ts` | `intimacy.state.json` |
-| `core/avatar/studio.ts` | the photograph, the expressions, `manifest.json` |
-| `core/gallery/gallery.ts` | a generated picture of her |
-| `core/knowledge/scan.ts` | `knowledge.json`, the record of what you approved |
-| `server/env-file.ts` | `.env` |
+| Module | Writes | Under |
+| --- | --- | --- |
+| `core/profile/profile.ts` | the six character files, `README.md`, `gallery/README.md` | profile |
+| `core/mood/mood.ts` | `mood.state.json` | profile |
+| `core/intimacy/intimacy.ts` | `intimacy.state.json` | profile |
+| `core/avatar/studio.ts` | `avatar/source.jpg`, `avatar/face-<expression>-<id>.jpg`, `avatar/manifest.json` | profile |
+| `core/gallery/gallery.ts` | `gallery/<her description>.jpg` | profile |
+| `core/knowledge/scan.ts` | `knowledge.json` | profile |
+| `core/memory/store.ts` | `memory.db`, `memory.db-wal`, `memory.db-shm` | data |
+| `core/session/brain.ts` | creates `data/`; deletes both folders on Start over | data |
+| `server/env-file.ts` | `.env` | where you started her |
+| `server/config.ts` | renames `anna-profile/` to `hers-profile/`, once | where you started her |
+
+Find them yourself. This is the exact pattern `src/shared/writers.test.ts`
+scans with, quoted from the same constant the test uses, so the answer you get
+is the answer the test gets:
 
 ```bash
-grep -rn "writeFile\|createWriteStream\|appendFile" --include="*.ts" src/ | grep -v test
+grep -rlE "(writeFile|appendFile|createWriteStream|renameSync|rename|mkdir)[[:space:]]*\(|node:sqlite" \
+  --include="*.ts" --exclude="*.test.ts" --exclude="writers.ts" src/
 ```
 
-Every line that comes back is either one of those seven or the `import` above
-it. The database is the one write that does not go through `fs` at all — it goes
-through `node:sqlite` in `core/memory/store.ts` — so count it as the eighth and
-the list is closed.
+Ten paths back, and the table above has ten rows. The test fails if the scan
+finds a module the list does not name, fails if the list names a module that has
+stopped writing, and fails if this page does not mention every path in it.
+`writers.ts` is excluded from the scan because it contains the pattern and would
+otherwise match itself; a separate test asserts that file imports no filesystem
+module, so the exemption cannot become a hiding place.
 
-Nothing on it takes a camera frame, a screen frame, or a buffer of PCM.
+The last two rows are why the pattern matches more than `writeFile`.
+`brain.ts` creates a directory and deletes two, and `config.ts` moves a folder
+during an upgrade — neither writes a byte of content, and a scan that only
+looked for content writes would have reported neither.
+
+Nothing on that list takes a camera frame, a screen frame, or a buffer of PCM.
 
 Also held only in memory, for the life of the process: your Gemini key, your
 Telegram bot token, the LiveKit tokens minted for a call, the resumption handle
@@ -235,10 +273,45 @@ it is sent to the image model as a reference so the woman in the new picture is
 the same woman. Nothing is generated from your camera. Google watermarks every
 generated image with SynthID.
 
-Google's terms for the Gemini API apply to all of it. On the free tier, Google's
-terms allow human review and training on your data; the paid tier does not. That
-is a decision you make when you choose a key, and not one this app can make for
-you.
+Google's terms for the Gemini API apply to all of it, and the difference between
+the two tiers is the single largest privacy decision in using Hers — larger than
+anything on this page, because it is the difference between your conversations
+staying between you and a model and your conversations being read by people.
+
+What the [Gemini API Additional Terms of
+Service](https://ai.google.dev/gemini-api/terms) actually say, read rather than
+characterised:
+
+On the **unpaid** tier, Google uses submitted content and generated responses to
+provide, improve and develop its products, and human reviewers may read,
+annotate and process API input and output — disconnected from your Google
+account, API key and Cloud project first. Google's own instruction in that
+paragraph is *"Do not submit sensitive, confidential, or personal information to
+the Unpaid Services."* A companion is nothing but personal information, so take
+that sentence literally: on a free key, this is not a private application.
+
+On the **paid** tier, prompts and responses are not used to improve products and
+are handled under Google's data-processor addendum. They are still logged for a
+limited period, solely for enforcing the Prohibited Use Policy.
+
+**Neither tier is given a retention period in those terms.** I went looking for a
+number to cite and there is not one — "a limited period of time" is as specific
+as the paid-tier text gets, and the unpaid section names no window at all. The
+only durations in the whole document are thirty days for Grounding with Google
+Search and thirty (with up to ninety for display optimisation) for Grounding with
+Google Maps. Hers enables no grounding tool of any kind, so neither applies here;
+her `recall` searches the local SQLite file and her `look` changes her own
+expression, and nothing in this program performs a web search. If a retention
+number matters to you, it is a question for Google, and this page will not invent
+one on their behalf.
+
+One carve-out worth knowing because it flips the whole calculation: if you are in
+the European Economic Area, Switzerland or the United Kingdom, Google's terms
+apply the *paid* data handling to all services, including the unpaid quota.
+
+Choosing the tier is a decision you make when you choose a key, and it is not one
+this app can make for you. It can tell you which key is in force — Setup shows
+the last four characters — and it cannot tell whether that key is billed.
 
 ### `api.telegram.org` — only with `TELEGRAM_BOT_TOKEN` set
 
@@ -487,11 +560,34 @@ means you can read it, and also means you can delete it. Please do not.
 
 ## The network boundary
 
-The server binds to `127.0.0.1`. Not as a default to be adjusted — as the
-design. Everything the website does needs a secure context, and `localhost` is
-one without a certificate while any other host is not. Binding wider does not
-get you a working phone client; it gets you an open door. Reaching her from a
-phone is what LiveKit is for, and that dials out.
+The server binds to `127.0.0.1`. That is the default, and it is a default you
+can change: `HERS_HOST` sets it, `.env.example` ships it as a documented knob,
+and nothing refuses to start if you point it somewhere else. An earlier version
+of this page called it "the design, not a default to be adjusted", which was
+simply not true, and a claim anyone could disprove in ten seconds is worse than
+no claim at all.
+
+So, accurately. The page behind that port has no login. It has never needed one,
+because on `127.0.0.1` nothing else can reach it — and what is behind it is her
+memory of you and a key that spends your money. Setting `HERS_HOST` to anything
+else removes the only thing protecting both. It also breaks the microphone, the
+camera and the screen share outright, because they need a secure context, and
+`localhost` is one without a certificate while no other host is. Binding wider
+therefore does not get you a working phone client; it gets you an open door in
+front of a companion who has gone deaf and blind. Reaching her from a phone is
+what LiveKit is for, and that dials out.
+
+Because it is your decision and not the program's, the program now says so
+rather than assuming you meant it. Any host that is not a loopback address
+produces a warning at startup, in the doctor, and in the website's own warning
+list — naming the variable, what it exposes, and what stops working
+(`isLoopbackHost` in `src/server/config.ts`, tested in `config.test.ts`):
+
+```
+! HERS_HOST=0.0.0.0 binds the website to something other than this machine. It
+  has no password, and anyone who can reach it can read her memory of you and
+  spend your Gemini key. …
+```
 
 The WebSocket handshake checks `Origin` and refuses anything the server does not
 itself serve from (`WebBridge`, `verifyClient`). This is not decoration:
@@ -545,7 +641,42 @@ are readable by your user and, by default, by an administrator. Separate user
 accounts and full-disk encryption are the answer to that, and they are a better
 answer than anything an application can do on its own.
 
+---
+
+## Who is responsible, and who to tell
+
+Most privacy policies open with a data controller, a company address and a
+supervisory authority. This one cannot, and the reason is the point rather than
+an omission.
+
+**There is no data controller for your conversations, because there is no
+service.** Hers is a program you run. Nothing is transmitted to its author, no
+server belonging to this project exists, there is no account and there is
+nothing to log in to. Under GDPR or CCPA the entity processing your
+conversations is you, on your own machine, under your own control — which is why
+sections about access requests, erasure requests and portability have nothing to
+attach to here. Everything those rights would get you, you already have: the
+files are on your disk in formats you can read, and **Setup → Start over**
+deletes them.
+
+The third parties are the ones with policies that bind you, and you chose each
+of them: Google for the Gemini API, Telegram if you set a bot token, LiveKit and
+your static host if you make calls. Their terms are yours, under your own
+account, and the host list above exists so you know exactly what reaches them.
+
+**Who wrote this.** Zicheng Zhao, a single author, MIT-licensed, no company. The
+project is at [github.com/Jamessfks/Hers](https://github.com/Jamessfks/Hers).
+
+**How to report something.** A vulnerability — anything that leaks your key,
+your memory, or your camera, microphone or screen somewhere you did not choose —
+goes through GitHub's private reporting form at
+<https://github.com/Jamessfks/Hers/security/advisories/new>, which is a private
+channel to the author and is the one named in `SECURITY.md`. Anything else,
+including a correction to this page, belongs in a public issue on the same
+repository. There is no support email, and this page will not print one it has
+not got: expect a human, not an SLA.
+
 If you find a hostname this program contacts that is not on this page, that is a
-bug and worth reporting — see `SECURITY.md`. It is also the one kind of error
-here that would be genuinely serious, which is why there is a test whose only
-job is to catch it.
+bug and worth reporting through the same private form. It is also the one kind
+of error here that would be genuinely serious, which is why there is a test
+whose only job is to catch it.

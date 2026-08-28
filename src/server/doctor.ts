@@ -27,7 +27,9 @@ import { KNOWN_LIVE_MODELS } from '../core/gemini/models.ts';
 import { LiveConversation } from '../core/gemini/live.ts';
 import { DESTINATIONS, requiresOf } from '../shared/destinations.ts';
 import type { Requires } from '../shared/destinations.ts';
-import { loadConfig, loadDotEnv } from './config.ts';
+import { writesUnder } from '../shared/writers.ts';
+import type { Root } from '../shared/writers.ts';
+import { envFilePath, loadConfig, loadDotEnv } from './config.ts';
 import type { Config } from './config.ts';
 
 const ok = (message: string) => console.log(`  ✓ ${message}`);
@@ -120,21 +122,42 @@ async function main(): Promise<number> {
  * Printed rather than described because the defaults are relative — `hers-profile`
  * and `data`, next to wherever you started her — so a document cannot know them
  * and this can. Copy a line out of here and open it; that is the whole point.
+ *
+ * The filenames come from {@link WRITERS} rather than from a string literal
+ * here. The literal is what this used to be, and it had already drifted: it had
+ * stopped listing `README.md` and `gallery/README.md`, both of which
+ * `profile.ts` writes on every first run. `writers.test.ts` now fails if a
+ * module writes something this list does not know about.
  */
 function printFiles(config: Config): void {
-  const db = path.join(config.dataDir, 'memory.db');
-  console.log('\n  Everything she keeps, and nowhere else\n');
-  note(`profile   ${config.profileDir}`);
-  note('          personality.md  identity.md  voice.md  mood.md  relationship.md');
-  note('          boundaries.md  mood.state.json  intimacy.state.json  avatar/  gallery/');
-  note('          knowledge.json, only if you let her read a folder');
-  note(`memory    ${db}`);
-  note(`          ${path.basename(db)}-wal and ${path.basename(db)}-shm alongside it: SQLite runs`);
-  note('          in WAL mode, so recent turns can be in the -wal until it is checkpointed');
-  note('key       held in memory for the life of the process; written only to .env');
+  console.log('\n  Everything she keeps, and nowhere else');
+
+  const roots: { root: Root; label: string; dir: string }[] = [
+    { root: 'profile', label: 'profile', dir: config.profileDir },
+    { root: 'data', label: 'memory', dir: config.dataDir },
+    { root: 'cwd', label: 'keys', dir: path.dirname(envFilePath()) },
+  ];
+
+  for (const { root, label, dir } of roots) {
+    const files = writesUnder(root);
+    if (files.length === 0) continue;
+    console.log('');
+    // A root with one file gets the whole path on one line, because "the
+    // directory your .env is in" is not what somebody looking for their .env
+    // wants to be handed.
+    if (files.length === 1) {
+      note(`${label.padEnd(8)}  ${path.join(dir, files[0] ?? '')}`);
+      continue;
+    }
+    note(`${label.padEnd(8)}  ${dir}`);
+    for (const line of wrap(files.join('   '), 64)) note(`          ${line}`);
+  }
+
   console.log('');
   note('Video frames and microphone audio appear nowhere above. They are encoded,');
   note('sent, and dropped — there is no buffer, cache, or debug dump to find.');
+  note('Start over deletes the first two directories outright and never touches');
+  note('the third, because the keys in it are yours rather than hers.');
 }
 
 /**
