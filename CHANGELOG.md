@@ -4,6 +4,29 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## Unreleased
+
+**A voice menu.** Thirty prebuilt Gemini voices, each with Google's own one-word
+description of how it sounds — `Sulafat — Warm`, `Algenib — Gravelly`,
+`Achernar — Soft` — on the **voice** tab of **Who she is**. Picking one writes it
+into `voice.md`, so it is still a file you can edit by hand, and the menu reads
+back whatever is in that file. She picks it up the next time she wakes, because
+a Live session fixes its voice at setup.
+
+The voice list and the frontmatter parser moved to `shared/`, so the browser and
+the server read one copy rather than two.
+
+**`sendClientContent` mid-session is confirmed to work.** v1.2.0 shipped with
+this question open. The answer, measured: it arrives on
+`gemini-3.1-flash-live-preview`, with and without the
+`initialHistoryInClientContent` mode Google documents, and the control arm that
+was never seeded says "I do not know". So her mood updates, sense changes,
+photograph and the `⟦director⟧` cue behind the three-minute rule all reach her.
+
+Still undocumented, and `npm run probe:client-content` stays runnable for the day
+Google enforces what its guide says. Also measured: 3.1 Flash Live refuses `TEXT`
+as a response modality outright.
+
 ## v1.2.0 — 27 August 2026
 
 Nothing she does changed. Everything written about what she does did.

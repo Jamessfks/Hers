@@ -25,6 +25,21 @@
  *
  *     npm run probe:client-content
  *
+ * Measured on 2026-08-27, on gemini-3.1-flash-live-preview:
+ *
+ *     seeded over sendClientContent              DELIVERED
+ *     control, never seeded                      "I do not know."
+ *     seeded with initialHistoryInClientContent   DELIVERED
+ *
+ * So it arrives, mid-session, with the mode Google documents and without it.
+ * The control arm matters: without it, a model that guessed would look like a
+ * channel that worked.
+ *
+ * Keep this runnable rather than deleting it. The behaviour is undocumented —
+ * the guide says to use send_realtime_input during a conversation — and the day
+ * Google enforces what it documents, five of her behaviours stop reaching her
+ * and nothing in the app will say so.
+ *
  * AUDIO with output transcription, not TEXT. Measured on 2026-08-27:
  *
  *     close 1007: The requested combination of response modalities (TEXT) is

@@ -10,6 +10,13 @@
  * "the app is broken". So capabilities are declared here and the session strips
  * anything the chosen model cannot take.
  *
+ * Two more facts about 3.1, measured rather than assumed. It refuses `TEXT` as a
+ * response modality outright — `1007`, audio out is the only option. And a
+ * mid-session `sendClientContent` does reach it, although the capabilities guide
+ * says that channel is for seeding initial history only; `npm run
+ * probe:client-content` is the one command that re-asks, because five of her
+ * behaviours ride on it and the failure would be silent.
+ *
  * As documented by Google:
  *
  *   gemini-2.5-flash-native-audio-preview-12-2025

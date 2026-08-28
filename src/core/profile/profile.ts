@@ -1,6 +1,9 @@
 /**
  * Reading and writing the personalization folder.
  *
+ * The frontmatter parser itself lives in `shared/frontmatter.ts`, because the
+ * browser needs it too; this module is the half that touches the disk.
+ *
  * The contract this module keeps, and the reason it is more defensive than it
  * looks: **loading a profile can fail in a hundred small ways and none of them
  * may stop her from waking up.** The folder is meant to be edited by hand, in
@@ -14,57 +17,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { MoodVector } from '../../shared/protocol.ts';
+import { parseProfileFile, serialiseProfileFile } from '../../shared/frontmatter.ts';
+import { DEFAULT_VOICE } from '../../shared/voices.ts';
 import { DEFAULT_PROFILE_FILES, GALLERY_README } from './defaults.ts';
 import { PREBUILT_VOICES, PROFILE_FILES } from './types.ts';
 import { PLACEHOLDER_NAME } from './naming.ts';
 import type { Profile, ProfileFile } from './types.ts';
 
-// ---------------------------------------------------------------------------
-// Frontmatter
-// ---------------------------------------------------------------------------
-
-/**
- * Parses `---` delimited `key: value` frontmatter.
- *
- * Not YAML. A real YAML parser is a dependency and a class of surprises (`no`
- * becoming `false`, `5:6` becoming a sexagesimal number) in exchange for
- * nesting nobody writing a character sheet needs. Keys are lowercased and
- * underscores are collapsed so `eye_color`, `eye color` and `Eye_Color` are the
- * same key — because all three will be typed.
- */
-export function parseProfileFile(raw: string): ProfileFile {
-  const frontmatter: Record<string, string> = {};
-  const normalised = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
-
-  const match = /^---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/.exec(normalised);
-  if (!match) return { frontmatter, body: normalised.trim() };
-
-  for (const line of (match[1] ?? '').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const colon = trimmed.indexOf(':');
-    if (colon <= 0) continue;
-    const key = normaliseKey(trimmed.slice(0, colon));
-    const value = trimmed
-      .slice(colon + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (key) frontmatter[key] = value;
-  }
-
-  return { frontmatter, body: normalised.slice(match[0].length).trim() };
-}
-
-function normaliseKey(key: string): string {
-  return key.trim().toLowerCase().replace(/[\s-]+/g, '_');
-}
-
-export function serialiseProfileFile(file: ProfileFile): string {
-  const keys = Object.keys(file.frontmatter);
-  if (keys.length === 0) return `${file.body.trim()}\n`;
-  const header = keys.map((key) => `${key}: ${file.frontmatter[key]}`).join('\n');
-  return `---\n${header}\n---\n\n${file.body.trim()}\n`;
-}
+export { parseProfileFile, serialiseProfileFile } from '../../shared/frontmatter.ts';
 
 // ---------------------------------------------------------------------------
 // Loading
@@ -205,8 +165,8 @@ function clamp(value: number, low: number, high: number): number {
 /** Case-insensitive, because "aoede" is what people type. */
 function pickVoice(value: string | undefined): string {
   const wanted = value?.trim().toLowerCase();
-  if (!wanted) return 'Aoede';
-  return PREBUILT_VOICES.find((voice) => voice.toLowerCase() === wanted) ?? 'Aoede';
+  if (!wanted) return DEFAULT_VOICE;
+  return PREBUILT_VOICES.find((voice) => voice.toLowerCase() === wanted) ?? DEFAULT_VOICE;
 }
 
 /**

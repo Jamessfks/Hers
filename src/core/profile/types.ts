@@ -52,44 +52,10 @@ export interface Profile {
   dir: string;
 }
 
-/** One file in the folder: `key: value` frontmatter, then markdown. */
-export interface ProfileFile {
-  frontmatter: Record<string, string>;
-  body: string;
-}
+export type { ProfileFile } from '../../shared/frontmatter.ts';
 
-export const PREBUILT_VOICES = [
-  'Zephyr',
-  'Puck',
-  'Charon',
-  'Kore',
-  'Fenrir',
-  'Leda',
-  'Orus',
-  'Aoede',
-  'Callirrhoe',
-  'Autonoe',
-  'Enceladus',
-  'Iapetus',
-  'Umbriel',
-  'Algieba',
-  'Despina',
-  'Erinome',
-  'Algenib',
-  'Rasalgethi',
-  'Laomedeia',
-  'Achernar',
-  'Alnilam',
-  'Schedar',
-  'Gacrux',
-  'Pulcherrima',
-  'Achird',
-  'Zubenelgenubi',
-  'Vindemiatrix',
-  'Sadachbia',
-  'Sadaltager',
-  'Sulafat',
-] as const;
+export { PREBUILT_VOICES, VOICES, DEFAULT_VOICE } from '../../shared/voices.ts';
+export type { Voice } from '../../shared/voices.ts';
 
 /*
  * The list of profile files lives in `shared/`, because the browser draws a tab

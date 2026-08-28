@@ -19,6 +19,8 @@ import type {
 } from '../shared/protocol.ts';
 import { SENSE_NAMES } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
+import { frontmatterValue, setFrontmatterValue } from '../shared/frontmatter.ts';
+import { DEFAULT_VOICE, VOICES } from '../shared/voices.ts';
 
 /**
  * How long one of her faces stays up.
@@ -155,6 +157,8 @@ export class Ui {
   /** The in-progress line per speaker, replaced until the turn closes. */
   readonly #pending = new Map<'user' | 'her', HTMLElement>();
   #profileFiles: Record<string, string> = {};
+  readonly #voicePick = need<HTMLElement>('voice-pick');
+  readonly #voiceSelect = need<HTMLSelectElement>('voice-select');
   #openFile = 'personality';
   #awake = false;
   /** True between clicking Save and the folder coming back. */
@@ -170,6 +174,25 @@ export class Ui {
 
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
+
+    for (const { name, character } of VOICES) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = `${name} — ${character}`;
+      this.#voiceSelect.append(option);
+    }
+
+    /*
+     * The menu edits the same text the editor is showing rather than saving on
+     * its own. One writer: whatever is on screen is what Save sends, so picking
+     * a voice and then typing in the file cannot produce two answers.
+     */
+    this.#voiceSelect.addEventListener('change', () => {
+      const current = this.#openFile === 'voice' ? this.#editor.value : (this.#profileFiles.voice ?? '');
+      const updated = setFrontmatterValue(current, 'voice', this.#voiceSelect.value);
+      this.#profileFiles.voice = updated;
+      if (this.#openFile === 'voice') this.#editor.value = updated;
+    });
 
     for (const sense of SENSE_NAMES) {
       const button = need<HTMLButtonElement>(`sense-${sense}`);
@@ -1003,5 +1026,17 @@ export class Ui {
     }
 
     this.#editor.value = files[this.#openFile] ?? '';
+
+    // Shown only on the file it writes to, and read back from that file every
+    // time: someone who types a voice name by hand should see the menu agree.
+    const isVoice = this.#openFile === 'voice';
+    this.#voicePick.hidden = !isVoice;
+    if (isVoice) {
+      const chosen = frontmatterValue(files.voice ?? '', 'voice')?.trim() ?? '';
+      const known = VOICES.some((voice) => voice.name.toLowerCase() === chosen.toLowerCase());
+      this.#voiceSelect.value = known
+        ? VOICES.find((voice) => voice.name.toLowerCase() === chosen.toLowerCase())!.name
+        : DEFAULT_VOICE;
+    }
   }
 }
