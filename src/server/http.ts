@@ -56,6 +56,14 @@ const TYPES: Record<string, string> = {
 export interface StaticOptions {
   /** Built website. */
   webRoot: string;
+  /**
+   * Origins allowed to reach the API, and the only `Host` values accepted.
+   *
+   * The same set the WebSocket handshake uses, threaded in rather than rebuilt,
+   * because two lists that are meant to be identical eventually are not.
+   * Omitted only by tests that are not exercising the guard.
+   */
+  allowedOrigins?: ReadonlySet<string>;
   /*
    * Looked up per request rather than held.
    *
@@ -101,10 +109,66 @@ const MAX_JSON_BYTES = 8 * 1024;
 /** Typed by hand into the reset box, so a stray click cannot do this. */
 export const RESET_PHRASE = 'start over';
 
+/**
+ * Whether a request is allowed to be here at all.
+ *
+ * `ws.ts` calls its own version of this the most important twenty lines in the
+ * server, and it was right, and for a long time this file had nothing like it.
+ * That was survivable while Hers was a thing you started in a terminal. It is
+ * not survivable now she is a double-clickable application, because the whole
+ * point of an application is that it is running while you browse.
+ *
+ * Two checks, for two different attacks.
+ *
+ * **`Origin`, for cross-site request forgery.** A page on the internet cannot
+ * read this server's replies — no `Access-Control-Allow-Origin` is ever sent —
+ * but it does not need to read them. `POST` with a CORS-safelisted content type
+ * skips the preflight entirely, so `evil.example` could silently call
+ * `/api/reset` and wipe her, `/api/key` and route every frame of your camera
+ * through somebody else's Google project, `/api/knowledge` and have her read
+ * your home directory to Google, or `/api/telegram` and install a bot token of
+ * its own — after which the bridge pins the first chat that speaks to it, and
+ * the first chat is theirs. Measured, all four, before this function existed.
+ *
+ * **`Host`, for DNS rebinding.** Origin alone is not enough: a name the
+ * attacker controls, re-resolved to `127.0.0.1`, makes their page genuinely
+ * same-origin, and then the Origin header is one they are allowed to send. The
+ * defence is to refuse a `Host` this server was never bound to.
+ *
+ * **A missing `Origin` is allowed, deliberately.** Browsers always send one on
+ * a cross-origin request, so absence means the caller is not a page: `curl`,
+ * `npm run doctor`, the packaged app's own renderer on first paint. Refusing it
+ * would break every one of those to stop nothing, since a page cannot suppress
+ * the header.
+ */
+function permitted(request: IncomingMessage, allowed: ReadonlySet<string>): boolean {
+  const origin = request.headers.origin;
+  if (typeof origin === 'string' && origin !== '' && origin !== 'null' && !allowed.has(origin)) {
+    return false;
+  }
+
+  const host = request.headers.host;
+  if (typeof host === 'string' && host !== '') {
+    // The allowlist holds scheme-qualified origins; a Host header does not carry
+    // one, so compare on the authority alone.
+    const authorities = new Set([...allowed].map((entry) => entry.replace(/^https?:\/\//, '')));
+    if (!authorities.has(host)) return false;
+  }
+
+  return true;
+}
+
 export function createRequestHandler(options: StaticOptions) {
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    // `URL` needs an origin; the host header is only used to parse and never
-    // trusted for anything, so a forged one cannot reach outside this handler.
+    if (options.allowedOrigins && !permitted(request, options.allowedOrigins)) {
+      response.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+      response.end('Forbidden\n');
+      return;
+    }
+
+    // `URL` needs an origin; the host header is parsed here only to read the
+    // path out of it, and `permitted` above has already refused any Host this
+    // server was not bound to.
     const url = new URL(request.url ?? '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
@@ -393,6 +457,21 @@ async function readJson(
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<Record<string, unknown> | null> {
+  /*
+   * A JSON content type is required, and that is a security check rather than
+   * pedantry. `text/plain`, `application/x-www-form-urlencoded` and
+   * `multipart/form-data` are the three types a cross-origin `fetch` may send
+   * without a preflight, which is exactly how a page on the internet reached
+   * these endpoints before `permitted` existed. Requiring the one type that
+   * cannot be sent without a preflight is a second lock on the same door, and
+   * the website has always sent it.
+   */
+  const type = (request.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase();
+  if (type !== 'application/json') {
+    send(response, 415, TYPES['.json']!, JSON.stringify({ error: 'Expected JSON.' }));
+    return null;
+  }
+
   const chunks: Buffer[] = [];
   let total = 0;
   try {

@@ -85,8 +85,13 @@ export async function main(): Promise<Running> {
   let telegram: TelegramBridge | null = null;
   let calls: CallBridge | null = null;
 
+  // One list, used by both doors. The WebSocket has always checked it; the HTTP
+  // API did not, which is the hole this closes.
+  const origins = allowedOrigins(config.host, config.port);
+
   const server = createServer(
     createRequestHandler({
+      allowedOrigins: origins,
       webRoot: path.join(repoRoot, 'dist', 'web'),
       gallery: () => brain.gallery,
       avatar: () => brain.avatar,
@@ -212,7 +217,7 @@ export async function main(): Promise<Running> {
     conversation,
     server,
     version: VERSION,
-    allowedOrigins: allowedOrigins(config.host, config.port),
+    allowedOrigins: origins,
     telegram: () => telegramView(),
   });
 

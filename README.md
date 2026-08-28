@@ -20,16 +20,19 @@ All yours. Full control.
 
 </div>
 
-### [Download her](https://github.com/Jamessfks/Hers/releases/latest) — macOS, Apple Silicon, 127.5 MiB
+### She builds into a double-clickable application — and nothing is published yet
 
-Open the file, drag her to **Applications**, double-click. No terminal, no Node, no git.
-She opens her own window and asks for the one thing she needs: a Gemini API key, free to
-create, no account or sign-up beyond a Google one you already have. Full detail in
-[Setup](#setup), including the first-launch warning — the build is **not signed**, and
-this README says exactly what to click, plus the one terminal line that skips all of it.
+`npm run package` produces `Hers-1.3.0-arm64.dmg` on an Apple Silicon Mac: 127.5 MiB,
+294 MB installed. Drag her to **Applications**, double-click, and she opens her own
+window and asks for the one thing she needs — a Gemini API key, free to create.
 
-294 MB installed. Windows and Intel Mac have no download yet and have never been built —
-[Platform](#platform) says why. From a clone they work today, and
+**There is no download link, because no build has been published.** The
+[releases page](https://github.com/Jamessfks/Hers/releases) carries source tags and no
+binaries. Until one is uploaded, the way to get the application is to build it, which
+needs the clone and the four commands below anyway. Said plainly rather than linked to,
+because a download button that 404s is worse than no download button.
+
+From a clone she works today on macOS and Windows —
 [running her from a clone](#run-it-from-a-clone) is four commands and unchanged.
 
 ---
@@ -103,10 +106,12 @@ Gemini API and — only if you set them up yourself — Telegram and LiveKit.
 
 ### 1. Download and open her
 
-**macOS, Apple Silicon.** `Hers-1.3.0-arm64.dmg`, **127.5 MiB**, on the
-[releases page](https://github.com/Jamessfks/Hers/releases/latest). Open it, drag
-**Hers** onto **Applications**, and double-click her there. She opens her own window;
-there is nothing to type into a terminal and nothing to install first.
+**macOS, Apple Silicon.** `npm run package` writes `Hers-1.3.0-arm64.dmg` into
+`release/`, **127.5 MiB**. Open it, drag **Hers** onto **Applications**, and double-click
+her there. She opens her own window; after that there is nothing to type into a terminal.
+
+No build has been published to the releases page yet, so this step is for someone who has
+already cloned. That is the honest state of it.
 
 **Drag her to Applications and launch her from there** — not from the disk image, not
 from Downloads. macOS runs a quarantined application from a randomized read-only copy of
@@ -120,10 +125,11 @@ LiveKit's media binding, which is only loaded if you set up phone calls. That nu
 here because nobody else publishes theirs and you deserve to know what you are agreeing
 to store.
 
-**There is no Windows download, and no Intel Mac download.** Neither has ever been
-compiled and neither has ever been run — the configuration for both exists and the
-workflow that would build them exists, and nobody has run it. From a clone, both work
-today. See [Platform](#platform) for why they cannot honestly be built from here.
+**There is no Windows build and no Intel Mac build.** Neither has ever been compiled and
+neither has ever been run. Windows has a target in `electron-builder.yml` and a job in
+`.github/workflows/release.yml`; **Intel Mac has neither** — `mac.target` names no
+architecture, so it builds for whatever machine runs it. From a clone, both work today.
+See [Platform](#platform) for why they cannot honestly be built from here.
 
 ### 2. Get past the warning, because there will be one
 

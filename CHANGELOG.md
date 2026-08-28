@@ -92,7 +92,9 @@ Install to `/Applications` — anywhere else, App Translocation runs a quarantin
 app from a randomized read-only copy of itself and the exception you granted
 does not stick.
 
-**One artifact exists: `Hers-1.3.0-arm64.dmg`, 127.5 MiB, 294 MB installed.**
+**`npm run package` produces one artifact: `Hers-1.3.0-arm64.dmg`, 127.5 MiB, 294 MB
+installed. It has not been published — the releases page carries source tags and no
+binaries, so there is nothing to download yet.**
 Windows and Intel Mac are configured and have never been compiled or run.
 LiveKit's binding is a per-architecture package that `npm install` picks for the
 machine doing the installing, so each artifact has to be built on its own

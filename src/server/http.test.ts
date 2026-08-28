@@ -23,7 +23,7 @@ after(() => {
   for (const stop of started) stop();
 });
 
-async function serve() {
+async function serve(allowedOrigins?: ReadonlySet<string>) {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-http-'));
   const webRoot = path.join(root, 'web');
   const galleryDir = path.join(root, 'gallery');
@@ -45,6 +45,7 @@ async function serve() {
 
   const server = createServer(
     createRequestHandler({
+      ...(allowedOrigins ? { allowedOrigins } : {}),
       webRoot,
       gallery: () => gallery,
       avatar: () => avatar,
@@ -66,6 +67,7 @@ async function serve() {
   const { port } = server.address() as AddressInfo;
 
   return {
+    port,
     root,
     keys,
     resets,
@@ -229,4 +231,91 @@ test('the setup routes are not readable, and do not answer with the app shell', 
     assert.equal(response.status, 404, route);
     assert.match(response.headers.get('content-type') ?? '', /json/, route);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The guard on the API
+// ---------------------------------------------------------------------------
+
+/*
+ * These four are the ones that were measured working before `permitted`
+ * existed: a page on the internet could reset her, replace the key every frame
+ * of your camera travels under, point her file reader at your home directory,
+ * or install a Telegram bot token of its own and become the chat she answers.
+ */
+
+test('a page on another origin cannot reset her', async () => {
+  const { port, resets } = await serve(new Set([`http://127.0.0.1:9999`]));
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/reset`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+    body: JSON.stringify({ confirm: 'start over' }),
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(resets.length, 0, 'she was wiped by a cross-origin request');
+});
+
+test('a page on another origin cannot replace the key', async () => {
+  const { port, keys } = await serve(new Set([`http://127.0.0.1:9999`]));
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/key`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+    body: JSON.stringify({ key: 'AIzaAttacker' }),
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(keys.length, 0, 'a stranger set the key every frame is billed to');
+});
+
+test('a forged Host is refused, which is what stops DNS rebinding', async () => {
+  const { port } = await serve(new Set([`http://127.0.0.1:${9999}`]));
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
+    headers: { host: 'hers.evil.example' },
+  });
+
+  assert.equal(response.status, 403);
+});
+
+test('the page itself is still allowed, on either name', async () => {
+  // The set is held by reference, so it can be filled in once the port is
+  // known — which is the same order the real server does it in.
+  const allowed = new Set<string>();
+  const { port } = await serve(allowed);
+  for (const name of ['127.0.0.1', 'localhost']) allowed.add(`http://${name}:${port}`);
+
+  for (const name of ['127.0.0.1', 'localhost']) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
+      headers: { origin: `http://${name}:${port}`, host: `${name}:${port}` },
+    });
+    assert.equal(response.status, 200, name);
+  }
+});
+
+test('a caller with no Origin is allowed, because curl and doctor have none', async () => {
+  // A browser cannot suppress the header, so absence is never an attacker.
+  const { port } = await serve(new Set([`http://127.0.0.1:1`]));
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
+    headers: { host: `127.0.0.1:${port}` },
+  });
+
+  assert.equal(response.status, 403, 'host is still checked when origin is absent');
+});
+
+test('a content type that skips the preflight is refused', async () => {
+  const { port, resets } = await serve();
+
+  // text/plain is CORS-safelisted: no preflight, which is how this was reached.
+  const response = await fetch(`http://127.0.0.1:${port}/api/reset`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify({ confirm: 'start over' }),
+  });
+
+  assert.equal(response.status, 415);
+  assert.equal(resets.length, 0);
 });
