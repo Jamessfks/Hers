@@ -151,6 +151,26 @@ export class Ui {
   readonly #dropzone = need<HTMLLabelElement>('dropzone');
   readonly #facePreview = need<HTMLImageElement>('face-preview');
   readonly #dropzoneLabel = need('dropzone-label');
+  readonly #facesEmpty = need('faces-empty');
+
+  /*
+   * How much of her voice reaches the orb, given what the machine asked for.
+   *
+   * The stylesheet's reduced-motion block only sets `transition-duration` to
+   * 0.01ms. That strips the easing off the amplitude and leaves the excursion
+   * exactly as large, snapping instead of moving — which is worse than what it
+   * replaced, not better, and it never reached this at all because the scale is
+   * written from here in JavaScript rather than declared in CSS.
+   *
+   * MDN's guidance is to substitute a muted alternative rather than delete the
+   * signal, and the signal is that she is talking, which is the entire job of
+   * the orb. A fifth of the travel still reads as breathing and is too small to
+   * be the kind of large-object scaling that triggers vestibular symptoms.
+   *
+   * The parentheses are not optional in `matchMedia`; without them the query
+   * silently never matches.
+   */
+  readonly #calm = window.matchMedia('(prefers-reduced-motion: reduce)');
   readonly #giveFace = need<HTMLButtonElement>('give-face');
   readonly #takeover = need('takeover');
   readonly #setup = need<HTMLDialogElement>('setup');
@@ -379,6 +399,8 @@ export class Ui {
       this.#handlers.onClaim();
     });
 
+    this.#calm.addEventListener('change', () => this.#paintLevel());
+
     const picker = need<HTMLInputElement>('face-file');
     picker.addEventListener('change', () => {
       const file = picker.files?.[0];
@@ -501,8 +523,14 @@ export class Ui {
 
   setMood(mood: MoodReadout): void {
     this.#moodLabel.textContent = mood.label;
-    // Valence picks the hue: cool blue when she is low, violet in the middle,
-    // warm rose when she is bright. Energy decides how much of it there is.
+    // Valence picks the hue, and it is an OKLCh angle now rather than an HSL
+    // one: 154 is a green, 216 the blue she sits at when she is level, 278 a
+    // violet. The space matters more than the numbers. OKLCh lightness is
+    // perceptually uniform, so 53% means the same brightness at every one of
+    // those angles, which is what lets the stylesheet promise white on
+    // `--accent` above 4.5:1 across the whole range instead of measuring 1.87:1
+    // at the low end. Energy still moves the accent, by 4% of lightness rather
+    // than 7% — the old span took the contrast floor with it.
     const hue = Math.round(216 + mood.current.valence * 62);
     const lift = (mood.current.energy + 1) / 2;
     document.documentElement.style.setProperty('--mood-hue', String(hue));
@@ -670,6 +698,7 @@ export class Ui {
     }
 
     this.#faceList.replaceChildren();
+    this.#facesEmpty.hidden = avatar.hasSource;
     if (!avatar.hasSource) return;
 
     for (const name of avatar.all) {
@@ -1084,6 +1113,7 @@ export class Ui {
     document.title = chosen || UNNAMED_TITLE;
     this.#still.alt = chosen || 'Her photograph';
     for (const label of this.#transcript.querySelectorAll('.line[data-who="her"] .who')) {
+      label.parentElement?.setAttribute('aria-label', this.#herName);
       label.textContent = chosen || UNNAMED_SPEAKER;
     }
     // Prose in the markup that names her. Marked in the HTML rather than listed
@@ -1099,7 +1129,8 @@ export class Ui {
   }
 
   #paintLevel(): void {
-    const level = Math.max(this.#micLevel * 0.5, this.#herLevel).toFixed(3);
+    const heard = Math.max(this.#micLevel * 0.5, this.#herLevel);
+    const level = (this.#calm.matches ? heard * 0.2 : heard).toFixed(3);
     this.#orb.style.setProperty('--level', level);
     this.#portrait.style.setProperty('--level', level);
   }
@@ -1112,9 +1143,15 @@ export class Ui {
     // against the one above, so a three-part answer reads as one turn.
     const previous = this.#transcript.lastElementChild as HTMLElement | null;
     element.dataset.same = String(previous?.dataset?.who === who);
+    // The thread prints no name on a bubble, so the speaker has to reach the
+    // accessibility tree some other way: `role="article"` gives the line a name
+    // of its own, and `.who` stays in the document as that name.
+    element.setAttribute('role', 'article');
     element.innerHTML = '<span class="who"></span><p class="said"></p>';
     const label = element.querySelector('.who');
-    if (label) label.textContent = who === 'her' ? this.#herName || UNNAMED_SPEAKER : 'You';
+    const speaker = who === 'her' ? this.#herName || UNNAMED_SPEAKER : 'You';
+    if (label) label.textContent = speaker;
+    element.setAttribute('aria-label', speaker);
     this.#transcript.append(element);
     return element;
   }

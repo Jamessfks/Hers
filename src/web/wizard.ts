@@ -570,7 +570,10 @@ export class Wizard {
     const picker = document.createElement('input');
     picker.type = 'file';
     picker.accept = 'image/jpeg,image/png,image/webp';
-    picker.hidden = true;
+    // Transparent rather than hidden, for the reason given beside `.file-input`
+    // in the stylesheet: `display: none` takes it out of the tab order.
+    picker.className = 'file-input';
+    picker.setAttribute('aria-label', 'Choose a photograph of her');
     picker.addEventListener('change', () => {
       const file = picker.files?.[0];
       if (file) this.#handlers.onUploadFace(file);

@@ -24,3 +24,7 @@ data/
 # quietly start offering a real person's face to `git add`.
 hers-profile/
 anna-profile/
+
+# Where the Stop hook records that `npm run check` already passed on this
+# exact working tree, so it does not run twice on the same state.
+.claude/.cache/
