@@ -20,7 +20,7 @@ All yours. Full control.
 
 </div>
 
-### [Download her for macOS](https://github.com/Jamessfks/Hers/releases/latest) — Apple Silicon, 128 MB
+### [Download Hers for macOS](https://github.com/Jamessfks/Hers/releases/latest) — Apple Silicon, 128 MB
 
 `Hers-1.4.1-arm64.dmg`. Open it, drag her to **Applications**, and double-click her
 there. She opens her own window and asks for the one thing she needs — a Gemini API
