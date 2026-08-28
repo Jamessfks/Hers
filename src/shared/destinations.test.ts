@@ -87,14 +87,39 @@ test('every hostname the program can dial is named in docs/PRIVACY.md', () => {
   }
 });
 
+
+/**
+ * Whether a field is an explanation rather than a placeholder.
+ *
+ * The previous version of these assertions required a non-empty string ending
+ * in a full stop, which `"x."` satisfies. That is a punctuation check wearing a
+ * documentation check's clothes: the whole premise of these lists is that every
+ * entry carries a reason a person can read, and a test that green-lights `"x."`
+ * is not holding anyone to it.
+ *
+ * Eight words is not a quality bar and is not pretending to be one. It is the
+ * floor below which a sentence cannot be doing the job — no real answer to
+ * "what is sent here and when" fits in fewer.
+ */
+function explains(prose: string): boolean {
+  const words = prose.trim().split(/\s+/).filter(Boolean);
+  return words.length >= 8 && /\.$/.test(prose.trim());
+}
+
 test('each destination says what is sent and what triggers it', () => {
-  // Both fields go straight into `npm run doctor` and into the document, so an
-  // empty one is a hostname with no explanation attached — which is the thing
+  // Both fields go straight into `npm run doctor` and into the document, so a
+  // thin one is a hostname with no explanation attached — which is the thing
   // this whole file exists to prevent.
   for (const destination of DESTINATIONS) {
     assert.ok(destination.host.length > 0);
-    assert.match(destination.what, /\S.*\.$/s, `${destination.host}: "${destination.what}"`);
-    assert.match(destination.when, /\S.*\.$/s, `${destination.host}: "${destination.when}"`);
+    assert.ok(explains(destination.what), `${destination.host} what: "${destination.what}"`);
+    assert.ok(explains(destination.when), `${destination.host} when: "${destination.when}"`);
+  }
+});
+
+test('every reason a host is only mentioned is actually given', () => {
+  for (const entry of MENTIONED_ONLY) {
+    assert.ok(explains(entry.why), `${entry.host}: "${entry.why}"`);
   }
 });
 

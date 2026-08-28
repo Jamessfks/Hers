@@ -208,6 +208,27 @@ export class Ui {
   /** A wizard save is in flight, and the wake behind it is waiting for it. */
   #savePending = false;
   #wakeAfterSave = false;
+  /**
+   * How long the wizard waits for the folder to come back before saying so.
+   *
+   * The last step holds the wake until the server echoes the saved profile, so
+   * that her first system instruction is built from what the wizard wrote rather
+   * than from what it replaced. That is right when the reply arrives. When it
+   * does not — a dropped socket between the save and the echo — the wait was
+   * forever, and the first run ended on a focused button and no explanation,
+   * which is the worst possible last impression for a ceremony about meeting
+   * somebody.
+   *
+   * So it gives up out loud. Not by waking anyway: that would reintroduce the
+   * race the wait exists to prevent, and guessing on the one conversation where
+   * she chooses her name is not a trade worth making. It says what happened and
+   * leaves the button there.
+   *
+   * A local round trip is milliseconds. Eight seconds is not a guess about
+   * latency, it is long enough that anything still outstanding is broken.
+   */
+  static readonly #SAVE_REPLY_TIMEOUT_MS = 8000;
+  #saveTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #wizard: Wizard;
 
   constructor(handlers: UiHandlers) {
@@ -242,8 +263,18 @@ export class Ui {
       onDone: ({ meet }) => {
         this.#wake.focus();
         if (!meet) return;
-        if (this.#savePending) this.#wakeAfterSave = true;
-        else this.#handlers.onWake();
+        if (!this.#savePending) {
+          this.#handlers.onWake();
+          return;
+        }
+        this.#wakeAfterSave = true;
+        this.#saveTimer = setTimeout(() => {
+          this.#saveTimer = null;
+          if (!this.#wakeAfterSave) return;
+          this.#wakeAfterSave = false;
+          this.#savePending = false;
+          this.toast('Saved, but she has not confirmed it. Press Wake her when you are ready.');
+        }, Ui.#SAVE_REPLY_TIMEOUT_MS);
       },
     });
 
@@ -1106,6 +1137,10 @@ export class Ui {
     // The folder on disk is now the one the wizard wrote, so the first system
     // instruction will be built out of it rather than out of what it replaced.
     this.#savePending = false;
+    if (this.#saveTimer !== null) {
+      clearTimeout(this.#saveTimer);
+      this.#saveTimer = null;
+    }
     if (this.#wakeAfterSave) {
       this.#wakeAfterSave = false;
       this.#handlers.onWake();

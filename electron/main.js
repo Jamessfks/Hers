@@ -27,7 +27,7 @@
  * `src/server/app-paths.ts`, which is TypeScript and has tests.
  */
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { format } from 'node:util';
@@ -127,7 +127,21 @@ if (!app.requestSingleInstanceLock()) {
  */
 const logFile = path.join(paths.home, 'hers.log');
 try {
-  writeFileSync(logFile, `Hers — ${new Date().toISOString()}\n`);
+  /*
+   * Owner-only. The log carries the absolute paths in use — which contain your
+   * account name — every configuration warning, and the pinned Telegram chat id
+   * if you use that bridge. None of it is a credential and all of it is yours,
+   * which is a reason to keep it and not a reason to leave it world-readable.
+   *
+   * `mode` applies when the file is created, so the `chmod` is for the launch
+   * after the first one, where the file already exists at whatever it was.
+   */
+  writeFileSync(logFile, `Hers — ${new Date().toISOString()}\n`, { mode: 0o600 });
+  try {
+    chmodSync(logFile, 0o600);
+  } catch {
+    // A log that cannot be narrowed is still a log worth having.
+  }
   for (const level of /** @type {const} */ (['log', 'warn', 'error'])) {
     const printed = console[level].bind(console);
     console[level] = (...args) => {

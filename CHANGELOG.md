@@ -21,6 +21,22 @@ every stored fact, her mood and the key hint, then send back `say`,
 instruction she is built from. `HERS_ALLOW_HEADLESS=1` for anybody writing their
 own client.
 
+**The first run cannot end on nothing.** "Meet her" holds the wake until the
+server echoes back the profile the wizard just wrote, so her first system
+instruction is built from the new folder rather than the one it replaced. That
+wait had no timeout: a dropped socket between the save and the echo ended the
+ceremony on a focused button and no explanation. It now gives up after eight
+seconds and says so, rather than waking anyway — guessing on the one conversation
+where she chooses her own name is not a trade worth making.
+
+**Smaller things.** `hers.log` is created owner-only; it carries no credential but
+it does carry your account name in the paths and the pinned Telegram chat id, and
+that is a reason to keep it rather than a reason to leave it world-readable. The
+two tests that check every host and every written path carries an explanation used
+to accept `"x."` — a punctuation check dressed as a documentation check. They ask
+for a sentence now, which immediately caught three of this project's own entries
+being too thin to be useful.
+
 **Nothing is fetched from a CDN any more.** The call page imported LiveKit's
 client from `cdn.jsdelivr.net` at run time. That was the hardest outbound request
 in this project to notice, because the *phone* made it — so the "unplug your

@@ -98,10 +98,29 @@ test('docs/PRIVACY.md quotes the exact pattern this test scans with', () => {
   );
 });
 
+
+/**
+ * Whether a field is an explanation rather than a placeholder.
+ *
+ * The previous version of these assertions required a non-empty string ending
+ * in a full stop, which `"x."` satisfies. That is a punctuation check wearing a
+ * documentation check's clothes: the whole premise of these lists is that every
+ * entry carries a reason a person can read, and a test that green-lights `"x."`
+ * is not holding anyone to it.
+ *
+ * Eight words is not a quality bar and is not pretending to be one. It is the
+ * floor below which a sentence cannot be doing the job — no real answer to
+ * "what is sent here and when" fits in fewer.
+ */
+function explains(prose: string): boolean {
+  const words = prose.trim().split(/\s+/).filter(Boolean);
+  return words.length >= 8 && /\.$/.test(prose.trim());
+}
+
 test('each writer says what it writes and when', () => {
   for (const writer of WRITERS) {
-    assert.match(writer.what, /\S.*\.$/s, writer.module);
-    assert.match(writer.when, /\S.*\.$/s, writer.module);
+    assert.ok(explains(writer.what), `${writer.module} what: "${writer.what}"`);
+    assert.ok(explains(writer.when), `${writer.module} when: "${writer.when}"`);
   }
 });
 

@@ -128,14 +128,23 @@ export const DESTINATIONS: readonly Destination[] = [
 export const MENTIONED_ONLY: readonly { host: string; why: string }[] = [
   { host: 'aistudio.google.com', why: 'Where you get a Gemini key. A link on the setup page and a line the doctor prints.' },
   { host: 't.me', why: 'The link that opens your bot in Telegram, and @BotFather. Shown to you; opened by you.' },
-  { host: 'ai.google.dev', why: "Google's Live API documentation, cited in comments." },
+  {
+    host: 'ai.google.dev',
+    why: "Google's own documentation for the Live API, cited in comments where this code depends on a documented behaviour. A link somebody may click while reading the source; nothing here requests it.",
+  },
   {
     host: 'cdn.jsdelivr.net',
     why: 'Named in a comment in `call/index.html` saying why it is no longer used. The call page used to import LiveKit\'s client from here at run time, which was a request made by the phone rather than by this machine — so a network monitor here would never have shown it. The library is a devDependency now and is copied in beside the page at build time. Nothing fetches it.',
   },
-  { host: 'docs.cloud.google.com', why: "Google's voice documentation, cited in a comment." },
+  {
+    host: 'docs.cloud.google.com',
+    why: "Where Google publishes which of the thirty prebuilt voices it labels female, which is the table the voice menu is built from. Cited in a comment so the claim can be checked; nothing here requests it.",
+  },
   { host: 'localhost', why: 'This machine. Where the server binds and what the browser talks to.' },
-  { host: '127.0.0.1', why: 'The same machine, written the other way.' },
+  {
+    host: '127.0.0.1',
+    why: 'The same machine as localhost, written the other way. Both spellings are in the allowlist because a person may type either one into a browser, and the handshake has to recognise the address it was actually reached on.',
+  },
 ];
 
 /** Everything that is off until you configure it. */
