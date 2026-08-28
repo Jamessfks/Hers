@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run check:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm ls:*)",
+      "Bash(node --test:*)",
+      "Bash(node --version)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git blame:*)",
+      "Bash(git describe:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
+    ],
+    "ask": [
+      "Bash(npm run audit:*)",
+      "Bash(npm run doctor:*)",
+      "Bash(npm run package:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(gh release:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./hers-profile/**)",
+      "Read(./anna-profile/**)",
+      "Read(./data/**)",
+      "Read(./hers.log)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-paths.sh",
+            "timeout": 15,
+            "statusMessage": "Checking the write path"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/typecheck.sh",
+            "timeout": 120,
+            "statusMessage": "tsc"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh",
+            "timeout": 300,
+            "statusMessage": "npm run check"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
