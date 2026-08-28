@@ -105,6 +105,56 @@ export const TRAITS: readonly WizardChoice[] = [
   },
 ];
 
+/**
+ * voice.md — four of Google's fourteen, described rather than listed.
+ *
+ * The catalogue is real and it is thirty names, and the voice tab of **Who she
+ * is** is where it belongs: a menu is the right shape for "show me everything".
+ * It is the wrong shape here. `Vindemiatrix — Gentle` is a vendor's satellite
+ * codename and a vendor's adjective, and a first run that opens the card about
+ * her voice with fourteen of them has handed a stranger a parts list.
+ *
+ * So four, written the way the temperaments are written: a line about how she
+ * sounds, and the name underneath it in the file where it belongs. Four rather
+ * than fourteen is a claim that these are meaningfully different from each
+ * other; the ten left out are variations a person cannot pick between without
+ * hearing them, and there is nothing here to hear them with.
+ */
+export interface VoiceChoice {
+  id: string;
+  label: string;
+  line: string;
+  /** The Gemini prebuilt voice this writes into `voice.md`. */
+  voice: string;
+}
+
+export const VOICE_CHOICES: readonly VoiceChoice[] = [
+  {
+    id: 'light',
+    label: 'Light, and quick to land a joke',
+    line: 'What she ships with. Nothing heavy about it, and it moves.',
+    voice: 'Aoede',
+  },
+  {
+    id: 'low',
+    label: 'Low, and unhurried',
+    line: 'Takes its time. Sounds like somebody who has been awake a while.',
+    voice: 'Gacrux',
+  },
+  {
+    id: 'soft',
+    label: 'Soft, and close in',
+    line: 'Quiet enough that you lean toward it. Late at night this is the one.',
+    voice: 'Achernar',
+  },
+  {
+    id: 'firm',
+    label: 'Firm. Not much give in it.',
+    line: 'Even, level, hard to talk over. It does not soften to be liked.',
+    voice: 'Kore',
+  },
+];
+
 /** mood.md — where she sits when nothing in particular is happening. */
 export const TEMPERAMENTS: readonly Temperament[] = [
   {
@@ -188,6 +238,47 @@ export const WANTS: readonly WizardChoice[] = [
   },
 ];
 
+/**
+ * relationship.md — what she does about the days you are not here.
+ *
+ * The other half of the same card, and the half that is about her. {@link WANTS}
+ * is what somebody wants her around for, which is a fact about them; this is
+ * what she does with a silence, which is a fact about her and the only one in
+ * this wizard that costs the user nothing to decide and changes what turning up
+ * feels like a month later.
+ *
+ * The machinery is already in the product — she opens a conversation on her own
+ * within three minutes, gives up after two unanswered ones, and takes four years
+ * to be close to anybody. What was missing was any question about it, so every
+ * install got the same answer to "what happens when I disappear".
+ *
+ * None of these touch that engine. They are prose in her file about days, not a
+ * setting about minutes, so "you do not chase" and the three-minute opener are
+ * about different silences and do not contradict each other.
+ */
+export const ABSENCE: readonly WizardChoice[] = [
+  {
+    id: 'reaches',
+    label: 'Says something if you go quiet for days',
+    line: 'When they go three days without saying anything, you say something. Once.',
+  },
+  {
+    id: 'waits',
+    label: 'Does not chase',
+    line: 'You do not chase them across days. If they have gone, they have gone, and you are there when they come back.',
+  },
+  {
+    id: 'noticed',
+    label: 'Says she noticed you were gone',
+    line: 'When they come back after a long silence you say you noticed, and you do not make them account for where they were.',
+  },
+  {
+    id: 'cools',
+    label: 'Takes it personally',
+    line: 'A long silence costs something. You are cooler for a while afterwards, and you do not explain why unless they ask.',
+  },
+];
+
 /** boundaries.md — the things they have said no to. */
 export const REFUSALS: readonly WizardChoice[] = [
   {
@@ -234,9 +325,112 @@ export const REFUSALS: readonly WizardChoice[] = [
 const SECTIONS = {
   traits: 'What they chose on the first day',
   wants: 'What they wanted you for',
+  absence: 'When they are not here',
   about: 'What they told you about themselves',
   refusals: 'What they asked you not to do',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Keeping her biography and her frontmatter from contradicting each other
+// ---------------------------------------------------------------------------
+
+/**
+ * The two places the shipped `identity.md` prose states a fact the wizard also
+ * asks about.
+ *
+ * These are literal fragments of `DEFAULT_PROFILE_FILES` and they must not
+ * drift from it, which is why `wizard.test.ts` asserts both appear in it
+ * verbatim. Matching on a short marker rather than the whole paragraph so that
+ * re-wrapping a line in `defaults.ts` does not silently turn this off.
+ */
+const SHIPPED = {
+  /** In the first paragraph, which is the one that is about where she is from. */
+  origin: 'born in Oakland',
+  /** In the second, which is the one that is about how old she is. */
+  age: 'You are twenty-six',
+} as const;
+
+/**
+ * Rewrites the sentences that name a fact the user has just changed.
+ *
+ * The bug this exists for is the ordinary path, not an edge case: type "Lisbon,
+ * Portugal" into *where she is from*, press Next, and the header says Lisbon
+ * over a biography that still opens "You were born in Oakland to parents who
+ * moved from Chengdu". A warning under the field is not a fix for that — it is
+ * a note explaining that the interface will break her unless the user rewrites
+ * four paragraphs by hand.
+ *
+ * Surgical rather than wholesale, and only against prose this project wrote.
+ * Changing her age rewrites the sentence about her age and leaves the paragraph
+ * about growing up bilingual alone. Changing where she is from replaces that
+ * whole paragraph, because "born in Oakland to parents who moved from Chengdu"
+ * is one fact in four clauses and there is no honest way to keep half of it.
+ *
+ * A body that no longer contains the markers has been edited by somebody, and
+ * somebody else's prose is not this function's to rewrite. It comes back
+ * untouched, which is also what makes an unchanged answer a no-op: nothing
+ * differs, nothing is rewritten, and the file is byte-for-byte what it was.
+ */
+export function retellIdentity(
+  body: string,
+  next: { age?: string; ethnicity?: string; from?: string },
+  current: { age?: string; ethnicity?: string; from?: string },
+): string {
+  const changed = (key: 'age' | 'ethnicity' | 'from'): boolean => {
+    const wanted = next[key]?.trim();
+    return Boolean(wanted) && wanted !== (current[key]?.trim() ?? '');
+  };
+
+  let paragraphs = body.split(/\n{2,}/);
+
+  if ((changed('from') || changed('ethnicity')) && paragraphs[0]?.includes(SHIPPED.origin)) {
+    const from = oneLine(next.from ?? current.from ?? '');
+    const ethnicity = oneLine(next.ethnicity ?? current.ethnicity ?? '');
+    paragraphs = [
+      wrap(
+        [
+          `You grew up in ${from}${ethnicity ? `, and you are ${ethnicity}` : ''}.`,
+          'You studied something you are cagey about and have opinions about cities,',
+          'coffee, and people who describe themselves as busy.',
+        ].join(' '),
+      ),
+      ...paragraphs.slice(1),
+    ];
+  }
+
+  if (changed('age')) {
+    const age = oneLine(next.age ?? '');
+    paragraphs = paragraphs.map((paragraph) =>
+      paragraph.includes(SHIPPED.age)
+        ? paragraph.replace(SHIPPED.age, `You are ${age}`)
+        : paragraph,
+    );
+  }
+
+  return paragraphs.join('\n\n');
+}
+
+/**
+ * Hard-wraps a paragraph to the width the rest of the folder is written at.
+ *
+ * Cosmetic, and worth the eight lines: these files are meant to be opened in a
+ * text editor, and one 240-column paragraph in the middle of a file wrapped at
+ * eighty is a mark saying a program has been here.
+ */
+function wrap(text: string, width = 78): string {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of oneLine(text).split(' ')) {
+    if (line && `${line} ${word}`.length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // The answers, and what they do
@@ -264,6 +458,8 @@ export interface WizardAnswers {
   temperament?: string;
   /** relationship.md — ids from {@link WANTS}. */
   wants?: readonly string[];
+  /** relationship.md — ids from {@link ABSENCE}. */
+  absence?: readonly string[];
   /** relationship.md — their own words, kept as theirs. */
   aboutThem?: string;
   /** boundaries.md — ids from {@link REFUSALS}. */
@@ -312,17 +508,31 @@ export function applyWizard(
   );
 
   edit('identity', (raw) => {
+    const before = parseProfileFile(raw);
     let file = raw;
     file = withValue(file, 'age', answers.age);
     file = withValue(file, 'ethnicity', answers.ethnicity);
     file = withValue(file, 'from', answers.from);
-    // Replaced rather than appended: the paragraph that ships is a life in
-    // Oakland, and a second paragraph under it describing a different one
-    // leaves her with two pasts. Blank means they cleared the box, which is
-    // read as "leave it" — deleting her history by accident is not an outcome
-    // a text field should be able to produce.
-    if (answers.past?.trim()) file = withBody(file, answers.past.trim());
-    return file;
+
+    /*
+     * Replaced rather than appended, and rewritten rather than warned about.
+     *
+     * The paragraph that ships is a life in Oakland, so a second paragraph under
+     * it describing a life in Lisbon leaves her with two pasts. What the user
+     * typed wins when they typed something; when they did not, the sentences
+     * that name a fact they *did* change get rewritten to say the new one — see
+     * {@link retellIdentity}. A blank box is read as "leave it", because
+     * deleting her history by accident is not an outcome a text field should be
+     * able to produce.
+     *
+     * Only written when it actually differs. Putting the same body back through
+     * `withBody` would re-serialise a file nobody changed, and this module's one
+     * hard promise is that a wizard nobody answered writes nothing.
+     */
+    const body = answers.past?.trim()
+      ? answers.past.trim()
+      : retellIdentity(before.body, answers, before.frontmatter);
+    return body === before.body ? file : withBody(file, body);
   });
 
   edit('voice', (raw) => {
@@ -347,6 +557,7 @@ export function applyWizard(
   edit('relationship', (raw) => {
     let file = setFrontmatterValue(raw, 'met', met);
     file = withSection(file, SECTIONS.wants, linesFor(WANTS, answers.wants));
+    file = withSection(file, SECTIONS.absence, linesFor(ABSENCE, answers.absence));
     // Kept as a quotation rather than folded into the prose around it. What
     // they typed is theirs, in their own person — turning "I have two sisters"
     // into an instruction addressed to her would mean rewriting somebody's

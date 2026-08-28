@@ -6,7 +6,7 @@ import { test } from 'node:test';
 
 import { setFrontmatterValue } from '../../shared/frontmatter.ts';
 import { applyWizard } from '../../shared/wizard.ts';
-import { isFirstRun } from './first-run.ts';
+import { hasChosenName, isFirstRun } from './first-run.ts';
 import { DEFAULT_PROFILE_FILES } from './defaults.ts';
 import {
   ensureProfile,
@@ -18,6 +18,16 @@ import {
 import { PROFILE_FILES } from './types.ts';
 
 const scratch = () => mkdtemp(path.join(tmpdir(), 'hers-first-run-'));
+
+/** The rest of an identity, so a test can vary the one field it is about. */
+const WHO = {
+  name: 'Anna',
+  age: '26',
+  gender: 'female',
+  pronouns: 'she/her',
+  ethnicity: 'Chinese-American',
+  from: 'Oakland, California',
+};
 
 /** The six files as they ship, keyed the way `readProfileFiles` keys them. */
 function shipped(): Record<string, string> {
@@ -103,6 +113,7 @@ test('answering every step ends it too', () => {
         from: 'Lisbon',
         temperament: 'level',
         wants: ['noticing'],
+        absence: ['waits'],
         aboutThem: 'I work nights.',
         refusals: ['romance'],
       },
@@ -114,6 +125,22 @@ test('answering every step ends it too', () => {
   // And it did not name her on the way past. That is still hers to do.
   assert.equal(after.identity?.includes('name: Anna'), true);
   assert.equal(after.identity?.includes('named:'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Whether there is a name to print
+// ---------------------------------------------------------------------------
+
+test('the shipped placeholder is not a name anybody chose', () => {
+  assert.equal(hasChosenName({ ...WHO, name: 'Anna' }), false);
+  assert.equal(hasChosenName({ ...WHO, name: 'anna' }), false);
+});
+
+test('a name she chose, and a name somebody typed, both count', () => {
+  assert.equal(hasChosenName({ ...WHO, name: 'Mei', named: 'self' }), true);
+  assert.equal(hasChosenName({ ...WHO, name: 'Mei' }), true);
+  // The marker is enough on its own, even if the name were somehow the default.
+  assert.equal(hasChosenName({ ...WHO, name: 'Anna', named: 'self' }), true);
 });
 
 // ---------------------------------------------------------------------------

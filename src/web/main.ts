@@ -42,7 +42,7 @@ const ui = new Ui({
     if (!awake) void toggleWake();
   },
   onLoadProfile: () => connection.send({ t: 'profile.load' }),
-  onSaveProfile: (files) => connection.send({ t: 'profile.save', files }),
+  onSaveProfile: (files, quiet) => connection.send({ t: 'profile.save', files, quiet: quiet === true }),
   onUploadFace: (file) => void uploadFace(file),
   onClaim: () => connection.connect(),
   onLoadMemory: () => connection.send({ t: 'memory.load' }),

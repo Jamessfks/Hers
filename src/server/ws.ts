@@ -42,7 +42,7 @@ import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
 import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
-import { isFirstRun } from '../core/profile/first-run.ts';
+import { hasChosenName, isFirstRun } from '../core/profile/first-run.ts';
 
 /** A screen frame at 1080p JPEG is comfortably under this; nothing legitimate is not. */
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -220,6 +220,7 @@ export class WebBridge {
       version: this.#options.version,
       model: brain.config.model,
       name: brain.profile.identity.name,
+      named: hasChosenName(brain.profile.identity),
       voice: brain.profile.voice.voice,
       senses: this.#options.conversation.situation?.senses ?? {
         hearing: false,
@@ -383,11 +384,16 @@ export class WebBridge {
         await this.#options.brain.reloadProfile();
         sendJson(socket, await this.#profile());
         // Honest about when it lands: a Live session's system instruction is
-        // fixed at setup, so this is the next wake, not this sentence.
-        this.#send({
-          t: 'trouble',
-          message: 'Saved. She picks up the changes the next time she wakes.',
-        });
+        // fixed at setup, so this is the next wake, not this sentence. Skipped
+        // when the caller says so — the first-run wizard wakes her itself, and
+        // ending a first run on an error-styled toast about scheduling is not a
+        // way to introduce anybody.
+        if (message.quiet !== true) {
+          this.#send({
+            t: 'trouble',
+            message: 'Saved. She picks up the changes the next time she wakes.',
+          });
+        }
         return;
       }
 

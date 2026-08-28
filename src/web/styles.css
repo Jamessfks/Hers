@@ -537,7 +537,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* One labelled control, with the reason for it underneath. */
 .wizard-field { display: grid; gap: 6px; min-width: 0; }
-.wizard-field > label { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.wizard-field > label,
+.wizard-group { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .wizard-field > small { color: var(--ink-faint); font-size: 12.5px; line-height: 1.55; }
 
 .wizard-input, .wizard-select {

@@ -107,8 +107,16 @@ export type ClientMessage =
   | { t: 'wake' }
   /** Close the live session and stop the clock. */
   | { t: 'sleep' }
-  /** Write changes back to the profile folder. */
-  | { t: 'profile.save'; files: Record<string, string> }
+  /**
+   * Write changes back to the profile folder.
+   *
+   * `quiet` suppresses the note the server otherwise sends back about the change
+   * landing on the next wake. That note is correct for the profile editor and
+   * wrong for the first-run wizard, which is about to wake her — and it travels
+   * on the `trouble` channel, so the last line of a first run was an error-styled
+   * toast about scheduling.
+   */
+  | { t: 'profile.save'; files: Record<string, string>; quiet?: boolean }
   /** Ask for the profile folder as it is on disk. */
   | { t: 'profile.load' }
   /** Ask for the current avatar state. */
@@ -201,6 +209,18 @@ export type ServerMessage =
        * in the interface disagrees with the name she answers to is two people.
        */
       name: string;
+      /**
+       * Whether that name is one anybody chose.
+       *
+       * False while it is still the placeholder the project ships with and she
+       * has not had her first conversation — the same pair of conditions
+       * `ensureNamed` reads, so a name typed into `identity.md` by hand counts
+       * as chosen. The page draws no name at all when this is false: the wizard
+       * spends a whole card explaining that she has not got one yet, and a
+       * header reading "Anna" over that card is either a lie or a bug, and a
+       * stranger cannot tell which.
+       */
+      named: boolean;
       voice: string;
       senses: Record<SenseName, boolean>;
       /** False when the server has no Gemini key; the UI shows setup instead. */

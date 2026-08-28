@@ -118,6 +118,9 @@ test('the first thing she says is what the UI needs to draw itself', async () =>
     const ready = messages.find((message) => message.t === 'ready');
     assert.ok(ready, 'no ready message');
     assert.equal(ready.t === 'ready' && ready.configured, false, 'no key is configured here');
+    // She has not chosen yet, so the page is told there is no name to draw —
+    // otherwise the wizard card saying she has not got one runs under "Anna".
+    assert.equal(ready.t === 'ready' && ready.named, false);
     assert.ok(ready.t === 'ready' && ready.cameraFps > 0);
     assert.deepEqual(
       ready.t === 'ready' ? Object.keys(ready.senses).sort() : [],

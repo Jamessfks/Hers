@@ -48,6 +48,21 @@
 import { frontmatterValue } from '../../shared/frontmatter.ts';
 import { DEFAULT_PROFILE_FILES } from './defaults.ts';
 import { PLACEHOLDER_NAME } from './naming.ts';
+import type { Identity } from './types.ts';
+
+/**
+ * Whether her name is one somebody actually chose.
+ *
+ * The same pair of conditions `Brain.ensureNamed` refuses to reduce to one, read
+ * off a loaded profile rather than off the files: `named: self` means she chose
+ * it, and any name that is not the shipped placeholder means a person typed it
+ * in. Either counts. Neither means she is still unnamed, and the interface says
+ * so by drawing no name.
+ */
+export function hasChosenName(identity: Identity): boolean {
+  if (identity.named === 'self') return true;
+  return identity.name.trim().toLowerCase() !== PLACEHOLDER_NAME.toLowerCase();
+}
 
 export interface FirstRunSignals {
   /**

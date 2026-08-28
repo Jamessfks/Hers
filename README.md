@@ -238,8 +238,8 @@ The first time you open the page on a folder nobody has used, a wizard walks tho
 files in order and then asks for a photograph — seven questions, one per thing she is
 made of, and every one of them skippable. It shows the exact sentence each answer puts
 in her file, because that sentence is what reaches the model. Skip all seven and you get
-the profile above, unchanged. It does not ask her name: she still chooses that herself
-on the first conversation, and the last card is about why.
+the profile above, unchanged. It does not ask her name: she still chooses that herself,
+the last card is about why, and the button on it wakes her so that she does.
 
 Edit them in a text editor or under **Profile**; changes take effect the next time she
 wakes, because a Live session's system instruction is fixed when the session opens. She

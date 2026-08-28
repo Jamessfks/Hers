@@ -2,7 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { frontmatterValue, parseProfileFile } from './frontmatter.ts';
-import { REFUSALS, TEMPERAMENTS, TRAITS, WANTS, applyWizard, withSection } from './wizard.ts';
+import {
+  ABSENCE,
+  REFUSALS,
+  TEMPERAMENTS,
+  TRAITS,
+  VOICE_CHOICES,
+  WANTS,
+  applyWizard,
+  retellIdentity,
+  withSection,
+} from './wizard.ts';
+import { FEMALE_VOICES } from './voices.ts';
 import type { WizardAnswers } from './wizard.ts';
 import { DEFAULT_PROFILE_FILES } from '../core/profile/defaults.ts';
 
@@ -57,10 +68,11 @@ test('answers that are present but empty count as skipped', () => {
     age: frontmatterValue(identity, 'age') ?? '',
     ethnicity: frontmatterValue(identity, 'ethnicity') ?? '',
     from: frontmatterValue(identity, 'from') ?? '',
-    past: parseProfileFile(identity).body,
+    past: '',
     voice: frontmatterValue(files.voice ?? '', 'voice') ?? '',
     pace: frontmatterValue(files.voice ?? '', 'pace') ?? '',
     wants: [],
+    absence: [],
     aboutThem: '',
     refusals: [],
     refusalExtra: '',
@@ -107,7 +119,7 @@ test('traits come out in the order they are offered, not the order they were cli
   assert.ok(teases > 0 && swears > teases);
 });
 
-test('identity writes three keys and replaces the paragraph under them', () => {
+test('identity writes three keys and takes the prose the user typed', () => {
   const changed = applyWizard(
     shipped(),
     { age: '31', ethnicity: 'Portuguese', from: 'Lisbon', past: 'You grew up over a bakery.' },
@@ -126,9 +138,67 @@ test('identity writes three keys and replaces the paragraph under them', () => {
   assert.equal(frontmatterValue(identity, 'name'), 'Anna');
 });
 
-test('clearing the past box leaves her past alone rather than deleting it', () => {
+test('clearing the past box leaves the paragraphs she has, minus the fact that moved', () => {
+  // Blank means "leave it", not "delete it" — but the sentence naming her age
+  // is still made to agree with the age above it.
   const changed = applyWizard(shipped(), { age: '31', past: '   ' }, MET);
-  assert.ok((changed.identity ?? '').includes('Oakland'));
+  const identity = changed.identity ?? '';
+  assert.ok(identity.includes('Oakland'), 'the paragraph nobody changed is gone');
+  assert.ok(identity.includes('You are 31 and you do not perform'));
+  assert.ok(!identity.includes('You are twenty-six'));
+});
+
+// ---------------------------------------------------------------------------
+// The bug the critic walked into: a header that disagrees with the biography
+// ---------------------------------------------------------------------------
+
+test('changing where she is from rewrites the paragraph that says where she is from', () => {
+  const changed = applyWizard(shipped(), { from: 'Lisbon, Portugal' }, MET);
+  const identity = changed.identity ?? '';
+
+  assert.equal(frontmatterValue(identity, 'from'), 'Lisbon, Portugal');
+  assert.ok(identity.includes('You grew up in Lisbon, Portugal'));
+  // The sentence that contradicted it is gone, and the two that did not are not.
+  assert.ok(!identity.includes('born in Oakland'));
+  assert.ok(identity.includes('people who describe themselves as busy'));
+  assert.ok(identity.includes('You do not have a job you talk about'));
+});
+
+test('changing only her age leaves the paragraph about growing up alone', () => {
+  const identity = applyWizard(shipped(), { age: '31' }, MET).identity ?? '';
+  assert.ok(identity.includes('born in Oakland'), 'a fact nobody asked about was rewritten');
+  assert.ok(identity.includes('You are 31 and'));
+});
+
+test('the markers it edits against are really in the file it ships', () => {
+  // `retellIdentity` finds the sentences by literal fragment, so a reword in
+  // defaults.ts would silently turn the whole rewrite off. This is the guard.
+  const shippedIdentity = DEFAULT_PROFILE_FILES['identity.md'] ?? '';
+  assert.ok(shippedIdentity.includes('born in Oakland'));
+  assert.ok(shippedIdentity.includes('You are twenty-six'));
+});
+
+test('prose somebody else wrote is not rewritten', () => {
+  const mine = 'You are from nowhere in particular and you like it that way.';
+  assert.equal(retellIdentity(mine, { from: 'Lisbon', age: '31' }, { from: 'Oakland' }), mine);
+});
+
+test('an answer identical to what is already there rewrites nothing', () => {
+  const body = parseProfileFile(shipped().identity ?? '').body;
+  assert.equal(retellIdentity(body, { from: 'Oakland, California', age: '26' }, { from: 'Oakland, California', age: '26' }), body);
+});
+
+test('the generated paragraph is wrapped like the rest of the folder', () => {
+  // A 240-column paragraph in a file wrapped at eighty is a mark saying a
+  // program has been here. Asserted on the paragraph this writes, not on the
+  // ones it copied through.
+  const body = parseProfileFile(shipped().identity ?? '').body;
+  const retold = retellIdentity(body, { from: 'Lisbon, Portugal' }, { from: 'Oakland, California' });
+  const written = retold.split(/\n{2,}/)[0] ?? '';
+
+  assert.ok(written.includes('Lisbon'));
+  assert.ok(written.includes('\n'), 'it came out as one long line');
+  for (const line of written.split('\n')) assert.ok(line.length <= 80, `long line: ${line}`);
 });
 
 test('a temperament writes five numbers and keeps the explanation under them', () => {
@@ -161,6 +231,37 @@ test('their own words go in as a quotation, in their own person', () => {
   assert.ok(relationship.includes('> I hate being managed.'));
   // Not rewritten into an instruction addressed to her.
   assert.ok(!relationship.includes('They have two sisters'));
+});
+
+test('what she does with a silence goes in under its own heading', () => {
+  const changed = applyWizard(shipped(), { wants: ['evening'], absence: ['waits', 'cools'] }, MET);
+  const relationship = changed.relationship ?? '';
+
+  assert.ok(relationship.includes('## When they are not here'));
+  assert.ok(relationship.includes(ABSENCE.find((each) => each.id === 'waits')?.line ?? ''));
+  assert.ok(relationship.includes(ABSENCE.find((each) => each.id === 'cools')?.line ?? ''));
+  // Its own section, so it does not land inside the one about what they wanted.
+  assert.ok(
+    relationship.indexOf('## What they wanted you for') <
+      relationship.indexOf('## When they are not here'),
+  );
+});
+
+test('every offered voice is a name Google actually has', () => {
+  // These are typed out by hand next to a description. A typo would fall back to
+  // the default at load and the card would be quietly lying about what it wrote.
+  for (const option of VOICE_CHOICES) {
+    assert.ok(
+      FEMALE_VOICES.some((voice) => voice.name === option.voice),
+      `${option.voice} is not one of hers`,
+    );
+  }
+  assert.equal(new Set(VOICE_CHOICES.map((o) => o.voice)).size, VOICE_CHOICES.length);
+});
+
+test('picking a described voice writes the name behind it', () => {
+  const changed = applyWizard(shipped(), { voice: 'Gacrux' }, MET);
+  assert.equal(frontmatterValue(changed.voice ?? '', 'voice'), 'Gacrux');
 });
 
 test('refusals become a list, and one of them can be theirs', () => {

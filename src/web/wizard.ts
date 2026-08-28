@@ -34,10 +34,18 @@
  * `shared/wizard.ts`, which is where that promise is actually kept.
  */
 
-import { REFUSALS, TEMPERAMENTS, TRAITS, WANTS, applyWizard } from '../shared/wizard.ts';
+import {
+  ABSENCE,
+  REFUSALS,
+  TEMPERAMENTS,
+  TRAITS,
+  VOICE_CHOICES,
+  WANTS,
+  applyWizard,
+  retellIdentity,
+} from '../shared/wizard.ts';
 import type { WizardAnswers, WizardChoice } from '../shared/wizard.ts';
 import { frontmatterValue, parseProfileFile } from '../shared/frontmatter.ts';
-import { DEFAULT_VOICE, FEMALE_VOICES } from '../shared/voices.ts';
 
 /** Local copy rather than an import from `ui.ts`, which imports this. */
 function need<T extends HTMLElement>(id: string): T {
@@ -53,8 +61,12 @@ export interface WizardHandlers {
   onUploadFace(file: File): void;
   /** A pasted Gemini key. Resolves to null on success, or to why not. */
   onSaveKey(key: string): Promise<string | null>;
-  /** The wizard is over, however it ended. */
-  onDone(): void;
+  /**
+   * The wizard is over. `meet` is true only when it ended on the button that
+   * says so and she has a key to wake with — Escape and Close are exits, not
+   * introductions.
+   */
+  onDone(outcome: { meet: boolean }): void;
 }
 
 /** One card. The panel is built once and kept, so Back does not lose an answer. */
@@ -97,6 +109,7 @@ export class Wizard {
   // look when asking what this will write, and `clear()` has something to clear.
   #traits = new Set<string>();
   #wants = new Set<string>();
+  #absence = new Set<string>();
   #refusals = new Set<string>();
   #temperament: string | undefined;
   #identity: { age: string; ethnicity: string; from: string; past: string } = {
@@ -125,7 +138,7 @@ export class Wizard {
       this.#go(this.#index + 1);
     });
     this.#next.addEventListener('click', () => {
-      if (this.#index >= this.#steps.length - 1) this.#finish();
+      if (this.#index >= this.#steps.length - 1) this.#finish(true);
       else this.#go(this.#index + 1);
     });
 
@@ -137,20 +150,18 @@ export class Wizard {
      * the rudest available reading of it. It is also what makes "this asks once"
      * true however it ended: the date goes in, so the wizard has run.
      *
-     * Three listeners for two exits, and the reason is that `close` is a queued
-     * task rather than a synchronous event. Measured: in a page the browser
-     * considers hidden, the dialog closed and the `close` event did not arrive,
-     * so the answers were saved or lost depending on whether the window was in
-     * front. The button and Escape are each hooked directly; `close` stays as
-     * the backstop for any route neither of them covers. `#closing` makes all
-     * three idempotent.
+     * Both exits are hooked directly, and there is deliberately no listener on
+     * `close`. Measured: `close` is a *queued* element task, and in a page the
+     * browser considers hidden the dialog closed and the event never arrived —
+     * three answers and the date were dropped. A listener that does not run in
+     * the one condition it exists for is not a backstop, it is a comment that
+     * reads like one, so it is gone. `cancel` is dispatched synchronously rather
+     * than queued, which is why Escape can be caught at all. Nothing else closes
+     * this dialog: {@link #finish} is the only caller of `close()`, and
+     * `#closing` keeps it idempotent.
      */
-    this.#close.addEventListener('click', () => this.#finish());
-    this.#dialog.addEventListener('cancel', () => this.#finish());
-    this.#dialog.addEventListener('close', () => {
-      if (this.#closing) return;
-      this.#finish();
-    });
+    this.#close.addEventListener('click', () => this.#finish(false));
+    this.#dialog.addEventListener('cancel', () => this.#finish(false));
   }
 
   /** Whether it has been put in front of somebody yet. */
@@ -247,12 +258,13 @@ export class Wizard {
    * went would leave a half-answered profile behind if somebody wandered off
    * mid-way, and would have to explain which half.
    */
-  #finish(): void {
+  #finish(intentional: boolean): void {
+    if (this.#closing) return;
     this.#closing = true;
     const changed = applyWizard(this.#files, this.#answers(), today());
     if (Object.keys(changed).length > 0) this.#handlers.onSave(changed);
     if (this.#dialog.open) this.#dialog.close();
-    this.#handlers.onDone();
+    this.#handlers.onDone({ meet: intentional && this.#configured });
   }
 
   #answers(): WizardAnswers {
@@ -266,6 +278,7 @@ export class Wizard {
       pace: this.#voice.pace,
       ...(this.#temperament ? { temperament: this.#temperament } : {}),
       wants: [...this.#wants],
+      absence: [...this.#absence],
       aboutThem: this.#aboutThem,
       refusals: [...this.#refusals],
       refusalExtra: this.#refusalExtra,
@@ -298,26 +311,63 @@ export class Wizard {
       id: 'personality',
       title: 'How she is with you',
       note:
-        'She ships warm, dry and hard to embarrass. Anything you add goes into her file as an instruction rather than an adjective, because being told to be something does nothing to a model and being told to do something does. Skip any of these — skipping leaves her exactly as she ships. This asks once.',
+        'She ships warm, dry and hard to embarrass. Anything you tick is a line in her file, and the line is underneath it, so you can read what she will be told before you choose it. Skip any of these; skipping leaves her exactly as she ships. This asks once. About four minutes.',
       panel,
       clear: () => untick(panel, this.#traits),
     };
   }
 
+  /**
+   * The three facts, and the paragraph that states them.
+   *
+   * The paragraph is not decoration here — it is the half Gemini reads, and it
+   * opens "You were born in Oakland to parents who moved from Chengdu". Typing
+   * "Lisbon, Portugal" into the field above it and pressing Next used to leave
+   * exactly that contradiction on disk, with a hint underneath warning that it
+   * would. A warning that the interface is about to break the character unless
+   * the user rewrites four paragraphs by hand is a bug with a label on it.
+   *
+   * So the fields drive the sentences that name them, live, and the box shows
+   * the result as it changes. The moment somebody edits the box themselves it
+   * stops rewriting and stays theirs — {@link retellIdentity} does the surgery
+   * and only ever against prose this project wrote.
+   */
   #identityStep(): Step {
     const identity = this.#files.identity ?? '';
     const age = frontmatterValue(identity, 'age') ?? '';
     const ethnicity = frontmatterValue(identity, 'ethnicity') ?? '';
     const from = frontmatterValue(identity, 'from') ?? '';
     const past = parseProfileFile(identity).body;
-    this.#identity = { age, ethnicity, from, past };
+    const shipped = { age, ethnicity, from };
+    this.#identity = { age, ethnicity, from, past: '' };
 
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
 
-    const ageInput = this.#text(age, (value) => (this.#identity.age = value));
-    const ethnicityInput = this.#text(ethnicity, (value) => (this.#identity.ethnicity = value));
-    const fromInput = this.#text(from, (value) => (this.#identity.from = value));
+    /** True while the box still shows something this wizard put there. */
+    let mine = true;
+
+    const retell = (): void => {
+      if (!mine) return;
+      const retold = retellIdentity(past, this.#identity, shipped);
+      pastArea.value = retold;
+      // Only counts as an answer once it differs from what shipped; otherwise a
+      // skipped card would send the body back and defeat the write-nothing rule.
+      this.#identity.past = retold === past ? '' : retold;
+    };
+
+    const ageInput = this.#text(age, (value) => {
+      this.#identity.age = value;
+      retell();
+    });
+    const ethnicityInput = this.#text(ethnicity, (value) => {
+      this.#identity.ethnicity = value;
+      retell();
+    });
+    const fromInput = this.#text(from, (value) => {
+      this.#identity.from = value;
+      retell();
+    });
 
     const row = document.createElement('div');
     row.className = 'wizard-row';
@@ -327,15 +377,18 @@ export class Wizard {
       this.#field('Where she is from', fromInput),
     );
 
-    const pastArea = this.#area(past, (value) => (this.#identity.past = value));
+    const pastArea = this.#area(past, (value) => {
+      mine = false;
+      this.#identity.past = value;
+    });
     pastArea.rows = 9;
 
     panel.append(
       row,
       this.#field(
-        'Her own account of it',
+        'What she has been told about her past',
         pastArea,
-        'This is the paragraph she is given about her past, exactly as it sits in identity.md. It names Oakland and it names twenty-six, so if you changed either of those above, change it here too. Clearing the box leaves it alone rather than deleting it.',
+        'This follows the three fields above — change one and watch the sentence that mentions it change with it. Write in here and it stops following and stays yours. Emptying it leaves her past alone rather than deleting it.',
       ),
     );
 
@@ -349,53 +402,79 @@ export class Wizard {
         ethnicityInput.value = ethnicity;
         fromInput.value = from;
         pastArea.value = past;
-        this.#identity = { age, ethnicity, from, past };
+        mine = true;
+        this.#identity = { age, ethnicity, from, past: '' };
       },
     };
   }
 
+  /**
+   * Four described voices, not fourteen listed ones.
+   *
+   * This card used to be a `<select>` of Google's satellite codenames with
+   * Google's one-word adjectives beside them — `Vindemiatrix — Gentle` — under a
+   * hint conceding they were "the only ones there are". On the card about how
+   * she sounds, that hands a stranger a vendor's parts list, which is exactly
+   * what the temperament card two steps later refuses to do with five numbers.
+   *
+   * So it is built the same way that one is: a line about how she sounds, and
+   * the name it writes kept out of the way in the file where it belongs. The
+   * full thirty are still reachable — the voice tab of **Who she is** has the
+   * menu, and `voice.md` takes any of them typed by hand.
+   */
   #voiceStep(): Step {
     const file = this.#files.voice ?? '';
-    const chosen = frontmatterValue(file, 'voice')?.trim() ?? DEFAULT_VOICE;
+    const chosen = frontmatterValue(file, 'voice')?.trim() ?? '';
     const pace = frontmatterValue(file, 'pace') ?? '';
-    this.#voice = { voice: chosen, pace };
-
-    const select = document.createElement('select');
-    select.className = 'wizard-select';
-    const offered = FEMALE_VOICES.some((voice) => voice.name.toLowerCase() === chosen.toLowerCase())
-      ? FEMALE_VOICES
-      : [...FEMALE_VOICES, { name: chosen, character: 'from your file', gender: 'female' as const }];
-    for (const { name, character } of offered) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = `${name} — ${character}`;
-      select.append(option);
-    }
-    select.value = chosen;
-    select.addEventListener('change', () => (this.#voice.voice = select.value));
-
-    const paceInput = this.#text(pace, (value) => (this.#voice.pace = value));
+    this.#voice = { voice: '', pace };
 
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
+
+    const list = document.createElement('div');
+    list.className = 'wizard-choices';
+    const inputs: HTMLInputElement[] = [];
+    for (const option of VOICE_CHOICES) {
+      const { row, input } = this.#choice('radio', 'wizard-voice', option.label, option.line);
+      input.value = option.id;
+      // Whatever the file already says wins the initial state, so a profile that
+      // has been edited by hand does not silently disagree with this card.
+      input.checked = option.voice.toLowerCase() === chosen.toLowerCase();
+      if (input.checked) this.#voice.voice = option.voice;
+      input.addEventListener('change', () => {
+        if (input.checked) this.#voice.voice = option.voice;
+      });
+      inputs.push(input);
+      list.append(row);
+    }
+    const initial = this.#voice.voice;
+
+    const paceInput = this.#text(pace, (value) => (this.#voice.pace = value));
+
+    const aside = document.createElement('p');
+    aside.className = 'wizard-aside';
+    aside.textContent =
+      'Each of these is one name in voice.md. There is nothing here to press to hear them; she has not said anything yet. All thirty Google publishes are on the voice tab of Who she is.';
+
     panel.append(
-      this.#field('Her voice', select, "Google's own descriptions, which are the only ones there are."),
+      list,
       this.#field(
         'How she paces it',
         paceInput,
-        'A line of prose, not a setting. "Unhurried, with real pauses" is what she ships with.',
+        'A line of prose rather than a setting. She is read this, not tuned by it.',
       ),
+      aside,
     );
 
     return {
       id: 'voice',
       title: 'How she sounds',
-      note: 'Fourteen voices. There is no preview button here on purpose: playing one is a request against your key, and she has not said anything yet. Changing it later is a menu in Who she is.',
+      note: 'She is speaking out loud, not typing. This is the difference between being talked to at eleven at night and being read a notification.',
       panel,
       clear: () => {
-        select.value = chosen;
+        for (const input of inputs) input.checked = input.value === chosenId(initial);
         paceInput.value = pace;
-        this.#voice = { voice: chosen, pace };
+        this.#voice = { voice: initial, pace };
       },
     };
   }
@@ -420,7 +499,7 @@ export class Wizard {
     const note = document.createElement('p');
     note.className = 'wizard-aside';
     note.textContent =
-      'Each of these is five numbers in mood.md. Her live mood moves away from them with what happens between you and decays back toward them over the following half hour, which is the whole of the mechanism.';
+      'Each of these is five numbers in mood.md. Her mood moves away from them with what happens between you, then settles back over the following half hour.';
 
     panel.append(list, note);
 
@@ -436,6 +515,15 @@ export class Wizard {
     };
   }
 
+  /**
+   * Two groups, and the second one is the one that was missing.
+   *
+   * {@link WANTS} is what somebody wants her around for, which is a fact about
+   * them. {@link ABSENCE} is what she does about the days they are not here,
+   * which is a fact about her — and it was the one thing the product already had
+   * machinery for and no question about, so every install got the same answer to
+   * "what happens when I disappear".
+   */
   #relationshipStep(): Step {
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
@@ -444,9 +532,12 @@ export class Wizard {
     area.rows = 4;
     area.placeholder = 'Anything. It goes in as a quotation, in your words, not rewritten.';
 
-    const picks = this.#picks(WANTS, this.#wants);
+    const wants = this.#picks(WANTS, this.#wants);
+    const absence = this.#picks(ABSENCE, this.#absence);
+
     panel.append(
-      picks,
+      this.#group('What you want her around for', wants),
+      this.#group('And when you are not here', absence),
       this.#field('What she should know about you before you start', area),
     );
 
@@ -456,7 +547,8 @@ export class Wizard {
       note: 'She will ask your name herself, early and once, the first time you talk — so it is not here. This is the rest of it.',
       panel,
       clear: () => {
-        untick(picks, this.#wants);
+        untick(wants, this.#wants);
+        untick(absence, this.#absence);
         area.value = '';
         this.#aboutThem = '';
       },
@@ -553,7 +645,7 @@ export class Wizard {
 
     for (const paragraph of [
       'That is the one thing this did not ask you, and it is the one thing that is not yours to decide. She chooses it herself, on the first conversation, out of a shortlist she puts forward — once, and then it is hers. It goes into identity.md with her reason beside it as a comment, and nothing ever asks again.',
-      'Everything this asked about is plain text in six markdown files. Who she is opens them. So does TextEdit. Nothing here is locked, whether you answered it or skipped it, and nothing about her lives anywhere but that folder.',
+      'Everything this asked about is six markdown files. Who she is opens them. Nothing here is locked, whether you answered it or skipped it.',
     ]) {
       const p = document.createElement('p');
       p.textContent = paragraph;
@@ -659,6 +751,20 @@ export class Wizard {
     return list;
   }
 
+  /** A heading over a list, for the one card that has two lists on it. */
+  #group(label: string, list: HTMLElement): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'wizard-field';
+    // A heading rather than a `<label>`: it names a group of checkboxes and
+    // labels nothing, and a label with no control is a label that lies to a
+    // screen reader about what clicking it does.
+    const caption = document.createElement('h3');
+    caption.className = 'wizard-group';
+    caption.textContent = label;
+    wrap.append(caption, list);
+    return wrap;
+  }
+
   #choice(
     type: 'checkbox' | 'radio',
     group: string,
@@ -729,6 +835,11 @@ export class Wizard {
     area.addEventListener('input', () => onChange(area.value));
     return area;
   }
+}
+
+/** The id of the choice that writes a given voice name, if one does. */
+function chosenId(voice: string): string {
+  return VOICE_CHOICES.find((option) => option.voice === voice)?.id ?? '';
 }
 
 /** Unticks every box in a panel and forgets what they meant. */
