@@ -174,11 +174,14 @@ She needs one, and it is the only account involved in any of this. Create it at
 key is checked against Google before it is written down, so a typo is a message on the
 page rather than a mystery ten minutes later. Two ways to supply it:
 
-- **In her window.** The **Setup** panel opens by itself on the first run. Paste the key
-  in and press **Save**; once Google accepts it, it is written down for you. It never
-  travels back to the page — that can be told the last four characters of the key in
-  force, and that is all it ever learns. This is the whole of setup for the downloaded
-  application; there is nothing else to do and nowhere else to go.
+- **In her window, or the browser tab.** On a profile nobody has used yet, the key is the
+  last card of the first-run wizard, after the seven about her — so you have already met
+  her before anything asks you for a credential. On a profile that has been used, the
+  **Setup** panel asks as soon as she opens. Paste it in and press **Save**; once Google
+  accepts it, it is written down for you. It never travels back to the page — that can be
+  told the last four characters of the key in force, and that is all it ever learns. For
+  the downloaded application this is the whole of setup; there is nothing else to do and
+  nowhere else to go.
 - **By hand**, if you are running from a clone. `cp .env.example .env` and fill in
   `GEMINI_API_KEY=`. That file is commented throughout and lists every other setting.
 
@@ -359,6 +362,13 @@ app reads with prose underneath that goes to the model.
 | `relationship.md` | Who you are to her                                       |
 | `boundaries.md`   | What she does not play, and what she will not lie about   |
 
+The first time you open the page on a folder nobody has used, a wizard walks those six
+files in order and then asks for a photograph — seven questions, one per thing she is
+made of, and every one of them skippable. It shows the exact sentence each answer puts
+in her file, because that sentence is what reaches the model. Skip all seven and you get
+the profile above, unchanged. It does not ask her name: she still chooses that herself,
+the last card is about why, and the button on it wakes her so that she does.
+
 Edit them in a text editor or under **Profile**; changes take effect the next time she
 wakes, because a Live session's system instruction is fixed when the session opens. She
 starts out 26, Chinese-American, from Oakland — in the files, not in the code, and a
@@ -496,7 +506,7 @@ npm run audit:bridges   # the phone-call and Telegram paths
 free — and `src/server/app-paths.ts` is the part with the tests, because path resolution
 is where this breaks.
 
-**TESTCOUNT tests, no API key needed.** The interesting ones are in
+**505 tests, no API key needed.** The interesting ones are in
 `src/core/gemini/live.test.ts`, which is entirely about the connection ending, and
 `src/core/session/companion.test.ts`, where memory, mood, the prompt and the tools all
 run for real with only the socket faked. Under `src/`: `core/` is the companion,

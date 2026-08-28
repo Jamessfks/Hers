@@ -42,7 +42,7 @@ const ui = new Ui({
     if (!awake) void toggleWake();
   },
   onLoadProfile: () => connection.send({ t: 'profile.load' }),
-  onSaveProfile: (files) => connection.send({ t: 'profile.save', files }),
+  onSaveProfile: (files, quiet) => connection.send({ t: 'profile.save', files, quiet: quiet === true }),
   onUploadFace: (file) => void uploadFace(file),
   onClaim: () => connection.connect(),
   onLoadMemory: () => connection.send({ t: 'memory.load' }),
@@ -203,6 +203,15 @@ const connection = new Connection({
 function onMessage(message: ServerMessage): void {
   if (message.t === 'ready') {
     vision.setRates(message.cameraFps, message.screenFps);
+    /*
+     * Asked for immediately, not when the settings dialog opens.
+     *
+     * The reply is what says whether this folder has ever been used, and the
+     * page cannot decide whether to offer the first-run wizard without it. It
+     * also means the profile editor is populated before anybody clicks it,
+     * which it was not before.
+     */
+    connection.send({ t: 'profile.load' });
     /*
      * Tell the server about any device that is actually open.
      *

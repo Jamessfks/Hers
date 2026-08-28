@@ -6,6 +6,42 @@ model — is a breaking change and gets called out here with what to do about it
 
 ## Unreleased
 
+**A first run that is about her.** The first time the page opens on a profile folder
+nobody has used, a wizard asks seven questions — one for each of the six files in
+`hers-profile/`, in the order the editor shows them, and a seventh for the photograph.
+Every step skips, and skipping writes nothing: take the shortest path through it and the
+folder is byte-for-byte the one that ships, plus the date under `met:` in
+`relationship.md`. Closing it or pressing Escape keeps whatever was answered so far.
+
+Every choice shows the exact sentence it will put in her file, and that sentence is what
+gets written — into the prose, where Gemini reads it, rather than as an adjective in a
+header nothing reads. The three headers that *are* read get written properly:
+`identity.md` for age and where she is from, `voice.md` for the voice, `mood.md` for the
+five numbers behind a temperament. Changing where she is from now rewrites the paragraph
+that says where she is from, so the header and the biography cannot disagree; changing
+her age leaves that paragraph alone and rewrites the sentence about her age.
+
+Card five asks the thing the product had machinery for and no question about: what she
+does with the days you are not here. Card three offers four voices described in a line
+each rather than fourteen of Google's satellite codenames — the full thirty are still on
+the voice tab of **Who she is**.
+
+It does not ask her name. She still chooses that herself on the first conversation, and
+the last card is about why — it carries the Gemini key, which is the only question in the
+whole flow that is not about her, and its button wakes her. The wizard ends on her first
+sentence and the name she picks, rather than on a wake button and a note about
+scheduling. Nothing else in the app wakes her without being asked, and Escape and Close
+still do not.
+
+Nothing is drawn where her name goes until there is a name. The page shipped the
+placeholder in its markup and printed `Anna` in the header and the tab title from the
+first frame, so the card explaining that she has not chosen one was displayed under the
+name it says she does not have.
+
+Fresh is three things, not one: she has not named herself, memory holds nothing at all,
+and `met:` is still the sentence it ships with. Deleting everything under **Start over**
+makes a folder fresh again, and the wizard comes back with it.
+
 **She is a download now.** `npm run package` builds a double-clickable
 application — a `.dmg` on macOS, an NSIS installer on Windows once somebody
 runs that build — with Electron
