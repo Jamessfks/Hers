@@ -1,5 +1,9 @@
 node_modules/
 dist/
+
+# What `npm run package` writes: the .app, the .dmg and electron-builder's
+# scratch. Rebuilt from source in one command, and a hundred megabytes each.
+release/
 .DS_Store
 *.log
 .env

@@ -36,13 +36,46 @@
   --accent-wash: hsl(var(--mood-hue) 70% 97%);
   --accent-edge: hsl(var(--mood-hue) 45% 88%);
 
+  /*
+   * Two more hues, derived rather than picked.
+   *
+   * The accent above is one hue and a lift, and the interface reads as one thing
+   * because of it. Warning and danger were eleven separate hand-chosen hexes —
+   * seven reds and four ambers — which is eleven chances for two of them to
+   * disagree, and the reason this stylesheet carried twenty-nine distinct
+   * colours where a page it admires carries sixteen. Same trick, same shape: one
+   * hue each, every shade computed off it.
+   */
+  --warn-hue: 42;
+  --warn-ink: hsl(var(--warn-hue) 70% 28%);
+  --warn-edge: hsl(var(--warn-hue) 60% 80%);
+  --warn-wash: hsl(var(--warn-hue) 80% 95%);
+  --warn-dot: hsl(var(--warn-hue) 66% 55%);
+
+  --danger-hue: 6;
+  --danger-ink: hsl(var(--danger-hue) 42% 44%);
+  --danger-strong: hsl(var(--danger-hue) 44% 44%);
+  --danger-edge: hsl(var(--danger-hue) 40% 84%);
+  --danger-wash: hsl(var(--danger-hue) 72% 98%);
+
+  --ok-ink: hsl(148 33% 37%);
+
   --radius: 18px;
   --radius-sm: 12px;
   --bubble: 20px;
 
-  --shadow-sm: 0 1px 2px rgb(28 27 26 / 0.05);
-  --shadow: 0 6px 22px -8px rgb(28 27 26 / 0.14);
-  --shadow-lg: 0 24px 60px -22px rgb(28 27 26 / 0.28);
+  /*
+   * Derived from the ink rather than repeating its channels. `color-mix` is
+   * Baseline widely available, and it means the shadows cannot drift away from
+   * the text colour they are meant to be a soft version of — which is what
+   * three hand-written `rgb(28 27 26 / …)` triples were quietly risking.
+   */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent);
+  --shadow: 0 6px 22px -8px color-mix(in srgb, var(--ink) 14%, transparent);
+  --shadow-lg: 0 24px 60px -22px color-mix(in srgb, var(--ink) 28%, transparent);
+
+  /** Over a photograph, where the ink is not dark enough to keep text legible. */
+  --scrim: color-mix(in srgb, #000000 60%, transparent);
 
   --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto,
     'Helvetica Neue', Arial, sans-serif;
@@ -87,10 +120,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .notice {
   margin: 12px 0 0;
   padding: 10px 14px;
-  border: 1px solid #efd9a8;
+  border: 1px solid var(--warn-edge);
   border-radius: var(--radius-sm);
-  background: #fdf6e6;
-  color: #7a5c14;
+  background: var(--warn-wash);
+  color: var(--warn-ink);
   font-size: 13px;
 }
 .notice[hidden] { display: none; }
@@ -116,8 +149,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 0 0 4px var(--accent-wash);
 }
 .app[data-state='connecting'] .dot,
-.app[data-state='reconnecting'] .dot { background: #d9a441; animation: pulse 1.4s ease-in-out infinite; }
-.app[data-state='error'] .dot { background: #d0655c; }
+.app[data-state='reconnecting'] .dot { background: var(--warn-dot); animation: pulse 1.4s ease-in-out infinite; }
+.app[data-state='error'] .dot { background: var(--danger-ink); }
 
 .name { font-weight: 600; font-size: 17px; letter-spacing: -0.02em; }
 .mood { color: var(--ink-faint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -387,7 +420,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .preview figcaption {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 3px 7px; font-size: 10px; line-height: 1.4; letter-spacing: 0.04em;
-  color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / 0.6));
+  color: #ffffff; background: linear-gradient(transparent, var(--scrim));
 }
 
 /* -- Panels ---------------------------------------------------------------- */
@@ -398,7 +431,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--card); color: var(--ink);
   padding: 0; overflow: auto; box-shadow: var(--shadow-lg);
 }
-.settings::backdrop { background: rgb(28 27 26 / 0.32); backdrop-filter: blur(3px); }
+.settings::backdrop { background: color-mix(in srgb, var(--ink) 32%, transparent); backdrop-filter: blur(3px); }
 
 .settings-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -463,7 +496,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
  * span that inherits `display: grid` from it lays the sentence out in columns.
  */
 .intimacy-readout .who-you-are { font-weight: 600; text-transform: capitalize; }
-.intimacy-readout .set-by-you { color: #b4544a; }
+.intimacy-readout .set-by-you { color: var(--danger-ink); }
 .setup-row input[type='range'] {
   flex: 1; min-width: 0; padding: 0; background: none; border: none;
   accent-color: var(--accent);
@@ -473,8 +506,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .setup-status { margin: 8px 0 0; font-size: 13px; min-height: 0; }
 .setup-status:empty { display: none; }
 .setup-status[data-kind='working'] { color: var(--ink-faint); }
-.setup-status[data-kind='good'] { color: #3f7d5a; }
-.setup-status[data-kind='bad'] { color: #b4544a; }
+.setup-status[data-kind='good'] { color: var(--ok-ink); }
+.setup-status[data-kind='bad'] { color: var(--danger-ink); }
 
 /*
  * The one thing on the page that destroys something.
@@ -483,10 +516,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
  * here" without turning into a warning nobody reads twice.
  */
 .danger-block {
-  border: 1px solid #e9d2cf; border-radius: var(--radius-sm);
-  background: #fdf7f6; padding: 16px 18px;
+  border: 1px solid var(--danger-edge); border-radius: var(--radius-sm);
+  background: var(--danger-wash); padding: 16px 18px;
 }
-.danger-block h3 { color: #a04a41; }
+.danger-block h3 { color: var(--danger-strong); }
 
 .primary {
   background: var(--accent); color: var(--accent-ink);
@@ -495,8 +528,120 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .primary:hover { filter: brightness(1.06); }
 
-.danger { background: none; border: 1px solid #e6c4c0; border-radius: 999px; padding: 4px 11px; font-size: 12px; color: #b4544a; }
-.danger:hover { background: #fdf1f0; }
+.danger { background: none; border: 1px solid var(--danger-edge); border-radius: 999px; padding: 4px 11px; font-size: 12px; color: var(--danger-ink); }
+.danger:hover { background: var(--danger-wash); }
+
+/* ---------------------------------------------------------------------------
+ * The first run
+ *
+ * The same dialog as everything else — same head, same note, same pill buttons,
+ * same accent — because it is the first thing anybody sees and it has to teach
+ * them what the rest of the interface looks like rather than being a separate
+ * product with its own manners.
+ *
+ * Narrow, at the width of the Setup panel rather than the 820px editor: every
+ * card here is a short list or three fields, and a wide column of ticked boxes
+ * reads as a settings screen.
+ * ------------------------------------------------------------------------- */
+
+#wizard { width: min(600px, 94vw); }
+
+.wizard-body { padding: 0 22px 18px; }
+.wizard-panel { display: grid; gap: 16px; }
+
+/* A row of things to tick, each showing the sentence it writes. */
+.wizard-choices { display: grid; gap: 4px; }
+
+.wizard-choice {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.wizard-choice:hover { background: var(--sunken); }
+.wizard-choice input { margin: 3px 0 0; accent-color: var(--accent); flex: none; }
+.wizard-choice span { display: grid; gap: 2px; min-width: 0; }
+.wizard-choice strong { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.wizard-choice small { color: var(--ink-faint); font-size: 12.5px; line-height: 1.55; }
+.wizard-choice:has(input:checked) { background: var(--accent-wash); border-color: var(--accent-edge); }
+.wizard-choice:has(input:checked) small { color: var(--ink-soft); }
+.wizard-choice:has(input:focus-visible) { border-color: var(--accent); }
+
+/* One labelled control, with the reason for it underneath. */
+.wizard-field { display: grid; gap: 6px; min-width: 0; }
+.wizard-field > label,
+.wizard-group { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.wizard-field > small { color: var(--ink-faint); font-size: 12.5px; line-height: 1.55; }
+
+.wizard-input, .wizard-select {
+  width: 100%; min-width: 0;
+  border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
+  font: inherit; background: var(--sunken); color: var(--ink); outline: none;
+}
+.wizard-input:focus, .wizard-select:focus { background: var(--card); border-color: var(--accent-edge); }
+
+.wizard-area {
+  width: 100%; resize: vertical;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px;
+  background: var(--sunken); color: var(--ink); outline: none;
+  font: 13px/1.7 ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  tab-size: 2;
+}
+.wizard-area:focus { background: var(--card); border-color: var(--accent-edge); }
+
+/* Three short fields side by side, and stacked when there is no room. */
+.wizard-row { display: grid; grid-template-columns: 5rem 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .wizard-row { grid-template-columns: 1fr; } }
+
+.wizard-aside {
+  margin: 0; padding: 12px 14px;
+  border-radius: var(--radius-sm); background: var(--sunken);
+  color: var(--ink-soft); font-size: 12.5px; line-height: 1.6;
+}
+
+/* Same 3:4 shape as the Face panel, and the same reason for capping it. */
+.wizard-face { display: grid; grid-template-columns: minmax(180px, 220px); }
+
+.wizard-done p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.65; }
+.wizard-key {
+  display: grid; gap: 10px;
+  padding: 16px 18px; margin-top: 4px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper);
+}
+.wizard-key[hidden] { display: none; }
+.wizard-key h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.wizard-key .settings-note { padding: 0; }
+.wizard-key .setup-status { margin: 0; }
+
+/*
+ * Sticky, and the reason is the phone.
+ *
+ * The identity card is a textarea nine rows tall, so on a narrow screen the
+ * panel scrolls — and Next living at the bottom of the scroll would mean the
+ * only way forward is off screen on the one step most likely to be long.
+ */
+.wizard-foot {
+  position: sticky; bottom: 0; z-index: 1;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--line-soft); background: var(--card);
+}
+.wizard-count { color: var(--ink-faint); font-size: 12px; font-variant: small-caps; letter-spacing: 0.08em; }
+.wizard-nav { display: flex; gap: 8px; margin-left: auto; }
+.wizard-nav button[hidden] { display: none; }
+
+.wizard-pips { display: flex; gap: 5px; }
+.wizard-pip {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--line);
+  transition: background 200ms ease;
+}
+.wizard-pip[data-done='true'] { background: var(--accent); }
+
+/* The heading takes focus on every step, and a ring around a title is noise. */
+#wizard-title:focus { outline: none; }
+#wizard-title:focus-visible { outline: 2px solid var(--accent-edge); outline-offset: 4px; border-radius: 4px; }
 
 /* -- Her face -------------------------------------------------------------- */
 
@@ -540,7 +685,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* -- Superseded ------------------------------------------------------------ */
 
-.takeover { position: fixed; inset: 0; display: grid; place-items: center; background: rgb(251 250 248 / 0.86); backdrop-filter: blur(5px); z-index: 20; }
+.takeover { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--paper) 86%, transparent); backdrop-filter: blur(5px); z-index: 20; }
 .takeover[hidden] { display: none; }
 .takeover-card { max-width: 30rem; margin: 24px; padding: 28px 30px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-lg); text-align: center; }
 .takeover-card h2 { margin: 0 0 10px; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }

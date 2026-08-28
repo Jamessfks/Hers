@@ -21,6 +21,7 @@ import { SENSE_NAMES } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
 import { frontmatterValue, setFrontmatterValue } from '../shared/frontmatter.ts';
 import { DEFAULT_VOICE, FEMALE_VOICES, VOICES } from '../shared/voices.ts';
+import { Wizard } from './wizard.ts';
 
 /**
  * How long one of her faces stays up.
@@ -42,7 +43,12 @@ export interface UiHandlers {
   onWake(): void;
   onSay(text: string): void;
   onLoadProfile(): void;
-  onSaveProfile(files: Record<string, string>): void;
+  /**
+   * Write these back. `quiet` suppresses the server's "she picks up the changes
+   * the next time she wakes" note, which is true of the profile editor and
+   * wrong of the wizard — that one is about to wake her.
+   */
+  onSaveProfile(files: Record<string, string>, quiet?: boolean): void;
   onUploadFace(file: File): void;
   /** Take the conversation back from whichever tab has it. */
   onClaim(): void;
@@ -94,6 +100,16 @@ export interface KnowledgeView {
 
 /** What has to be typed before the delete button will do anything. */
 const RESET_PHRASE = 'start over';
+
+/**
+ * What the interface says before she has a name.
+ *
+ * The tab has to say something and so does a sentence about her, so they say
+ * the product's name and a pronoun. The header says nothing at all, which is
+ * the honest shape of the answer: there is no name there yet.
+ */
+const UNNAMED_TITLE = 'Hers';
+const UNNAMED_SPEAKER = 'She';
 
 export class Ui {
   readonly #handlers: UiHandlers;
@@ -169,11 +185,60 @@ export class Ui {
   #herLevel = 0;
   /** So a reconnect on an unconfigured server does not reopen the dialog. */
   #offeredSetup = false;
-  /** Whatever she calls herself. The markup ships with a placeholder. */
-  #herName = 'Anna';
+  /** Whatever she calls herself, or empty until she has chosen. */
+  #herName = '';
+  /**
+   * What the server said about the key, and about the folder.
+   *
+   * Held rather than acted on the moment each arrives, because the two answers
+   * come in two messages and the decision needs both: an unconfigured server on
+   * a fresh profile must open the wizard, not the Setup panel on top of it. See
+   * {@link #offerFirstThing}.
+   */
+  #configured = false;
+  #profileSeen = false;
+  #firstRun = false;
+  /** A wizard save is in flight, and the wake behind it is waiting for it. */
+  #savePending = false;
+  #wakeAfterSave = false;
+  readonly #wizard: Wizard;
 
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
+
+    this.#wizard = new Wizard({
+      onSave: (files) => {
+        this.#profileFiles = { ...this.#profileFiles, ...files };
+        this.#savePending = true;
+        this.#handlers.onSaveProfile(files, true);
+      },
+      onUploadFace: (file) => this.#handlers.onUploadFace(file),
+      onSaveKey: (key) => this.#handlers.onSaveKey(key),
+      /*
+       * "Meet her" means meet her.
+       *
+       * A companion that opens a billed session because a dialog closed is a
+       * companion nobody should install, and that is still true — which is why
+       * Escape and Close do not do this. But a button labelled *Meet her*, on a
+       * card that has just spent two paragraphs promising she will choose her
+       * own name the first time you talk to her, is the explicit gesture. It is
+       * also the gesture the audio path needs; browsers will not start playback
+       * without one. Ending here on a wake button and a toast reading "she picks
+       * up the changes the next time she wakes" is a ceremony that introduces
+       * nobody.
+       *
+       * Held until the folder comes back rather than sent now. The two messages
+       * are handled concurrently by the server, so waking immediately races the
+       * save and can build her first system instruction out of the profile the
+       * wizard just replaced — the one conversation where that matters most.
+       */
+      onDone: ({ meet }) => {
+        this.#wake.focus();
+        if (!meet) return;
+        if (this.#savePending) this.#wakeAfterSave = true;
+        else this.#handlers.onWake();
+      },
+    });
 
     /*
      * The menu edits the same text the editor is showing rather than saving on
@@ -314,7 +379,7 @@ export class Ui {
   apply(message: ServerMessage): void {
     switch (message.t) {
       case 'ready':
-        this.#setName(message.name);
+        this.#setName(message.named ? message.name : '');
         for (const [sense, on] of Object.entries(message.senses)) {
           this.setSense(sense as SenseName, on);
         }
@@ -354,7 +419,7 @@ export class Ui {
         return;
 
       case 'profile':
-        this.#setProfile(message.files);
+        this.#setProfile(message.files, message.firstRun);
         return;
 
       case 'avatar':
@@ -476,7 +541,7 @@ export class Ui {
     } else {
       const image = document.createElement('img');
       image.src = url;
-      image.alt = caption ?? `A picture from ${this.#herName}`;
+      image.alt = caption ?? (this.#herName ? `A picture from ${this.#herName}` : 'A picture she sent');
       image.loading = 'lazy';
       element.append(image);
     }
@@ -579,6 +644,7 @@ export class Ui {
     this.#giveFace.hidden = hasSource;
 
     this.#renderFaceList(avatar);
+    this.#wizard.setAvatar(hasSource ? avatar.sourceUrl : null);
 
     if (hasSource && avatar.sourceUrl) {
       this.#sourceUrl = avatar.sourceUrl;
@@ -826,6 +892,16 @@ export class Ui {
 
     this.#resetConfirm.value = '';
     this.#status(this.#resetStatus, 'Gone. She does not know you.', 'good');
+    /*
+     * The folder was deleted and rebuilt, so it is a genuinely fresh profile
+     * again and gets the wizard again — which is the honest reading of "she
+     * meets you as a stranger with a new face". Asking for the profile is what
+     * makes the server say so; forgetting is what lets this page listen.
+     */
+    this.#wizard.forget();
+    this.#handlers.onLoadProfile();
+    // Out of the way, so the wizard is not the second modal on a stack of two.
+    if (this.#setup.open) this.#setup.close();
     // The server re-sends everything; this only clears what it has no reason
     // to send — an empty transcript is an absence, not a message.
     this.#transcript.replaceChildren(this.#empty);
@@ -836,12 +912,14 @@ export class Ui {
   /**
    * Whether she has a key, and which one.
    *
-   * The first run opens the setup dialog by itself. Everything on the page is
-   * inert without a key, and a first-time user staring at a wake button that
-   * does nothing has no way to discover why — that used to be a line of toast
-   * telling them to go and edit a file.
+   * A page with no key opens something by itself. Everything here is inert
+   * without one, and a first-time user staring at a wake button that does
+   * nothing has no way to discover why — that used to be a line of toast telling
+   * them to go and edit a file. *Which* thing it opens is decided one message
+   * later, by {@link #offerFirstThing}.
    */
   #setConfigured(configured: boolean, keyHint: string): void {
+    this.#configured = configured;
     this.#notice.hidden = configured;
     if (!configured) {
       this.#notice.textContent = 'She needs a Gemini API key before she can hear you.';
@@ -849,10 +927,8 @@ export class Ui {
 
     this.#keyInput.placeholder = keyHint ? `${keyHint} — paste a new one to replace it` : 'AIza…';
 
-    if (!configured && !this.#offeredSetup) {
-      this.#offeredSetup = true;
-      if (!this.#setup.open) this.#setup.showModal();
-    }
+    this.#wizard.setConfigured(configured);
+    this.#offerFirstThing();
   }
 
   /**
@@ -930,27 +1006,32 @@ export class Ui {
    * Puts her name everywhere it appears, including on turns already on screen.
    *
    * She chooses it during the first wake, so the first `ready` of a fresh install
-   * carries a different name from the one in the markup — and by then there may
-   * already be lines in the transcript labelled with the placeholder.
+   * carries no name at all — and by then there may already be lines in the
+   * transcript, which get relabelled here when one arrives.
+   *
+   * An empty string is a real answer and not a failure: she has not got a name
+   * yet. The page used to ship the placeholder in its markup and print `Anna` in
+   * the header, the tab title and the portrait's alt text from the first frame,
+   * which meant the wizard card explaining that she has not chosen one was
+   * displayed under the name it says she does not have. A stranger reads that as
+   * a lie or a bug and cannot tell which. So nothing is drawn where the name
+   * goes, and the prose that has to say something says "she".
    */
   #setName(name: string): void {
     const chosen = name.trim();
-    if (!chosen || chosen === this.#herName) {
-      this.#name.textContent = this.#herName;
-      return;
-    }
+    if (chosen === this.#herName) return;
 
     this.#herName = chosen;
     this.#name.textContent = chosen;
-    document.title = chosen;
-    this.#still.alt = chosen;
+    document.title = chosen || UNNAMED_TITLE;
+    this.#still.alt = chosen || 'Her photograph';
     for (const label of this.#transcript.querySelectorAll('.line[data-who="her"] .who')) {
-      label.textContent = chosen;
+      label.textContent = chosen || UNNAMED_SPEAKER;
     }
     // Prose in the markup that names her. Marked in the HTML rather than listed
     // here, so a new sentence about her does not have to remember to come back.
     for (const spot of document.querySelectorAll('[data-her-name]')) {
-      spot.textContent = chosen;
+      spot.textContent = chosen || UNNAMED_SPEAKER;
     }
   }
 
@@ -975,7 +1056,7 @@ export class Ui {
     element.dataset.same = String(previous?.dataset?.who === who);
     element.innerHTML = '<span class="who"></span><p class="said"></p>';
     const label = element.querySelector('.who');
-    if (label) label.textContent = who === 'her' ? this.#herName : 'You';
+    if (label) label.textContent = who === 'her' ? this.#herName || UNNAMED_SPEAKER : 'You';
     this.#transcript.append(element);
     return element;
   }
@@ -988,9 +1069,48 @@ export class Ui {
     if (distance < 120) this.#transcript.scrollTop = this.#transcript.scrollHeight;
   }
 
-  #setProfile(files: Record<string, string>): void {
+  #setProfile(files: Record<string, string>, firstRun: boolean): void {
     this.#profileFiles = files;
+    this.#profileSeen = true;
+    this.#firstRun = firstRun;
     this.#renderProfile();
+    this.#offerFirstThing();
+
+    // The folder on disk is now the one the wizard wrote, so the first system
+    // instruction will be built out of it rather than out of what it replaced.
+    this.#savePending = false;
+    if (this.#wakeAfterSave) {
+      this.#wakeAfterSave = false;
+      this.#handlers.onWake();
+    }
+  }
+
+  /**
+   * Opens exactly one of the two things a new arrival can be shown.
+   *
+   * The wizard wins when the folder has never been used, even with no key, and
+   * the key is asked for on its last card instead. That ordering is the point of
+   * the whole feature: the first questions somebody is asked about a companion
+   * should be about her, and the one question about their toolchain should come
+   * after they have decided who she is rather than before they have met her.
+   *
+   * Called from both messages because either can arrive last, and it does
+   * nothing until the profile has been seen — which is guaranteed, because the
+   * page asks for the profile the moment the server says it is ready.
+   */
+  #offerFirstThing(): void {
+    if (!this.#profileSeen) return;
+
+    if (this.#firstRun && !this.#wizard.shown) {
+      this.#offeredSetup = true;
+      this.#wizard.offer(this.#profileFiles, this.#configured);
+      return;
+    }
+
+    if (!this.#configured && !this.#offeredSetup) {
+      this.#offeredSetup = true;
+      if (!this.#setup.open) this.#setup.showModal();
+    }
   }
 
   #renderProfile(): void {

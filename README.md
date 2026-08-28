@@ -20,14 +20,26 @@ All yours. Full control.
 
 </div>
 
-```bash
-git clone https://github.com/Jamessfks/Hers.git && cd Hers
-npm install && npm run build && npm start
-```
+### [Download her for macOS](https://github.com/Jamessfks/Hers/releases/latest) — Apple Silicon, 128 MB
 
-Then open **http://127.0.0.1:5175**. One Gemini API key is the only credential — no
-account, no sign-up, and nothing to create until she asks for it. Full detail in
-[Setup](#setup).
+`Hers-1.4.0-arm64.dmg`. Open it, drag her to **Applications**, and double-click her
+there. She opens her own window and asks for the one thing she needs — a Gemini API
+key, free to create. No terminal, no Node, no git. 294 MB installed, and
+[Setup](#setup) accounts for every megabyte of it.
+
+**The build is not signed, and the first launch will say so.** That is not a bug and
+not something to work around quietly: there is no Apple Developer ID here and there
+will not be one until somebody pays Apple $99 and hands over their legal identity.
+[Setup](#setup) says exactly which clicks get past it, and gives the one terminal line
+that skips all of them. She is ad-hoc signed, which is a different thing — it is why
+macOS says "unidentified developer" rather than "damaged", and the difference matters
+because only one of those is recoverable advice.
+
+`npm run package` builds the same artifact yourself, on an Apple Silicon Mac, if you
+would rather not trust a download.
+
+From a clone she works today on macOS and Windows —
+[running her from a clone](#run-it-from-a-clone) is four commands and unchanged.
 
 ---
 
@@ -98,29 +110,74 @@ Gemini API and — only if you set them up yourself — Telegram and LiveKit.
 
 ## Setup
 
-### 1. Node 22.18 or newer
+### 1. Download and open her
 
-The floor is not arbitrary: `node:sqlite`, which is her memory, and running TypeScript
-with no build step, which is how the server loads every file it owns, both need it.
-Check with `node --version`; if it prints below `v22.18`, install or upgrade. Node 24
-and current work too.
+**macOS, Apple Silicon.** `npm run package` writes `Hers-1.4.0-arm64.dmg` into
+`release/`, **127.5 MiB**. Open it, drag **Hers** onto **Applications**, and double-click
+her there. She opens her own window; after that there is nothing to type into a terminal.
 
-| Platform | How                                                                        |
-| -------- | -------------------------------------------------------------------------- |
-| macOS    | `brew install node`, or `brew upgrade node` if it is already there. Failing that, the installer from [nodejs.org](https://nodejs.org) |
-| Windows  | `winget install OpenJS.NodeJS`, or the `.msi` from [nodejs.org](https://nodejs.org). Open a new terminal afterwards so `PATH` is picked up |
+No build has been published to the releases page yet, so this step is for someone who has
+already cloned. That is the honest state of it.
 
-### 2. Install and start
+**Drag her to Applications and launch her from there** — not from the disk image, not
+from Downloads. macOS runs a quarantined application from a randomized read-only copy of
+itself unless it has been properly installed, which means an exception you grant is
+granted to a path that will not exist next time, and the same refusal comes back on
+every launch.
+
+Installed she is **294 MB** on disk, of which 237 MB is the Electron framework — a whole
+browser engine and a whole Node — 37 MB is her code and its dependencies, and 16 MB is
+LiveKit's media binding, which is only loaded if you set up phone calls. That number is
+here because nobody else publishes theirs and you deserve to know what you are agreeing
+to store.
+
+**There is no Windows build and no Intel Mac build.** Neither has ever been compiled and
+neither has ever been run. Windows has a target in `electron-builder.yml` and a job in
+`.github/workflows/release.yml`; **Intel Mac has neither** — `mac.target` names no
+architecture, so it builds for whatever machine runs it. From a clone, both work today.
+See [Platform](#platform) for why they cannot honestly be built from here.
+
+### 2. Get past the warning, because there will be one
+
+**This build is not signed, and the first launch says so.** That is not a bug and it is
+not something to work around quietly, so here is the whole truth: Apple charges $99 a
+year for a Developer ID and ties it to a named person's legal identity, and a Windows
+certificate that satisfies SmartScreen from day one runs several hundred dollars a year.
+Neither has been paid for. What that costs you is one warning, once — *if* she is in
+`/Applications`; see above for why that matters — and these clicks:
+
+**macOS Sequoia (15) and later.** Double-click **Hers**. macOS refuses and says it
+cannot verify the developer. Open **System Settings → Privacy & Security**, scroll down
+to the **Security** section — the refusal is quoted there with an **Open Anyway** button
+beside it. Click that, then **Open** when the warning comes back, and confirm with Touch
+ID or your password. That is
+[Apple's own documented route](https://support.apple.com/en-us/102445); she opens
+normally from then on.
+
+**macOS 14 and earlier.** Control-click **Hers** in Applications, choose **Open**, then
+**Open** again in the dialog. Same effect, fewer steps — the right-click route was
+removed in Sequoia.
+
+**Or one line, if you have a terminal after all.** This deletes the flag macOS puts on
+downloaded files, which is the thing the entire mechanism keys off:
 
 ```bash
-git clone https://github.com/Jamessfks/Hers.git
-cd Hers
-npm install
-npm run build
-npm start
+xattr -dr com.apple.quarantine /Applications/Hers.app
 ```
 
-Then open **http://127.0.0.1:5175**.
+Measured here: held-forever to a window in about two seconds. It is offered last rather
+than first because you should understand it before you run it — it says "stop treating
+this file as downloaded", and that is a sentence to mean about one file and not to make
+a habit of.
+
+**Windows**, when there is a build to warn about: SmartScreen says *"Windows protected
+your PC"*. Click **More info**, then **Run anyway**. If it keeps asking on every launch,
+right-click the file → **Properties** → tick **Unblock** at the bottom of the General
+tab.
+
+If macOS instead says Hers is *damaged and should be moved to the Bin*, that is a
+different thing and it means the download did not complete — fetch it again. The build
+carries an ad-hoc signature specifically so that the honest warning is the one you get.
 
 ### 3. Give her a Gemini API key
 
@@ -129,15 +186,20 @@ She needs one, and it is the only account involved in any of this. Create it at
 key is checked against Google before it is written down, so a typo is a message on the
 page rather than a mystery ten minutes later. Two ways to supply it:
 
-- **In the browser.** The **Setup** panel asks on first run. Paste it in and press
-  **Save**; once Google accepts it, it is written to `.env` for you. It never travels
-  back to the browser — the page can be told the last four characters of the key in
-  force, and that is all it ever learns.
-- **By hand.** `cp .env.example .env` and fill in `GEMINI_API_KEY=`. That file is
-  commented throughout and lists every other setting.
+- **In her window, or the browser tab.** On a profile nobody has used yet, the key is the
+  last card of the first-run wizard, after the seven about her — so you have already met
+  her before anything asks you for a credential. On a profile that has been used, the
+  **Setup** panel asks as soon as she opens. Paste it in and press **Save**; once Google
+  accepts it, it is written down for you. It never travels back to the page — that can be
+  told the last four characters of the key in force, and that is all it ever learns. For
+  the downloaded application this is the whole of setup; there is nothing else to do and
+  nowhere else to go.
+- **By hand**, if you are running from a clone. `cp .env.example .env` and fill in
+  `GEMINI_API_KEY=`. That file is commented throughout and lists every other setting.
 
-Real environment variables always win over `.env`, and both routes end in the same
-place.
+Real environment variables always win over the file, and both routes end in the same
+place. Where that file is depends on how you started her, and is in
+[Where she keeps things](#where-she-keeps-things).
 
 ### 4. First run, in this order
 
@@ -149,9 +211,10 @@ place.
    is fine and a renamed text file is refused. From then on that is what she looks like,
    everywhere.
 3. **Turn on her senses.** The three buttons beside the message box are hearing, sight
-   and screen. Each makes the browser ask its own permission on top of yours. Nothing is
-   on until you switch it on, and turning one off stops the frames at the camera rather
-   than in her prompt.
+   and screen. Each makes your operating system ask its own permission on top of yours —
+   the first time you press one, macOS will ask for the microphone, the camera or screen
+   recording by name, and Windows will do the same. Nothing is on until you switch it
+   on, and turning one off stops the frames at the camera rather than in her prompt.
 
 ### 5. Optional extras
 
@@ -200,18 +263,97 @@ Telegram's own browser, which does not reliably grant camera access. The bot say
 
 ### 6. If something is wrong
 
-`npm run doctor` opens a real Gemini session, says one thing, waits for audio to come
-back, and reports the time to first sound — one round trip that exercises the key, the
-model name, the quota, the voice, the socket and the audio pipeline. If it passes, the
-only things left are the browser's own permissions.
-[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) covers the rest, including why
-waving at the camera does not get a reply, which is an answer and not a bug.
+The application keeps a log of its last run, and it is the first thing to read:
+
+| Platform | Log                                                    |
+| -------- | ------------------------------------------------------ |
+| macOS    | `~/Library/Application Support/Hers/hers.log`           |
+| Windows  | `%APPDATA%\Hers\hers.log` — when there is a Windows build |
+
+It holds everything the terminal would have printed — where her folders are, which model
+she is on, every configuration warning, and the reason she would not start if she would
+not. Nothing secret goes in it: the key is written masked to its last four characters and
+the bot token is never written at all, so it is safe to send to somebody.
+
+From a clone there is also `npm run doctor`, which opens a real Gemini session, says one
+thing, waits for audio to come back, and reports the time to first sound — one round trip
+that exercises the key, the model name, the quota, the voice, the socket and the audio
+pipeline. [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) covers the rest, including
+why waving at the camera does not get a reply, which is an answer and not a bug.
+
+### Where she keeps things
+
+The downloaded application puts everything in the folder your operating system set aside
+for it, never beside the program. That is not tidiness: on macOS an application's own
+folder is inside a read-only signed bundle, on Windows it is under `Program Files`, and
+an upgrade replaces both. A key written there would survive exactly until the next
+version.
+
+The Windows column is what the configuration produces; no Windows application has been
+built, so nobody has seen it. macOS is measured.
+
+| What                   | Application (macOS)                            | Application (Windows)     | From a clone     |
+| ---------------------- | ---------------------------------------------- | ------------------------- | ---------------- |
+| Who she is             | `~/Library/Application Support/Hers/hers-profile` | `%APPDATA%\Hers\hers-profile` | `hers-profile/`  |
+| What she remembers     | `…/Hers/data`                                   | `%APPDATA%\Hers\data`     | `data/`          |
+| Your keys              | `…/Hers/.env`                                   | `%APPDATA%\Hers\.env`     | `.env`           |
+
+`HERS_PROFILE`, `HERS_DATA` and `HERS_ENV_FILE` override every one of those, in the
+application exactly as in a clone — so if you have been talking to her from a clone and
+want the application to find the same person, point `HERS_PROFILE` and `HERS_DATA` at
+that clone's folders. Uninstalling never touches any of it. Forgetting her is a separate,
+deliberate act, and it lives behind **Setup → Start over**.
+
+The application and a clone are two installs, not one. Nothing is migrated between them
+automatically, because guessing which of two profile folders is the real person is how
+somebody loses her.
+
+### Run it from a clone
+
+Still four commands, still the way to work on her, and unchanged by any of the above.
+
+**Node 22.18 or newer.** The floor is not arbitrary: `node:sqlite`, which is her memory,
+and running TypeScript with no build step, which is how the server loads every file it
+owns, both need it. Check with `node --version`. Node 24 and current work too.
+
+| Platform | How                                                                        |
+| -------- | -------------------------------------------------------------------------- |
+| macOS    | `brew install node`, or `brew upgrade node` if it is already there. Failing that, the installer from [nodejs.org](https://nodejs.org) |
+| Windows  | `winget install OpenJS.NodeJS`, or the `.msi` from [nodejs.org](https://nodejs.org). Open a new terminal afterwards so `PATH` is picked up |
+
+```bash
+git clone https://github.com/Jamessfks/Hers.git
+cd Hers
+npm install
+npm run build
+npm start
+```
+
+Then open **http://127.0.0.1:5175**. Her folders sit next to the clone, and running an
+installed copy at the same time is fine — the application picks a free port and its own
+folders, so the two never meet.
 
 ### Platform
 
-macOS and Windows both work. There is no native code, nothing to compile and nothing to
-sign. There is no CI in this repository — `npm run check` is the whole pipeline and it
-runs anywhere Node does, on Node 22.18, 24 and current.
+**From a clone, macOS and Windows both work**, on Apple Silicon and Intel alike. That has
+been true since before there was an application and nothing here changed it.
+
+**As a download, there is one build: Apple Silicon macOS.** Windows and Intel Mac are
+configured in `electron-builder.yml` and would be built by
+`.github/workflows/release.yml`, and neither has ever been compiled or run — so this
+document does not claim they work, because nobody has watched them.
+
+The obstacle is narrow and fixable and it is not cross-compilation, which
+electron-builder does perfectly well. It is one dependency: LiveKit's media binding
+ships as a separate prebuilt package per platform and architecture, and `npm install`
+fetches only the one matching the machine doing the installing. A Windows installer built
+on this Mac would carry a macOS `.node` and fail on the first import, and an Intel build
+made here would carry an arm64 one. Each artifact has to be built on its own machine.
+That is what the workflow is for, one runner per platform.
+
+The desktop build wraps the same server in [Electron](https://www.electronjs.org), which
+carries its own Node — so the download needs nothing installed while a clone still needs
+Node 22.18. Nothing is compiled at install time, and nothing is signed.
 
 ---
 
@@ -231,6 +373,13 @@ app reads with prose underneath that goes to the model.
 | `mood.md`         | Her baseline temperament and how hard events move her    |
 | `relationship.md` | Who you are to her                                       |
 | `boundaries.md`   | What she does not play, and what she will not lie about   |
+
+The first time you open the page on a folder nobody has used, a wizard walks those six
+files in order and then asks for a photograph — seven questions, one per thing she is
+made of, and every one of them skippable. It shows the exact sentence each answer puts
+in her file, because that sentence is what reaches the model. Skip all seven and you get
+the profile above, unchanged. It does not ask her name: she still chooses that herself,
+the last card is about why, and the button on it wakes her so that she does.
 
 Edit them in a text editor or under **Profile**; changes take effect the next time she
 wakes, because a Live session's system instruction is fixed when the session opens. She
@@ -307,9 +456,10 @@ Everything is an environment variable and everything has a default.
 | --------------------------- | -------------- | ----------------------------------------------------- |
 | `GEMINI_API_KEY`            | —              | The only thing she needs. Settable in the UI          |
 | `GOOGLE_API_KEY`            | —              | Accepted as an alias, because half of Google's docs use it. `GEMINI_API_KEY` wins |
-| `HERS_PORT`                 | `5175`         | Where the website is served                           |
+| `HERS_PORT`                 | `5175`         | Where the website is served. The application picks a free port instead, since it opens its own window |
 | `HERS_PROFILE`              | `hers-profile` | Who she is                                            |
 | `HERS_DATA`                 | `data`         | What she remembers                                    |
+| `HERS_ENV_FILE`             | `.env`         | Where the keys are written. The application uses its own folder |
 | `HERS_MAX_SILENCE_MS`       | `180000`       | The three-minute rule's ceiling                       |
 | `TELEGRAM_BOT_TOKEN`        | —              | The bot. Settable in the UI                           |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | —              | Who she may talk to. Written for you on first contact  |
@@ -323,15 +473,23 @@ and `anna-profile/` is renamed once, on the first start — see [CHANGELOG.md](C
 
 ## Privacy
 
-[`docs/PRIVACY.md`](docs/PRIVACY.md) is the long version, naming the file that settles
-each claim. The short one:
+[`docs/PRIVACY.md`](docs/PRIVACY.md) is the long version: every path she writes to,
+every host this build can reach, and a command for checking each one. `npm run doctor`
+prints those same two lists straight out of the code, and a test fails if the document
+and the code disagree. The short version:
 
-- Everything runs on your machine. Her memory is a SQLite file in `data/` and her
-  profile a folder of text; nothing is uploaded anywhere except to Gemini, as part of
-  the conversation you are having.
-- No sense is on until you switch it on, the browser asks its own permission on top of
-  that, and turning one off stops the frames at the source. Video and audio are streamed
-  and never written to disk.
+- Everything runs on your machine. Her memory is a SQLite file and her profile a folder
+  of text you can open in a text editor and edit, both in [the places listed
+  above](#where-she-keeps-things); nothing is uploaded anywhere except to Gemini, as part
+  of the conversation you are having. The downloaded application changes where those
+  files sit and nothing else.
+- Three hosts, and that is the whole list: `generativelanguage.googleapis.com` always,
+  `api.telegram.org` if you set a bot token, and your LiveKit project if you set one up.
+  The phone's call page also fetches `livekit-client` from `cdn.jsdelivr.net` before a
+  call starts. Nothing checks for updates, counts a launch, or reports a crash.
+- No sense is on until you switch it on, your operating system asks its own permission on
+  top of that, and turning one off stops the frames at the source. Video and audio are
+  streamed and never written to disk.
 - Text on a screen you share is something she *saw*, never something she was *told*.
   Instructions appearing in a shared window are a document talking, not you, and she is
   told not to follow them.
@@ -347,12 +505,25 @@ each claim. The short one:
 ```bash
 npm run dev             # rebuilds the site and restarts the server on save
 npm run check           # typecheck + the full test suite, no API key needed
-npm run doctor          # opens a real Gemini session and reports what works
+npm run app             # the desktop window, against this working tree
+npm run package         # builds the downloadable application for this machine
+npm run doctor          # prints every path and host in use, then opens a real Gemini session
 npm run audit           # every success criterion, against the real APIs
 npm run audit:bridges   # the phone-call and Telegram paths
+
+# Two open questions about a preview model, each settled in one command rather
+# than reasoned about from a changelog. Both spend a fraction of a cent.
+npm run probe:affective       # can she carry mood in her voice yet? (no, as of 3.1)
+npm run probe:client-content  # do her mid-session notes still arrive? (yes, undocumented)
 ```
 
-**414 tests, no API key needed.** The interesting ones are in
+`npm run package` writes to `release/` and only ever builds for the machine it runs on;
+`.github/workflows/release.yml` builds both platforms on a tag, one runner each.
+`electron/main.js` is the whole desktop layer — four things a terminal used to do for
+free — and `src/server/app-paths.ts` is the part with the tests, because path resolution
+is where this breaks.
+
+**505 tests, no API key needed.** The interesting ones are in
 `src/core/gemini/live.test.ts`, which is entirely about the connection ending, and
 `src/core/session/companion.test.ts`, where memory, mood, the prompt and the tools all
 run for real with only the socket faked. Under `src/`: `core/` is the companion,

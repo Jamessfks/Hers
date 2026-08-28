@@ -5,7 +5,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { FORMER_PROFILE_DIR, PROFILE_DIR, loadConfig, migrateProfileDir } from './config.ts';
+import {
+  ENV_FILE,
+  FORMER_PROFILE_DIR,
+  PROFILE_DIR,
+  envFilePath,
+  isLoopbackHost,
+  loadConfig,
+  migrateProfileDir,
+} from './config.ts';
 import { DEFAULT_LIVE_MODEL } from '../core/gemini/models.ts';
 
 const env = (values: Record<string, string>) => values as NodeJS.ProcessEnv;
@@ -185,4 +193,58 @@ test('the old variable names still work, and say so under their own name', () =>
     HERS_PORT: '4001',
   } as NodeJS.ProcessEnv);
   assert.equal(both.port, 4001);
+});
+
+// ---------------------------------------------------------------------------
+// Binding, and the warning that has to come with it
+// ---------------------------------------------------------------------------
+
+test('the default bind produces no warning, because it is the safe one', () => {
+  assert.deepEqual(loadConfig(env({})).warnings, []);
+  assert.deepEqual(loadConfig(env({ HERS_HOST: '127.0.0.1' })).warnings, []);
+});
+
+test('binding anywhere but this machine is warned about loudly', () => {
+  // `docs/PRIVACY.md` used to say the loopback bind was "the design, not a
+  // default to be adjusted". It is a default and it is adjustable, so the
+  // document now says so — and this is the warning that makes saying so safe.
+  for (const host of ['0.0.0.0', '192.168.1.10', '::', 'hers.local']) {
+    const { warnings } = loadConfig(env({ HERS_HOST: host }));
+    assert.equal(warnings.length, 1, host);
+    assert.match(warnings[0] ?? '', /HERS_HOST/, host);
+    assert.match(warnings[0] ?? '', /no password/i, host);
+    assert.match(warnings[0] ?? '', /secure context/i, host);
+  }
+});
+
+test('the warning names the variable that was actually set', () => {
+  // Somebody upgrading from before v1.0 has ANNA_HOST in their file, and a
+  // warning pointing at a line they do not have is a warning they cannot act on.
+  const { warnings } = loadConfig(env({ ANNA_HOST: '0.0.0.0' }));
+  assert.match(warnings[0] ?? '', /ANNA_HOST=0\.0\.0\.0/);
+});
+
+test('every way of writing this machine counts as this machine', () => {
+  for (const host of ['127.0.0.1', 'localhost', 'LOCALHOST', '::1', '[::1]', '127.1.2.3']) {
+    assert.equal(isLoopbackHost(host), true, host);
+  }
+  for (const host of ['0.0.0.0', '::', '192.168.1.10', '128.0.0.1', 'example.com', '']) {
+    assert.equal(isLoopbackHost(host), false, host);
+  }
+});
+
+test('the keys file is one name, resolved absolute, and the desktop build can move it', () => {
+  assert.equal(ENV_FILE, '.env');
+  assert.ok(path.isAbsolute(envFilePath()), 'a relative path is the thing nobody can find');
+  assert.equal(envFilePath({} as NodeJS.ProcessEnv), path.resolve('.env'));
+
+  // The packaged application cannot write beside its own executable, so it sets
+  // this before the server starts. Every later write has to land in the same
+  // file as the first, or the key you pasted is gone on the second launch.
+  const moved = { HERS_ENV_FILE: '/somewhere/keys.env' } as NodeJS.ProcessEnv;
+  assert.equal(envFilePath(moved), '/somewhere/keys.env');
+
+  // The old name still works, for an install that predates the rename.
+  const legacy = { ANNA_ENV_FILE: '/somewhere/old.env' } as NodeJS.ProcessEnv;
+  assert.equal(envFilePath(legacy), '/somewhere/old.env');
 });

@@ -1,0 +1,118 @@
+# What `npm run package` builds.
+#
+# One artifact per platform, unsigned. Signing is deliberately absent and is not
+# an oversight: an Apple Developer ID is $99 a year and tied to a person's legal
+# identity, a Windows EV certificate is several hundred more, and Microsoft's
+# Trusted Signing is only open to organisations with a trading history. None of
+# that is a reasonable thing to require before somebody can download a companion
+# that runs on their own machine. So the download is unsigned, the first-launch
+# warning is real, and the README says exactly which two clicks get past it on
+# each operating system rather than pretending the warning is not there.
+
+appId: com.zichengzhao.hers
+productName: Hers
+copyright: Copyright © 2026 Zicheng Zhao
+
+directories:
+  output: release
+  buildResources: build
+
+# Runs after the bundle is assembled and before the disk image is made. On
+# macOS it puts an ad-hoc signature over the whole thing, which is what stops an
+# unsigned download from being reported as damaged rather than as unsigned.
+# Read the file; the distinction is not obvious and it is the one that matters.
+afterPack: build/adhoc-sign.cjs
+
+# Everything the server needs and nothing else. `src/web` is absent because it
+# has already been built into `dist/web`; the tests are absent because they are
+# a third of the TypeScript in here and none of it runs in an application.
+#
+# `src` is taken whole rather than folder by folder, and that is the second
+# version of this list. The first named `server`, `core` and `shared`, forgot
+# `bridges`, and produced an application that started, found no
+# `telegram/bridge.ts`, and hung with no window and nothing on screen. A list of
+# the directories that exist today is a list that is wrong the first time
+# somebody adds one.
+files:
+  - package.json
+  - electron/**/*
+  - src/**/*.ts
+  - dist/web/**/*
+  - '!src/web/**/*'
+  - '!**/*.test.ts'
+
+# Nothing here is compiled against Node's ABI. The one native file in the tree
+# is LiveKit's prebuilt N-API binding, which is ABI-stable by construction and
+# is the reason `node:sqlite` was chosen over `better-sqlite3` in the first
+# place. Rebuilding would cost minutes and change nothing.
+# The fuses are NOT set here. electron-builder runs its fuse step after
+# `afterPack`, so setting them here rewrote the binary after `build/adhoc-sign.cjs`
+# had sealed it, and `codesign --verify` then reported "code or signature have
+# been modified" — the state that makes macOS call the app damaged rather than
+# unsigned. They are flipped inside that script instead, before the signature.
+# The long version is in its header.
+
+npmRebuild: false
+
+# One language. The other fifty-odd `.pak` files are about four megabytes of
+# translations for an interface that only exists in English.
+electronLanguages:
+  - en-US
+
+mac:
+  category: public.app-category.social-networking
+  icon: build/icon.png
+  # Unsigned. electron-builder still applies an ad-hoc signature, which Apple
+  # Silicon requires before it will run a binary at all — it is not a
+  # Developer ID and macOS will still ask on first launch.
+  identity: null
+  # Apple Silicon only, and that is a limit of this machine rather than a
+  # decision. LiveKit's binding is a per-architecture package that npm installs
+  # only for the machine it is installing on, so a build made here would carry
+  # an arm64 `.node` into an Intel application and crash on the first import.
+  # An Intel build is one `npm install` on an Intel Mac away; it is not one
+  # flag away, and shipping it from here would be a lie.
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # macOS refuses the microphone, the camera and the screen without a sentence
+  # saying what they are for, and shows this sentence in the prompt. Three
+  # senses, three sentences, each true.
+  extendInfo:
+    NSMicrophoneUsageDescription: Hers listens when you turn hearing on, so she can hear you speak.
+    NSCameraUsageDescription: Hers watches when you turn sight on, so she can see you.
+    NSScreenCaptureUsageDescription: Hers reads your screen when you turn the screen sense on, so she can see what you are working on.
+    # She waits out silences and then speaks first, and the timer that does it
+    # runs in this process. App Nap throttles the timers of an application
+    # nobody is looking at, which is exactly when that promise matters.
+    NSAppSleepDisabled: true
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+# Written, not built, and not tested — there is no Windows machine in this
+# project. It is here because a configuration that exists is one somebody can
+# run on a Windows box and correct, and an absent one is a rewrite.
+win:
+  icon: build/icon.png
+  # x64 only, for the same reason macOS is arm64 only: the LiveKit binding is
+  # picked by npm for the machine doing the installing. Windows on ARM runs x64
+  # applications under emulation, so this is one installer rather than a gap.
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  # Not one-click. A silent installer that finishes before you have read
+  # anything is the wrong shape for something that is going to hold a
+  # microphone, a camera and a copy of your conversations.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # Her profile and her memory live in %APPDATA%\Hers, which the uninstaller
+  # must not touch. Uninstalling an application is not the same sentence as
+  # forgetting a person, and Setup → Start over is where that one is said.
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}

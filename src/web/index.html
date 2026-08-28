@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />
-    <title>Anna</title>
+    <title>Hers</title>
     <link rel="icon" href="./icon.png" />
     <link rel="apple-touch-icon" href="./icon.png" />
   </head>
@@ -13,7 +13,7 @@
       <header class="bar">
         <div class="identity">
           <span class="dot" id="dot" aria-hidden="true"></span>
-          <span class="name" id="name">Anna</span>
+          <span class="name" id="name"></span>
           <span class="mood" id="mood"></span>
         </div>
         <div class="bar-actions">
@@ -30,7 +30,7 @@
       <main class="stage">
         <div class="presence">
           <div class="portrait" id="portrait" hidden>
-            <img id="portrait-still" alt="Anna" />
+            <img id="portrait-still" alt="" />
           </div>
           <div class="orb" id="orb">
             <div class="orb-core"></div>
@@ -177,9 +177,10 @@
           <h3>Gemini API key</h3>
           <p class="settings-note">
             This is the one thing she cannot work without. It is checked with Google
-            before it is saved, then written to the <code>.env</code> file next to
-            <code>package.json</code> — it stays on this machine and is never sent back
-            to this page.
+            before it is saved, then written to her key file — <code>.env</code> beside
+            the clone if you run her from a terminal, or inside her own folder if you
+            installed the application. Either way it stays on this machine and is never
+            sent back to this page.
           </p>
           <div class="setup-row">
             <input
@@ -208,8 +209,8 @@
             <a href="https://t.me/botfather" target="_blank" rel="noreferrer noopener"
               >@BotFather</a
             >, send it <code>/newbot</code>, and paste the token it gives you. It is
-            checked with Telegram before it is saved, then written to
-            <code>.env</code> and kept on this machine.
+            checked with Telegram before it is saved, then written to the same key file
+            as the Gemini key and kept on this machine.
           </p>
           <div class="setup-row">
             <input
@@ -297,11 +298,48 @@
       </div>
     </dialog>
 
+    <!--
+      The first run.
+
+      Deliberately the same dialog as every other panel — same head, same note,
+      same buttons — because it is not a separate product with its own manners.
+      Everything inside it is drawn by `wizard.ts`: the steps are data, and
+      markup for eight of them written out by hand here would be eight places to
+      forget to change something.
+    -->
+    <dialog class="settings wizard" id="wizard">
+      <!--
+        The only dialog head here that is not a `method="dialog"` form.
+
+        That form closes the dialog by submitting it, and the `close` event it
+        raises is a *queued* task — which is a fine way to hear about a closed
+        panel and a bad way to be told to save somebody's answers. A page that is
+        not visible defers those tasks, so the answers were written or not
+        depending on whether the window happened to be in front. This button
+        finishes the wizard in its own click handler, and closes it afterwards.
+      -->
+      <div class="settings-head">
+        <h2 id="wizard-title" tabindex="-1">Before you meet her</h2>
+        <button class="ghost" id="wizard-close" type="button" aria-label="Close">Close</button>
+      </div>
+      <p class="settings-note" id="wizard-note"></p>
+      <div class="wizard-body" id="wizard-body"></div>
+      <div class="wizard-foot">
+        <div class="wizard-pips" id="wizard-pips" aria-hidden="true"></div>
+        <span class="wizard-count" id="wizard-count" aria-live="polite"></span>
+        <div class="wizard-nav">
+          <button class="ghost" id="wizard-back" type="button">Back</button>
+          <button class="ghost" id="wizard-skip" type="button">Skip</button>
+          <button class="primary" id="wizard-next" type="button">Next</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="takeover" id="takeover" hidden>
       <div class="takeover-card">
         <h2>She's in another tab</h2>
         <p>
-          <span data-her-name>Anna</span> holds one conversation at a time, so the
+          <span data-her-name>She</span> holds one conversation at a time, so the
           newest tab has her. This one has stopped so the two aren't fighting over
           her.
         </p>

@@ -23,7 +23,7 @@ import { Memory } from '../memory/memory.ts';
 import { MemoryStore } from '../memory/store.ts';
 import { Mood } from '../mood/mood.ts';
 import { ensureProfile, loadProfile, loadVolatility, writeChosenName } from '../profile/profile.ts';
-import { PLACEHOLDER_NAME, chooseName } from '../profile/naming.ts';
+import { PLACEHOLDER_NAME, chooseName, isPlaceholderName } from '../profile/naming.ts';
 import type { Profile } from '../profile/types.ts';
 import type { Config } from '../../server/config.ts';
 
@@ -235,7 +235,7 @@ export class Brain {
   async #chooseAndRecordName(): Promise<string | null> {
     const identity = this.#parts.profile.identity;
     if (identity.named === 'self') return null;
-    if (identity.name !== PLACEHOLDER_NAME) return null;
+    if (!isPlaceholderName(identity.name)) return null;
     if (!this.#config.geminiApiKey || this.#options.offline) return null;
 
     const ask = this.#options.chooseName ?? chooseName;

@@ -40,6 +40,29 @@ import { GoogleGenAI, Type } from '@google/genai';
 /** The name the project ships with, which is the marker for "not chosen yet". */
 export const PLACEHOLDER_NAME = 'Anna';
 
+/**
+ * Whether a name is still the one this project ships with.
+ *
+ * One function because there were three comparisons and one of them disagreed,
+ * and the disagreement deadlocked her. `hasChosenName` and `isFirstRun` folded
+ * case; `Brain#chooseAndRecordName` did not. So a profile hand-edited to
+ * `name: anna` — which the README and the privacy page both invite somebody to
+ * do — read as *unnamed* to the interface, which therefore drew no name and
+ * called her "She", and as *already named* to the one piece of code that could
+ * have fixed that, which therefore never ran. Permanently, on every
+ * conversation.
+ *
+ * Case is folded because the placeholder typed in lower case is not somebody
+ * choosing a name, it is somebody leaving the default alone. Whitespace is
+ * trimmed for the same reason. An absent name counts as the placeholder, which
+ * is what `loadProfile` falls back to anyway.
+ */
+export function isPlaceholderName(name: string | undefined): boolean {
+  const trimmed = name?.trim();
+  if (!trimmed) return true;
+  return trimmed.toLowerCase() === PLACEHOLDER_NAME.toLowerCase();
+}
+
 /** Cheap, fast, and this is one short answer. */
 const NAMING_MODEL = 'gemini-3.5-flash';
 
@@ -231,7 +254,7 @@ export function cleanName(raw: string): string | null {
   if (!/^\p{L}[\p{L}'’-]*\p{L}$/u.test(trimmed)) return null;
 
   // She was told not to, and taking it would loop the choice forever.
-  if (trimmed.toLowerCase() === PLACEHOLDER_NAME.toLowerCase()) return null;
+  if (isPlaceholderName(trimmed)) return null;
 
   return trimmed[0]!.toUpperCase() + trimmed.slice(1);
 }

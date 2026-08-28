@@ -54,7 +54,15 @@ export async function setEnvValue(file: string, name: string, value: string): Pr
     // No file yet. The normal case on a first run.
   }
 
-  await writeFile(file, replaceOrAppend(existing, name, value), 'utf8');
+  /*
+   * Created owner-only, rather than created and then narrowed. The `chmod`
+   * below is still needed for a file that already exists with looser
+   * permissions, but on the first write there used to be a moment — between
+   * `writeFile` returning at the umask default and `chmod` landing — when the
+   * file holding your keys was readable by anyone on the machine. Narrow, and
+   * free to close.
+   */
+  await writeFile(file, replaceOrAppend(existing, name, value), { encoding: 'utf8', mode: 0o600 });
   try {
     await chmod(file, 0o600);
   } catch {

@@ -4,6 +4,125 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v1.4.0 — 28 August 2026
+
+**Every host she can reach, and every file she writes, in a list the tests hold
+her to.** `docs/PRIVACY.md` was rewritten to be checkable rather than
+reassuring: the exact paths on each platform, every outbound hostname and what
+triggers it, what is held only in memory, and commands a reader can run to
+confirm all of it. `npm test` now fails if the program can dial a host, or write
+a file, that the document does not name — so the page is not an assertion, it is
+something the build will not pass without.
+
+That turned up `cdn.jsdelivr.net`, which the phone's call page fetches
+`livekit-client` from before a call starts. It was documented nowhere, and it is
+invisible to a network monitor on the machine Hers runs on, because that machine
+is not the one making the request.
+
+It also corrected this page's own earlier claims. The privacy document had
+promised "No access to your files", which was never true of **Setup → Let her
+read your files**; had said the two folders "are not in an application-support
+directory", which the desktop build made false; and had described the loopback
+bind as "the design, not a default to be adjusted" when `HERS_HOST` is exactly
+that. A non-loopback bind now warns loudly at startup, in the doctor, and in the
+website.
+
+**A first run that is about her.** The first time the page opens on a profile folder
+nobody has used, a wizard asks seven questions — one for each of the six files in
+`hers-profile/`, in the order the editor shows them, and a seventh for the photograph.
+Every step skips, and skipping writes nothing: take the shortest path through it and the
+folder is byte-for-byte the one that ships, plus the date under `met:` in
+`relationship.md`. Closing it or pressing Escape keeps whatever was answered so far.
+
+Every choice shows the exact sentence it will put in her file, and that sentence is what
+gets written — into the prose, where Gemini reads it, rather than as an adjective in a
+header nothing reads. The three headers that *are* read get written properly:
+`identity.md` for age and where she is from, `voice.md` for the voice, `mood.md` for the
+five numbers behind a temperament. Changing where she is from now rewrites the paragraph
+that says where she is from, so the header and the biography cannot disagree; changing
+her age leaves that paragraph alone and rewrites the sentence about her age.
+
+Card five asks the thing the product had machinery for and no question about: what she
+does with the days you are not here. Card three offers four voices described in a line
+each rather than fourteen of Google's satellite codenames — the full thirty are still on
+the voice tab of **Who she is**.
+
+It does not ask her name. She still chooses that herself on the first conversation, and
+the last card is about why — it carries the Gemini key, which is the only question in the
+whole flow that is not about her, and its button wakes her. The wizard ends on her first
+sentence and the name she picks, rather than on a wake button and a note about
+scheduling. Nothing else in the app wakes her without being asked, and Escape and Close
+still do not.
+
+Nothing is drawn where her name goes until there is a name. The page shipped the
+placeholder in its markup and printed `Anna` in the header and the tab title from the
+first frame, so the card explaining that she has not chosen one was displayed under the
+name it says she does not have.
+
+Fresh is three things, not one: she has not named herself, memory holds nothing at all,
+and `met:` is still the sentence it ships with. Deleting everything under **Start over**
+makes a folder fresh again, and the wizard comes back with it.
+
+**She is a download now.** `npm run package` builds a double-clickable
+application — a `.dmg` on macOS, an NSIS installer on Windows once somebody
+runs that build — with Electron
+carrying its own Node inside it. Eleven steps became three, and the three hard
+gates went: no Node to install, no git, no terminal. The same server, the same
+page, the same everything, in a window that opens itself.
+
+Nothing about running her from a clone changed. `npm start` still serves on
+5175 out of `hers-profile/` and `data/` beside the code, still reads and writes
+`.env` there, and an install that works today goes on working.
+
+**Where the application keeps things**, because it cannot keep them beside
+itself — macOS puts an application inside a read-only signed bundle and Windows
+puts it under `Program Files`, and an upgrade replaces both:
+
+| What            | macOS                                             | Windows                       |
+| --------------- | ------------------------------------------------- | ----------------------------- |
+| Profile         | `~/Library/Application Support/Hers/hers-profile` | `%APPDATA%\Hers\hers-profile` |
+| Memory          | `…/Hers/data`                                      | `%APPDATA%\Hers\data`         |
+| Keys            | `…/Hers/.env`                                      | `%APPDATA%\Hers\.env`         |
+| Log of last run | `…/Hers/hers.log`                                  | `%APPDATA%\Hers\hers.log`     |
+
+`HERS_PROFILE` and `HERS_DATA` still win over all of it, which is the point: an
+existing install is not orphaned by installing the application, and pointing the
+application at a clone's folders is how you move. Nothing is migrated
+automatically, because guessing which of two profile folders is the real person
+is how somebody loses her.
+
+**New:** `HERS_ENV_FILE`, which is where the Setup panel writes the key. It
+defaults to `.env` and exists because the application needs somewhere writable
+that is not next to the executable. That was the subtle half of this work: a
+first run that ends at "paste your key" and then cannot store it is a first run
+that is also the last one.
+
+**The LiveKit binding is loaded only when calls are configured.** It was
+imported unconditionally before. Inside the application that meant a second copy
+of WebRTC alongside Chromium's, registering nine Objective-C classes under names
+Chromium had already taken, which macOS warns "may cause mysterious crashes".
+Nobody who has not set up LiveKit is exposed to it now.
+
+**The build is not signed**, and the README says which two clicks get past
+Gatekeeper rather than pretending the warning is not there — plus the `xattr
+-dr com.apple.quarantine` line, which cannot fail and which the first draft of
+that page left out. It *is* ad-hoc signed, which is a different thing and the
+reason macOS says "unverified developer" rather than "damaged": an unsealed
+bundle fails verification outright, and that message is unrecoverable advice.
+Install to `/Applications` — anywhere else, App Translocation runs a quarantined
+app from a randomized read-only copy of itself and the exception you granted
+does not stick.
+
+**`npm run package` produces one artifact: `Hers-1.4.0-arm64.dmg`, 127.5 MiB, 294 MB
+installed. It has not been published — the releases page carries source tags and no
+binaries, so there is nothing to download yet.**
+Windows and Intel Mac are configured and have never been compiled or run.
+LiveKit's binding is a per-architecture package that `npm install` picks for the
+machine doing the installing, so each artifact has to be built on its own
+machine; a Windows installer built on a Mac would carry a macOS `.node` and fail
+on the first import. `.github/workflows/release.yml` does one runner per
+platform on a tag, and it has never run either.
+
 ## v1.3.0 — 27 August 2026
 
 **A voice menu.** Fourteen prebuilt Gemini voices, each with Google's own one-word
