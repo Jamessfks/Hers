@@ -13,6 +13,7 @@
  * out rather than listening.
  */
 
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Brain } from '../core/session/brain.ts';
 import { Conversation } from '../core/session/conversation.ts';
-import { loadConfig, loadDotEnv, migrateProfileDir } from './config.ts';
+import { envFilePath, loadConfig, loadDotEnv, migrateProfileDir } from './config.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 import {
   applyBotToken,
@@ -33,6 +34,7 @@ import {
 } from './setup.ts';
 import { knowledgeState, runScan, suggestedFolders } from './knowledge.ts';
 import { WebBridge } from './ws.ts';
+import type { Config } from './config.ts';
 import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 import { CallBridge } from '../bridges/livekit/bridge.ts';
@@ -270,12 +272,7 @@ export async function main(): Promise<void> {
     server.listen(config.port, config.host, resolve);
   });
 
-  console.log(`\n  Hers is at http://${displayHost(config.host)}:${config.port}\n`);
-  console.log(`  profile   ${config.profileDir}`);
-  console.log(`  memory    ${path.join(config.dataDir, 'memory.db')}`);
-  console.log(`  model     ${config.model}`);
-  console.log(`  telegram  ${config.telegram ? 'on' : 'off'}`);
-  console.log(`  calls     ${config.livekit ? 'on' : 'off'}\n`);
+  for (const line of startupBanner(config)) console.log(line);
 
   startTelegram();
 
@@ -324,6 +321,29 @@ function allowedOrigins(host: string, port: number): Set<string> {
     origins.add(`https://${name}:${port}`);
   }
   return origins;
+}
+
+/**
+ * The lines printed once the server is up.
+ *
+ * Extracted and exported so it can be tested, which matters for one line in
+ * particular. `docs/PRIVACY.md` tells a reader that both `npm run doctor` and
+ * `npm start` name the three paths this program writes to, resolved. That was
+ * untrue when it was written — this banner listed the profile folder and the
+ * database and never mentioned `.env` at all, which is the one people actually
+ * go looking for. A claim in a document about what a program prints should be
+ * held up by a test that reads what the program prints.
+ */
+export function startupBanner(config: Config, envFile = envFilePath()): string[] {
+  return [
+    `\n  Hers is at http://${displayHost(config.host)}:${config.port}\n`,
+    `  profile   ${config.profileDir}`,
+    `  memory    ${path.join(config.dataDir, 'memory.db')}`,
+    `  keys      ${envFile}${existsSync(envFile) ? '' : ' (not written yet)'}`,
+    `  model     ${config.model}`,
+    `  telegram  ${config.telegram ? 'on' : 'off'}`,
+    `  calls     ${config.livekit ? 'on' : 'off'}\n`,
+  ];
 }
 
 function displayHost(host: string): string {

@@ -323,12 +323,18 @@ and `anna-profile/` is renamed once, on the first start — see [CHANGELOG.md](C
 
 ## Privacy
 
-[`docs/PRIVACY.md`](docs/PRIVACY.md) is the long version, naming the file that settles
-each claim. The short one:
+[`docs/PRIVACY.md`](docs/PRIVACY.md) is the long version: every path she writes to,
+every host this build can reach, and a command for checking each one. `npm run doctor`
+prints those same two lists straight out of the code, and a test fails if the document
+and the code disagree. The short version:
 
 - Everything runs on your machine. Her memory is a SQLite file in `data/` and her
-  profile a folder of text; nothing is uploaded anywhere except to Gemini, as part of
-  the conversation you are having.
+  profile a folder of text you can open in a text editor and edit; nothing is uploaded
+  anywhere except to Gemini, as part of the conversation you are having.
+- Three hosts, and that is the whole list: `generativelanguage.googleapis.com` always,
+  `api.telegram.org` if you set a bot token, and your LiveKit project if you set one up.
+  The phone's call page also fetches `livekit-client` from `cdn.jsdelivr.net` before a
+  call starts. Nothing checks for updates, counts a launch, or reports a crash.
 - No sense is on until you switch it on, the browser asks its own permission on top of
   that, and turning one off stops the frames at the source. Video and audio are streamed
   and never written to disk.
@@ -347,12 +353,12 @@ each claim. The short one:
 ```bash
 npm run dev             # rebuilds the site and restarts the server on save
 npm run check           # typecheck + the full test suite, no API key needed
-npm run doctor          # opens a real Gemini session and reports what works
+npm run doctor          # prints every path and host in use, then opens a real Gemini session
 npm run audit           # every success criterion, against the real APIs
 npm run audit:bridges   # the phone-call and Telegram paths
 ```
 
-**414 tests, no API key needed.** The interesting ones are in
+**453 tests, no API key needed.** The interesting ones are in
 `src/core/gemini/live.test.ts`, which is entirely about the connection ending, and
 `src/core/session/companion.test.ts`, where memory, mood, the prompt and the tools all
 run for real with only the socket faked. Under `src/`: `core/` is the companion,

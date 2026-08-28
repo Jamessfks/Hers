@@ -42,6 +42,38 @@ export interface Config {
 /** Where the profile folder lives unless told otherwise. */
 export const PROFILE_DIR = 'hers-profile';
 
+/**
+ * The file the keys live in, relative to wherever Hers was started.
+ *
+ * One copy, because three places need it and two of them are promises made to
+ * a reader: `loadDotEnv` reads it, `setEnvValue` writes it, and both the doctor
+ * and the startup banner print it resolved so nobody has to guess which `.env`
+ * is in force. `docs/PRIVACY.md` says those two print it; this is what makes
+ * that true rather than nearly true.
+ */
+export const ENV_FILE = '.env';
+
+/** {@link ENV_FILE} as an absolute path, which is the only useful form to print. */
+export function envFilePath(cwd = process.cwd()): string {
+  return path.resolve(cwd, ENV_FILE);
+}
+
+/**
+ * Whether a host only accepts connections from this machine.
+ *
+ * The whole security model of the web UI is that it has no authentication
+ * because nothing else can reach it, so this is the predicate the rest of that
+ * argument rests on. All of `127.0.0.0/8` counts, not just `127.0.0.1`, and the
+ * bracketed IPv6 form is accepted because that is how it is typed into a URL.
+ */
+export function isLoopbackHost(host: string): boolean {
+  const bare = host.trim().replace(/^\[|\]$/g, '').toLowerCase();
+  if (bare === 'localhost' || bare === '::1') return true;
+  const parts = bare.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((part) => /^\d{1,3}$/.test(part)) && parts[0] === '127';
+}
+
 /** What it was called before the project was renamed to Hers. */
 export const FORMER_PROFILE_DIR = 'anna-profile';
 
@@ -178,6 +210,31 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     warnings,
   };
 
+  /*
+   * Binding off-loopback is allowed and is not warned about gently.
+   *
+   * The page has no login, because until now nothing else could reach it. On
+   * any other host it can, and what is behind it is her memory of somebody and
+   * a key that spends their money. Two things also simply stop working: the
+   * microphone, camera and screen share all need a secure context, which
+   * `localhost` is without a certificate and no other host is.
+   *
+   * A warning rather than a refusal, because someone doing this on purpose
+   * behind their own firewall is entitled to. But `docs/PRIVACY.md` used to
+   * call the loopback bind "the design, not a default to be adjusted", which
+   * was flatly untrue — it is `HERS_HOST`, and `.env.example` ships it as a
+   * documented knob. The claim is now accurate and this is what backs it.
+   */
+  if (!isLoopbackHost(config.host)) {
+    warnings.push(
+      `${host.name}=${config.host} binds the website to something other than this machine. ` +
+        'It has no password, and anyone who can reach it can read her memory of you and spend ' +
+        'your Gemini key. The microphone, camera and screen share will also stop working, ' +
+        'because they need a secure context and only localhost is one without a certificate. ' +
+        'Set HERS_HOST=127.0.0.1 unless you know exactly why you are not.',
+    );
+  }
+
   if (config.minSilenceMs > config.maxSilenceMs) {
     warnings.push(
       `${minSilence.name} (${config.minSilenceMs}) is above ${maxSilence.name} (${config.maxSilenceMs}); using the ceiling for both.`,
@@ -201,7 +258,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /** Reads `.env` if there is one. Real environment variables always win. */
-export function loadDotEnv(file = '.env'): void {
+export function loadDotEnv(file = ENV_FILE): void {
   try {
     process.loadEnvFile(file);
   } catch {
