@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { setFrontmatterValue } from '../../shared/frontmatter.ts';
 import { applyWizard } from '../../shared/wizard.ts';
 import { hasChosenName, isFirstRun } from './first-run.ts';
+import { isPlaceholderName } from './naming.ts';
 import { DEFAULT_PROFILE_FILES } from './defaults.ts';
 import {
   ensureProfile,
@@ -73,6 +74,24 @@ test('the placeholder is the placeholder however it was typed', () => {
   const files = shipped();
   files.identity = setFrontmatterValue(files.identity ?? '', 'name', 'anna');
   assert.equal(isFirstRun({ files, hasHistory: false }), true);
+});
+
+test('and the naming path agrees, which it used to not', () => {
+  /*
+   * This used to be the one input where the two halves disagreed, and the
+   * disagreement was permanent: `isFirstRun` folded case and read `anna` as the
+   * placeholder, so the interface drew no name; `Brain#chooseAndRecordName`
+   * compared exactly and read it as already chosen, so she never picked one. The
+   * predicate is shared now, and this asserts the agreement rather than the
+   * divergence.
+   */
+  for (const typed of ['anna', 'Anna', ' ANNA ', 'aNnA', '']) {
+    assert.equal(isPlaceholderName(typed), true, JSON.stringify(typed));
+  }
+  for (const chosen of ['Mei', 'Annabel', 'Anna Lee']) {
+    assert.equal(isPlaceholderName(chosen), false, chosen);
+  }
+  assert.equal(isPlaceholderName(undefined), true, 'an absent name is the default');
 });
 
 test('a half-written identity file is still a first run', () => {

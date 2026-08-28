@@ -89,6 +89,27 @@ mkdirSync(paths.home, { recursive: true });
  */
 process.chdir(paths.home);
 
+/*
+ * One copy — and this is checked *before* the log is opened, which is the whole
+ * reason it sits here rather than further down.
+ *
+ * A second `getUpdates` poller is two halves of a Telegram conversation, so a
+ * second instance has to go. But the log below is truncated on every launch, so
+ * checking the lock afterwards meant double-clicking the dock icon while she was
+ * running emptied the only diagnostic surface the application has — and "read
+ * `hers.log`" is the first instruction on both the README's setup section and the
+ * troubleshooting page. The second instance would exit, having deleted the
+ * evidence the first one was writing.
+ *
+ * `process.exit` after `app.exit` because this is top-level module code: there
+ * is no `return` here, and `app.exit` does not reliably stop the rest of the
+ * file from evaluating and opening the log anyway.
+ */
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+  process.exit(0);
+}
+
 /**
  * Everything the server says, written down as well as printed.
  *
@@ -121,9 +142,6 @@ try {
 } catch {
   // Same rule one level up.
 }
-
-/** One copy. A second `getUpdates` poller is two halves of a Telegram conversation. */
-if (!app.requestSingleInstanceLock()) app.exit(0);
 
 /** @type {import('../src/server/index.ts').Running | null} */
 let running = null;
@@ -164,8 +182,10 @@ function freePort() {
  * message box, which are off until pressed, and the operating system's own
  * microphone, camera and screen-recording prompts, which this cannot answer.
  */
+/** @param {string} origin */
 function allowMediaFor(origin) {
   const permitted = new Set(['media', 'clipboard-sanitized-write']);
+  /** @param {string} url */
   const mine = (url) => {
     try {
       return new URL(url).origin === origin;
@@ -193,28 +213,83 @@ function allowMediaFor(origin) {
    * screen share that silently picks display one is not a screen share
    * somebody agreed to.
    */
+  /*
+   * A Content-Security-Policy, as defence in depth rather than as a fix.
+   *
+   * Every model-generated string in this interface already reaches the DOM
+   * through `textContent`, and the three `innerHTML` sites are literals or the
+   * fixed stage table — so there is no injection sink to close today. This is
+   * here for the day somebody adds one, and because a renderer holding the
+   * microphone, the camera and the screen should not also be able to reach an
+   * arbitrary host if it is ever made to run somebody else's script.
+   *
+   * `connect-src` allows the WebSocket back to the same origin, `img-src`
+   * allows `blob:` because generated pictures arrive that way, `style-src`
+   * allows inline because the mood hue is set as a style property, and
+   * `script-src` allows `blob:` for the audio worklet. `frame-src` and
+   * `object-src` are none: nothing here embeds anything.
+   */
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self' blob:",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' blob: data:",
+            "media-src 'self' blob:",
+            "connect-src 'self' ws://127.0.0.1:* ws://localhost:*",
+            "font-src 'self'",
+            "frame-src 'none'",
+            "object-src 'none'",
+            "base-uri 'none'",
+          ].join('; '),
+        ],
+      },
+    });
+  });
+
   session.defaultSession.setDisplayMediaRequestHandler(
     (request, callback) => {
       void (async () => {
-        const sources = await desktopCapturer.getSources({ types: ['screen'] });
-        if (sources.length === 0) return callback({});
-        if (sources.length === 1) return callback({ video: sources[0] });
+        /*
+         * The callback has to be called on every path, including the ones that
+         * throw. Without this, a rejection from `getSources` or the dialog left
+         * `getDisplayMedia()` in the page unsettled forever: the screen switch
+         * stayed mid-press, no error appeared anywhere, and the log this file
+         * exists to write had nothing to say about it either. Refusing is a
+         * worse outcome than sharing and a much better one than hanging.
+         */
+        try {
+          const sources = await desktopCapturer.getSources({ types: ['screen'] });
+          if (sources.length === 0) return callback({});
+          if (sources.length === 1) return callback({ video: sources[0] });
 
-        const { response } = await dialog.showMessageBox({
-          type: 'question',
-          message: 'Which screen should she see?',
-          buttons: [...sources.map((each) => each.name), 'Cancel'],
-          cancelId: sources.length,
-          defaultId: 0,
-        });
-        callback(response < sources.length ? { video: sources[response] } : {});
+          const { response } = await dialog.showMessageBox({
+            type: 'question',
+            message: 'Which screen should she see?',
+            buttons: [...sources.map((each) => each.name), 'Cancel'],
+            cancelId: sources.length,
+            defaultId: 0,
+          });
+          callback(response < sources.length ? { video: sources[response] } : {});
+        } catch (error) {
+          fail(error);
+          callback({});
+        }
       })();
     },
     { useSystemPicker: true },
   );
 }
 
-/** The window. One, and it only ever shows her. */
+/**
+ * The window. One, and it only ever shows her.
+ *
+ * @param {string} url
+ */
 function openWindow(url) {
   window = new BrowserWindow({
     width: 1120,
@@ -233,6 +308,15 @@ function openWindow(url) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      /*
+       * Off, and not merely left at its default like the three above.
+       * Chromium's spellchecker downloads hunspell dictionaries from Google's
+       * CDN on Windows, which would be an outbound host that
+       * `src/shared/destinations.ts` does not list and `docs/PRIVACY.md` does
+       * not name — and that page's whole claim is that the list is complete.
+       * Nothing here is a document; she is the one writing prose.
+       */
+      spellcheck: false,
     },
   });
 
@@ -293,6 +377,7 @@ function openWindow(url) {
   void window.loadURL(url);
 }
 
+/** @param {string} url */
 function originOf(url) {
   try {
     return new URL(url).origin;
@@ -301,6 +386,7 @@ function originOf(url) {
   }
 }
 
+/** @param {string} url */
 function safeProtocol(url) {
   try {
     return new URL(url).protocol;
@@ -392,6 +478,7 @@ async function start() {
  * the user is looking at, which is indistinguishable from nothing happening.
  * That is how the packaging bug this file logs about stayed invisible.
  */
+/** @param {unknown} error */
 function fail(error) {
   console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
   app.focus({ steal: true });

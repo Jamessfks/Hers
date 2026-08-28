@@ -48,6 +48,50 @@
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 
+const { FuseV1Options, FuseVersion, flipFuses } = require('@electron/fuses');
+
+/*
+ * ## Why the fuses are flipped here and not in `electron-builder.yml`
+ *
+ * They were, once, for about ten minutes. electron-builder runs its own fuse
+ * step *after* `afterPack`, so the order was: seal the bundle, then rewrite the
+ * binary. Flipping a fuse edits the executable, which breaks the seal, and
+ * `codesign --verify` said so:
+ *
+ *     invalid signature (code or signature have been modified)
+ *
+ * Which is exactly the state the whole of the comment above exists to prevent —
+ * an app that reads as damaged rather than merely unsigned. Adding the fuses
+ * that way made every download worse than having no fuses at all, and the build
+ * still reported success.
+ *
+ * So the fuses are flipped in here, before the signature, and
+ * `electron-builder.yml` has no `electronFuses` key. One step, one order, and
+ * the verify at the end of this file is what proves it.
+ *
+ * What they turn off: `runAsNode` and the two Node CLI switches, which would
+ * otherwise let `ELECTRON_RUN_AS_NODE=1 …/Hers -e '<js>'` run somebody else's
+ * JavaScript under this application's identity — inheriting the Camera,
+ * Microphone and Screen Recording permissions the user granted to *her*. That is
+ * the ordinary way an Electron app becomes a route around a permission prompt
+ * that was already answered.
+ *
+ * The limit, stated: an ad-hoc signature is reproducible by anyone, so somebody
+ * who can write to the installed bundle can flip these back and re-sign it. This
+ * raises the bar against an attacker who can run a command; it seals nothing.
+ */
+async function hardenFuses(app) {
+  await flipFuses(app, {
+    version: FuseVersion.V1,
+    resetAdHocDarwinSignature: false,
+    [FuseV1Options.RunAsNode]: false,
+    [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+    [FuseV1Options.EnableNodeCliInspectArguments]: false,
+    [FuseV1Options.OnlyLoadAppFromAsar]: true,
+    [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+  });
+}
+
 exports.default = async function adhocSign(context) {
   if (context.electronPlatformName !== 'darwin') return;
 
@@ -56,6 +100,9 @@ exports.default = async function adhocSign(context) {
     `${context.packager.appInfo.productFilename}.app`,
   );
 
+  // Before the signature, always. See the note above.
+  await hardenFuses(app);
+
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
 
   // Checked here rather than trusted, because the failure this replaced was
@@ -63,5 +110,5 @@ exports.default = async function adhocSign(context) {
   // at the build rather than at somebody's download.
   execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
 
-  console.log(`  • ad-hoc signed  file=${path.relative(process.cwd(), app)}`);
+  console.log(`  • fuses flipped, then ad-hoc signed  file=${path.relative(process.cwd(), app)}`);
 };

@@ -24,19 +24,29 @@ function modulesThatWrite(): string[] {
       '-rlE',
       WRITE_CALL_PATTERN,
       '--include=*.ts',
+      // `.js` as well as `.ts`, and `electron/` as well as `src/`, because the
+      // desktop entry point is plain JavaScript outside `src/` and it writes
+      // `hers.log`. Scanning only `src/**/*.ts` meant the one module added in
+      // the same round as this test was the one module it could not see, and
+      // the whole suite stayed green while `docs/PRIVACY.md` failed to name a
+      // file the program writes on every launch.
+      '--include=*.js',
       '--exclude=*.test.ts',
       // `writers.ts` states the pattern, so it contains the pattern, so it
       // matches itself. A rule cannot be its own subject. The test below keeps
       // this carve-out from turning into a hiding place.
       '--exclude=writers.ts',
       'src/',
+      'electron/',
     ],
     { cwd: root, encoding: 'utf8' },
   );
   return output
     .split('\n')
     .filter(Boolean)
-    .map((file) => file.replace(/^src\//, ''))
+    // `src/` is stripped so entries read `core/profile/profile.ts`; anything
+    // outside it keeps its directory, so `electron/main.js` stays itself.
+    .map((file) => (file.startsWith('src/') ? file.slice('src/'.length) : file))
     .sort();
 }
 
@@ -120,20 +130,53 @@ test('the profile files the code ships are the profile files the list claims', (
   }
 });
 
-test('nothing under src/ writes outside the three roots', () => {
+test('nothing writes outside the roots the document names', () => {
   // A sanity check on the shape of the list rather than on the code: every
-  // entry has to hang off the profile folder, the data folder, or the working
-  // directory, because those are the only three the document tells you to look
-  // in.
+  // entry has to hang off the profile folder, the data folder, the working
+  // directory, or — since the desktop build — the application's own folder,
+  // because those are the only ones the document tells you to look in.
   for (const writer of WRITERS) {
-    assert.ok(['profile', 'data', 'cwd'].includes(writer.root), writer.module);
+    assert.ok(['profile', 'data', 'cwd', 'app'].includes(writer.root), writer.module);
   }
-  // And the only thing outside the two directories Start over deletes is `.env`.
+  // The only thing outside the two directories Start over deletes is `.env`,
+  // plus the application's log, which is rewritten on every launch anyway.
   const outside = WRITERS.filter((writer) => writer.root === 'cwd').flatMap((w) => w.writes);
   assert.deepEqual(outside, ['.env']);
+  const app = WRITERS.filter((writer) => writer.root === 'app').flatMap((w) => w.writes);
+  assert.deepEqual(app, ['hers.log']);
 });
 
-/** Guards the assumption that `src/` is where all of this lives. */
+/**
+ * Guards the assumption that the scan looks everywhere code lives.
+ *
+ * The previous version of this test listed the subdirectories of `src/`, so it
+ * could not notice a new *top-level* directory — which is precisely how
+ * `electron/` arrived, wrote a log file, and left the document incomplete with
+ * every test green. It now watches the repository root as well.
+ */
+test('a new top-level directory of code cannot appear unnoticed', () => {
+  const known = new Set([
+    'src',
+    'electron',
+    'scripts',
+    'build',
+    'call',
+    'docs',
+    'dist',
+    'release',
+    'node_modules',
+    'data',
+    'hers-profile',
+    'anna-profile',
+  ]);
+  const top = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => entry.name);
+  for (const name of top) {
+    assert.ok(known.has(name), `${name}/ is new: does the write scan need to cover it?`);
+  }
+});
+
 test('the scan covers every source directory', () => {
   const dirs = readdirSync(path.join(root, 'src'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())

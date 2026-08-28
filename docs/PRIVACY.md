@@ -205,7 +205,10 @@ and no "save this conversation". `Companion#see` hands the bytes straight to the
 live session.
 
 That is checkable rather than merely asserted, and it is checked the same way
-the host list is. Exactly ten modules under `src/` touch the filesystem:
+the host list is. Exactly eleven modules touch the filesystem — ten under `src/`
+and one in `electron/`, which is worth saying because the first version of this
+table scanned `src/**/*.ts` only, and therefore could not see the plain
+JavaScript entry point that writes the log:
 
 | Module | Writes | Under |
 | --- | --- | --- |
@@ -219,6 +222,23 @@ the host list is. Exactly ten modules under `src/` touch the filesystem:
 | `core/session/brain.ts` | creates `data/`; deletes both folders on Start over | data |
 | `server/env-file.ts` | `.env` | where you started her |
 | `server/config.ts` | renames `anna-profile/` to `hers-profile/`, once | where you started her |
+| `electron/main.js` | `hers.log` | the application's own folder |
+
+### `hers.log`, and what is in it
+
+Only the downloaded application writes it; running her from a clone does not. It
+holds everything the last run printed, and it is rewritten from empty on every
+launch, because a window that never appeared cannot tell you why it did not and
+this is where it says so instead. Both the README and the troubleshooting page
+tell you to read it, so this page has to tell you what you would be reading.
+
+It contains the absolute paths in use, which include your account name; the
+pinned Telegram chat id if you use that bridge; and every configuration warning.
+It contains no key. The Gemini key is printed only as its last four characters,
+the doctor prints its length rather than the key itself, and the bot token is
+never printed at all — that is enforced by the same tests as the rest of this
+page. It is safe to send to somebody helping you, and if that ever stops being
+true, this paragraph is the thing that was wrong.
 
 Find them yourself. This is the exact pattern `src/shared/writers.test.ts`
 scans with, quoted from the same constant the test uses, so the answer you get

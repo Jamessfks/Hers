@@ -47,7 +47,7 @@
 
 import { frontmatterValue } from '../../shared/frontmatter.ts';
 import { DEFAULT_PROFILE_FILES } from './defaults.ts';
-import { PLACEHOLDER_NAME } from './naming.ts';
+import { isPlaceholderName } from './naming.ts';
 import type { Identity } from './types.ts';
 
 /**
@@ -61,7 +61,7 @@ import type { Identity } from './types.ts';
  */
 export function hasChosenName(identity: Identity): boolean {
   if (identity.named === 'self') return true;
-  return identity.name.trim().toLowerCase() !== PLACEHOLDER_NAME.toLowerCase();
+  return !isPlaceholderName(identity.name);
 }
 
 export interface FirstRunSignals {
@@ -87,8 +87,7 @@ export function isFirstRun({ files, hasHistory }: FirstRunSignals): boolean {
 
   // Absent counts as the placeholder: that is what `loadProfile` falls back to,
   // and a half-written file is a case this folder is explicitly allowed to be in.
-  const name = frontmatterValue(identity, 'name')?.trim();
-  if (name && name.toLowerCase() !== PLACEHOLDER_NAME.toLowerCase()) return false;
+  if (!isPlaceholderName(frontmatterValue(identity, 'name'))) return false;
 
   const met = frontmatterValue(files.relationship ?? '', 'met')?.trim();
   if (met && met !== unmetValue()) return false;

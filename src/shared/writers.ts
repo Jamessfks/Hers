@@ -30,7 +30,7 @@
  */
 
 /** Which directory a path is relative to. */
-export type Root = 'profile' | 'data' | 'cwd';
+export type Root = 'profile' | 'data' | 'cwd' | 'app';
 
 export interface Writer {
   /** The module, relative to `src/`, exactly as the scan reports it. */
@@ -129,6 +129,13 @@ export const WRITERS: readonly Writer[] = [
     writes: ['.env'],
     what: 'Your keys. Written with owner-only permissions, one line at a time, leaving every other line exactly as it was.',
     when: 'When you submit a key or a bot token in Setup. Nothing else ever writes here, and Start over does not touch it.',
+  },
+  {
+    module: 'electron/main.js',
+    root: 'app',
+    writes: ['hers.log'],
+    what: 'Everything the last run printed to its console, so that a window which never appeared can still say why. It carries the absolute paths in use — which include your account name — the pinned Telegram chat id if you use the bridge, and every configuration warning. It carries no key: the Gemini key is only ever printed masked to its last four characters, and the bot token is never printed at all.',
+    when: 'Rewritten from empty every time the application launches. Only the application writes it; running her from a clone does not.',
   },
   {
     module: 'server/config.ts',

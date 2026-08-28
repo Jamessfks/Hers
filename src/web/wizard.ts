@@ -644,7 +644,7 @@ export class Wizard {
       const note = document.createElement('p');
       note.className = 'settings-note';
       note.textContent =
-        'A Gemini API key, which is the only account involved in any of this. It is checked with Google before it is saved, written to the .env file next to package.json, and never sent back to this page. Without one she cannot hear you — or choose her name.';
+        'A Gemini API key, which is the only account involved in any of this. It is checked with Google before it is saved, written to the keys file — `.env` beside the clone if you run her from a terminal, or inside her own folder if you installed the application — and never sent back to this page. Without one she cannot hear you — or choose her name.';
 
       const row = document.createElement('div');
       row.className = 'setup-row';

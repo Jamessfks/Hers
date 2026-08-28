@@ -45,6 +45,13 @@ files:
 # is LiveKit's prebuilt N-API binding, which is ABI-stable by construction and
 # is the reason `node:sqlite` was chosen over `better-sqlite3` in the first
 # place. Rebuilding would cost minutes and change nothing.
+# The fuses are NOT set here. electron-builder runs its fuse step after
+# `afterPack`, so setting them here rewrote the binary after `build/adhoc-sign.cjs`
+# had sealed it, and `codesign --verify` then reported "code or signature have
+# been modified" — the state that makes macOS call the app damaged rather than
+# unsigned. They are flipped inside that script instead, before the signature.
+# The long version is in its header.
+
 npmRebuild: false
 
 # One language. The other fifty-odd `.pak` files are about four megabytes of

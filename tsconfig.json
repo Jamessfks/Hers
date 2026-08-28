@@ -32,7 +32,17 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    /*
+     * The desktop entry point is plain JavaScript, and it is checked anyway.
+     * It imports from `src/server/`, decides where her memory and your keys are
+     * written, and configures the window — and it was outside both this file's
+     * include and the test glob, so 382 lines of it were verified by nothing.
+     * That is the same gap the comment below describes, one directory over.
+     */
+    "allowJs": true,
+    "checkJs": true
   },
   /*
    * `scripts/` is in here, and learning that cost a green build. The audit
@@ -42,6 +52,6 @@
    * "this[#sink].named is not a function". Anything that imports from `src` has
    * to be typechecked with `src`.
    */
-  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "electron/**/*.js"],
   "exclude": ["node_modules", "dist", "src/web"]
 }
