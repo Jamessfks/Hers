@@ -35,6 +35,7 @@ import { format } from 'node:util';
 import { BrowserWindow, app, desktopCapturer, dialog, session, shell } from 'electron';
 
 import { applyDesktopPaths } from '../src/server/app-paths.ts';
+import { loadDotEnv } from '../src/server/config.ts';
 
 /**
  * The name, fixed here rather than taken from wherever Electron would find it.
@@ -49,6 +50,29 @@ const APP_NAME = 'Hers';
 
 app.setName(APP_NAME);
 app.setPath('userData', path.join(app.getPath('appData'), APP_NAME));
+
+/*
+ * The keys file is read *before* the paths are decided, and the order is the
+ * whole point.
+ *
+ * `applyDesktopPaths` writes `HERS_PROFILE`, `HERS_DATA` and `HERS_ENV_FILE`
+ * into the environment, and `process.loadEnvFile` refuses to overwrite a
+ * variable that is already there. Read the file second and every one of those
+ * keys is a dead letter — which is what shipped: the README, `.env.example`,
+ * the changelog and this file all promised that pointing `HERS_PROFILE` at a
+ * clone's folder is how the application finds the person you have been talking
+ * to, and it worked only from a shell-exported variable, which is the one way
+ * somebody who double-clicks an icon cannot do it. The documented migration
+ * path quietly produced a stranger.
+ *
+ * So: read `<userData>/.env` first, then decide. `desktopPaths` already
+ * prefers whatever the environment says, so nothing else had to change.
+ *
+ * The one thing this cannot do is relocate the file it just read. `HERS_ENV_FILE`
+ * set *inside* the default keys file is circular and is ignored; set it in the
+ * real environment if you need the keys somewhere else.
+ */
+loadDotEnv(path.join(app.getPath('userData'), '.env'));
 
 /** Where everything she has lives. Made now, because the key gets written into it. */
 const paths = applyDesktopPaths(app.getPath('userData'));

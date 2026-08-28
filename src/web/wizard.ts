@@ -42,6 +42,8 @@ import {
   VOICE_CHOICES,
   WANTS,
   applyWizard,
+  draftToAnswers,
+  emptyDraft,
   retellIdentity,
 } from '../shared/wizard.ts';
 import type { WizardAnswers, WizardChoice } from '../shared/wizard.ts';
@@ -105,22 +107,15 @@ export class Wizard {
   #closing = false;
   #configured = false;
 
-  // The answers, held here rather than read back out of the DOM. One place to
-  // look when asking what this will write, and `clear()` has something to clear.
-  #traits = new Set<string>();
-  #wants = new Set<string>();
-  #absence = new Set<string>();
-  #refusals = new Set<string>();
-  #temperament: string | undefined;
-  #identity: { age: string; ethnicity: string; from: string; past: string } = {
-    age: '',
-    ethnicity: '',
-    from: '',
-    past: '',
-  };
-  #voice = { voice: '', pace: '' };
-  #aboutThem = '';
-  #refusalExtra = '';
+  /*
+   * Every answer, in one object, replaced wholesale when the wizard opens.
+   *
+   * It used to be nine separate fields, and four of the seven cards rebuilt
+   * their controls without clearing the state behind them — so a second run
+   * after **Start over** carried the previous person's answers into the new
+   * folder while every control on screen was drawn empty. See `WizardDraft`.
+   */
+  #draft = emptyDraft();
 
   /** Elements the key card owns, built only when there is no key yet. */
   #keyInput: HTMLInputElement | null = null;
@@ -185,6 +180,10 @@ export class Wizard {
     if (this.#shown) return;
     this.#shown = true;
     this.#closing = false;
+    // Every answer, gone. This is the whole fix for a second run carrying the
+    // first person's choices, and it is here rather than in the cards because
+    // this is the one door every run comes through.
+    this.#draft = emptyDraft();
     this.#files = files;
     this.#configured = configured;
     this.#steps = this.#build();
@@ -261,29 +260,12 @@ export class Wizard {
   #finish(intentional: boolean): void {
     if (this.#closing) return;
     this.#closing = true;
-    const changed = applyWizard(this.#files, this.#answers(), today());
+    const changed = applyWizard(this.#files, draftToAnswers(this.#draft), today());
     if (Object.keys(changed).length > 0) this.#handlers.onSave(changed);
     if (this.#dialog.open) this.#dialog.close();
     this.#handlers.onDone({ meet: intentional && this.#configured });
   }
 
-  #answers(): WizardAnswers {
-    return {
-      traits: [...this.#traits],
-      age: this.#identity.age,
-      ethnicity: this.#identity.ethnicity,
-      from: this.#identity.from,
-      past: this.#identity.past,
-      voice: this.#voice.voice,
-      pace: this.#voice.pace,
-      ...(this.#temperament ? { temperament: this.#temperament } : {}),
-      wants: [...this.#wants],
-      absence: [...this.#absence],
-      aboutThem: this.#aboutThem,
-      refusals: [...this.#refusals],
-      refusalExtra: this.#refusalExtra,
-    };
-  }
 
   // -------------------------------------------------------------------------
   // The cards
@@ -305,7 +287,7 @@ export class Wizard {
   #traitsStep(): Step {
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
-    panel.append(this.#picks(TRAITS, this.#traits));
+    panel.append(this.#picks(TRAITS, this.#draft.traits));
 
     return {
       id: 'personality',
@@ -313,7 +295,7 @@ export class Wizard {
       note:
         'She ships warm, dry and hard to embarrass. Anything you tick is a line in her file, and the line is underneath it, so you can read what she will be told before you choose it. Skip any of these; skipping leaves her exactly as she ships. This asks once. About four minutes.',
       panel,
-      clear: () => untick(panel, this.#traits),
+      clear: () => untick(panel, this.#draft.traits),
     };
   }
 
@@ -339,7 +321,7 @@ export class Wizard {
     const from = frontmatterValue(identity, 'from') ?? '';
     const past = parseProfileFile(identity).body;
     const shipped = { age, ethnicity, from };
-    this.#identity = { age, ethnicity, from, past: '' };
+    this.#draft.identity = { age, ethnicity, from, past: '' };
 
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
@@ -349,23 +331,23 @@ export class Wizard {
 
     const retell = (): void => {
       if (!mine) return;
-      const retold = retellIdentity(past, this.#identity, shipped);
+      const retold = retellIdentity(past, this.#draft.identity, shipped);
       pastArea.value = retold;
       // Only counts as an answer once it differs from what shipped; otherwise a
       // skipped card would send the body back and defeat the write-nothing rule.
-      this.#identity.past = retold === past ? '' : retold;
+      this.#draft.identity.past = retold === past ? '' : retold;
     };
 
     const ageInput = this.#text(age, (value) => {
-      this.#identity.age = value;
+      this.#draft.identity.age = value;
       retell();
     });
     const ethnicityInput = this.#text(ethnicity, (value) => {
-      this.#identity.ethnicity = value;
+      this.#draft.identity.ethnicity = value;
       retell();
     });
     const fromInput = this.#text(from, (value) => {
-      this.#identity.from = value;
+      this.#draft.identity.from = value;
       retell();
     });
 
@@ -379,7 +361,7 @@ export class Wizard {
 
     const pastArea = this.#area(past, (value) => {
       mine = false;
-      this.#identity.past = value;
+      this.#draft.identity.past = value;
     });
     pastArea.rows = 9;
 
@@ -403,7 +385,7 @@ export class Wizard {
         fromInput.value = from;
         pastArea.value = past;
         mine = true;
-        this.#identity = { age, ethnicity, from, past: '' };
+        this.#draft.identity = { age, ethnicity, from, past: '' };
       },
     };
   }
@@ -426,7 +408,7 @@ export class Wizard {
     const file = this.#files.voice ?? '';
     const chosen = frontmatterValue(file, 'voice')?.trim() ?? '';
     const pace = frontmatterValue(file, 'pace') ?? '';
-    this.#voice = { voice: '', pace };
+    this.#draft.voice = { voice: '', pace };
 
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
@@ -440,16 +422,16 @@ export class Wizard {
       // Whatever the file already says wins the initial state, so a profile that
       // has been edited by hand does not silently disagree with this card.
       input.checked = option.voice.toLowerCase() === chosen.toLowerCase();
-      if (input.checked) this.#voice.voice = option.voice;
+      if (input.checked) this.#draft.voice.voice = option.voice;
       input.addEventListener('change', () => {
-        if (input.checked) this.#voice.voice = option.voice;
+        if (input.checked) this.#draft.voice.voice = option.voice;
       });
       inputs.push(input);
       list.append(row);
     }
-    const initial = this.#voice.voice;
+    const initial = this.#draft.voice.voice;
 
-    const paceInput = this.#text(pace, (value) => (this.#voice.pace = value));
+    const paceInput = this.#text(pace, (value) => (this.#draft.voice.pace = value));
 
     const aside = document.createElement('p');
     aside.className = 'wizard-aside';
@@ -474,7 +456,7 @@ export class Wizard {
       clear: () => {
         for (const input of inputs) input.checked = input.value === chosenId(initial);
         paceInput.value = pace;
-        this.#voice = { voice: initial, pace };
+        this.#draft.voice = { voice: initial, pace };
       },
     };
   }
@@ -490,7 +472,7 @@ export class Wizard {
       const { row, input } = this.#choice('radio', 'wizard-temperament', temperament.label, temperament.line);
       input.value = temperament.id;
       input.addEventListener('change', () => {
-        if (input.checked) this.#temperament = temperament.id;
+        if (input.checked) this.#draft.temperament = temperament.id;
       });
       inputs.push(input);
       list.append(row);
@@ -510,7 +492,7 @@ export class Wizard {
       panel,
       clear: () => {
         for (const input of inputs) input.checked = false;
-        this.#temperament = undefined;
+        this.#draft.temperament = undefined;
       },
     };
   }
@@ -528,12 +510,12 @@ export class Wizard {
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
 
-    const area = this.#area('', (value) => (this.#aboutThem = value));
+    const area = this.#area('', (value) => (this.#draft.aboutThem = value));
     area.rows = 4;
     area.placeholder = 'Anything. It goes in as a quotation, in your words, not rewritten.';
 
-    const wants = this.#picks(WANTS, this.#wants);
-    const absence = this.#picks(ABSENCE, this.#absence);
+    const wants = this.#picks(WANTS, this.#draft.wants);
+    const absence = this.#picks(ABSENCE, this.#draft.absence);
 
     panel.append(
       this.#group('What you want her around for', wants),
@@ -547,10 +529,10 @@ export class Wizard {
       note: 'She will ask your name herself, early and once, the first time you talk — so it is not here. This is the rest of it.',
       panel,
       clear: () => {
-        untick(wants, this.#wants);
-        untick(absence, this.#absence);
+        untick(wants, this.#draft.wants);
+        untick(absence, this.#draft.absence);
         area.value = '';
-        this.#aboutThem = '';
+        this.#draft.aboutThem = '';
       },
     };
   }
@@ -559,10 +541,10 @@ export class Wizard {
     const panel = document.createElement('div');
     panel.className = 'wizard-panel';
 
-    const extra = this.#text('', (value) => (this.#refusalExtra = value));
+    const extra = this.#text('', (value) => (this.#draft.refusalExtra = value));
     extra.placeholder = 'Anything else. One line.';
 
-    const picks = this.#picks(REFUSALS, this.#refusals);
+    const picks = this.#picks(REFUSALS, this.#draft.refusals);
     panel.append(picks, this.#field('One more', extra));
 
     return {
@@ -571,9 +553,9 @@ export class Wizard {
       note: 'There is already one thing she does not play, and it is in the file: if you are in real danger she stops performing and stays with you. That one is not a checkbox. These are.',
       panel,
       clear: () => {
-        untick(picks, this.#refusals);
+        untick(picks, this.#draft.refusals);
         extra.value = '';
-        this.#refusalExtra = '';
+        this.#draft.refusalExtra = '';
       },
     };
   }

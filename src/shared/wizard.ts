@@ -442,6 +442,73 @@ function wrap(text: string, width = 78): string {
  * answers are all `undefined`, and `applyWizard` has to produce a working
  * profile out of exactly that.
  */
+/**
+ * The answers while they are still being given.
+ *
+ * {@link WizardAnswers} is the finished thing handed to {@link applyWizard};
+ * this is the mutable draft the cards write into as somebody ticks boxes. It
+ * exists as one object, built by one function, for one reason: a wizard that is
+ * offered twice must not carry the first person's answers into the second run.
+ *
+ * That happened. The fields used to be nine separate members of the dialog
+ * class, and four of the seven cards rebuilt their controls without clearing
+ * the state behind them — so **Setup -> Start over**, the one flow whose whole
+ * promise is that she meets you as a stranger, wrote the previous person's
+ * traits, wants, absence rules, refusals, temperament and their verbatim
+ * quotation into the brand-new folder, with every checkbox on screen drawn
+ * empty. One object with one factory means resetting is one line in one place,
+ * and a card cannot forget to do it.
+ *
+ * A factory rather than a constant to spread, deliberately. `identity` and
+ * `voice` are nested objects, and this codebase has already shipped that bug
+ * once: `{ ...EMPTY }` copied the outer object and shared the inner one, so an
+ * expression generated in one `AvatarStudio` appeared in all of them.
+ */
+export interface WizardDraft {
+  traits: Set<string>;
+  wants: Set<string>;
+  absence: Set<string>;
+  refusals: Set<string>;
+  temperament: string | undefined;
+  identity: { age: string; ethnicity: string; from: string; past: string };
+  voice: { voice: string; pace: string };
+  aboutThem: string;
+  refusalExtra: string;
+}
+
+export function emptyDraft(): WizardDraft {
+  return {
+    traits: new Set<string>(),
+    wants: new Set<string>(),
+    absence: new Set<string>(),
+    refusals: new Set<string>(),
+    temperament: undefined,
+    identity: { age: '', ethnicity: '', from: '', past: '' },
+    voice: { voice: '', pace: '' },
+    aboutThem: '',
+    refusalExtra: '',
+  };
+}
+
+/** The draft as {@link applyWizard} wants it: sets flattened, blanks dropped. */
+export function draftToAnswers(draft: WizardDraft): WizardAnswers {
+  return {
+    traits: [...draft.traits],
+    wants: [...draft.wants],
+    absence: [...draft.absence],
+    refusals: [...draft.refusals],
+    ...(draft.temperament ? { temperament: draft.temperament } : {}),
+    age: draft.identity.age,
+    ethnicity: draft.identity.ethnicity,
+    from: draft.identity.from,
+    past: draft.identity.past,
+    voice: draft.voice.voice,
+    pace: draft.voice.pace,
+    aboutThem: draft.aboutThem,
+    refusalExtra: draft.refusalExtra,
+  };
+}
+
 export interface WizardAnswers {
   /** personality.md — ids from {@link TRAITS}. */
   traits?: readonly string[];

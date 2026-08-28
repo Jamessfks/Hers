@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -166,4 +166,71 @@ test('the key a first-time user pastes in has somewhere to land', async () => {
       else process.env[name] = value;
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Reading the keys file before deciding the paths
+// ---------------------------------------------------------------------------
+
+/*
+ * The bug this guards. `applyDesktopPaths` writes HERS_PROFILE, HERS_DATA and
+ * HERS_ENV_FILE into the environment, and `process.loadEnvFile` will not
+ * overwrite a variable that is already set. The desktop entry point used to
+ * decide the paths first and read the file second, so every one of those keys
+ * written into `.env` was ignored — and four documents promised otherwise. The
+ * documented way to move an existing install produced a stranger instead.
+ */
+
+test('HERS_PROFILE in the keys file wins, if the file is read first', async () => {
+  const userData = await mkdtemp(path.join(tmpdir(), 'hers-userdata-'));
+  const clone = await mkdtemp(path.join(tmpdir(), 'hers-clone-'));
+  await writeFile(path.join(userData, '.env'), `HERS_PROFILE=${clone}\n`, 'utf8');
+
+  // The order the entry point now uses.
+  const env: NodeJS.ProcessEnv = {};
+  const before = process.env.HERS_PROFILE;
+  try {
+    delete process.env.HERS_PROFILE;
+    loadDotEnv(path.join(userData, '.env'));
+    env.HERS_PROFILE = process.env.HERS_PROFILE;
+
+    const paths = desktopPaths(userData, env);
+    assert.equal(paths.profileDir, path.resolve(clone), 'the keys file was ignored');
+    assert.equal(paths.overridden.profileDir, true);
+  } finally {
+    if (before === undefined) delete process.env.HERS_PROFILE;
+    else process.env.HERS_PROFILE = before;
+  }
+});
+
+test('the wrong order makes it a dead letter, which is what shipped', async () => {
+  // Kept as a test rather than a comment so the reason the order matters is
+  // executable: decide first, and the file cannot be heard afterwards.
+  const userData = await mkdtemp(path.join(tmpdir(), 'hers-userdata-'));
+  const clone = await mkdtemp(path.join(tmpdir(), 'hers-clone-'));
+  await writeFile(path.join(userData, '.env'), `HERS_PROFILE=${clone}\n`, 'utf8');
+
+  const env: NodeJS.ProcessEnv = {};
+  applyDesktopPaths(userData, env); // decided, before anything was read
+  const already = env.HERS_PROFILE;
+
+  // process.loadEnvFile only fills in what is absent, so this changes nothing.
+  assert.equal(env.HERS_PROFILE, already);
+  assert.notEqual(path.resolve(already ?? ''), path.resolve(clone));
+});
+
+test('a keys file with nothing in it leaves the defaults alone', async () => {
+  const userData = await mkdtemp(path.join(tmpdir(), 'hers-userdata-'));
+  await writeFile(path.join(userData, '.env'), 'GEMINI_API_KEY=\n', 'utf8');
+
+  loadDotEnv(path.join(userData, '.env'));
+  const paths = desktopPaths(userData, {});
+
+  assert.equal(paths.profileDir, path.join(path.resolve(userData), 'hers-profile'));
+  assert.equal(paths.overridden.profileDir, false);
+});
+
+test('a missing keys file is not an error, because it is the normal first run', () => {
+  const missing = path.join(tmpdir(), 'hers-definitely-absent', '.env');
+  assert.doesNotThrow(() => loadDotEnv(missing));
 });

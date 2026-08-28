@@ -12,6 +12,8 @@ import {
   applyWizard,
   retellIdentity,
   withSection,
+  draftToAnswers,
+  emptyDraft,
 } from './wizard.ts';
 import { FEMALE_VOICES } from './voices.ts';
 import type { WizardAnswers } from './wizard.ts';
@@ -326,4 +328,93 @@ test('a heading quoted inside an example is not mistaken for the section', () =>
   // the heading would find one in there and cut the file in half.
   const file = 'Top.\n\n    ## What they chose on the first day\n\nStill here.\n';
   assert.equal(parseProfileFile(withSection(file, 'What they chose on the first day', [])).body, file.trim());
+});
+
+// ---------------------------------------------------------------------------
+// The draft, and the bug that made it one object
+// ---------------------------------------------------------------------------
+
+test('a fresh draft holds nothing', () => {
+  const draft = emptyDraft();
+
+  assert.equal(draft.traits.size, 0);
+  assert.equal(draft.wants.size, 0);
+  assert.equal(draft.absence.size, 0);
+  assert.equal(draft.refusals.size, 0);
+  assert.equal(draft.temperament, undefined);
+  assert.deepEqual(draft.identity, { age: '', ethnicity: '', from: '', past: '' });
+  assert.deepEqual(draft.voice, { voice: '', pace: '' });
+  assert.equal(draft.aboutThem, '');
+  assert.equal(draft.refusalExtra, '');
+});
+
+test('two drafts share nothing, including the nested objects', () => {
+  /*
+   * The reason this is a factory and not a constant to spread. This codebase
+   * shipped the shallow-copy version once: `{ ...EMPTY }` copied the outer
+   * object and shared the inner one, so an expression generated in one avatar
+   * studio turned up in every other.
+   */
+  const first = emptyDraft();
+  const second = emptyDraft();
+
+  first.traits.add('teases');
+  first.identity.from = 'Lisbon';
+  first.voice.voice = 'Kore';
+  first.aboutThem = 'a secret';
+
+  assert.equal(second.traits.size, 0, 'the sets are shared');
+  assert.equal(second.identity.from, '', 'identity is shared');
+  assert.equal(second.voice.voice, '', 'voice is shared');
+  assert.equal(second.aboutThem, '');
+  assert.notEqual(first.identity, second.identity);
+  assert.notEqual(first.voice, second.voice);
+});
+
+test('a second run cannot inherit the first run\'s answers', () => {
+  /*
+   * The bug, in the shape it actually had. A completed run, then Start over,
+   * then a fresh draft — and nothing of the first person survives into the
+   * files the second run writes. Before this, four of the seven cards left
+   * their state behind while drawing every control empty.
+   */
+  const first = emptyDraft();
+  first.traits.add('teases');
+  first.wants.add('notices-quiet');
+  first.absence.add('reaches-out');
+  first.refusals.add('no-therapy');
+  first.temperament = 'sunny';
+  first.aboutThem = 'I work nights.';
+  first.refusalExtra = 'never mention my brother';
+
+  const second = emptyDraft();
+  const answers = draftToAnswers(second);
+
+  assert.deepEqual(answers.traits, []);
+  assert.deepEqual(answers.wants, []);
+  assert.deepEqual(answers.absence, []);
+  assert.deepEqual(answers.refusals, []);
+  assert.equal(answers.temperament, undefined);
+  assert.equal(answers.aboutThem, '');
+  assert.equal(answers.refusalExtra, '');
+});
+
+test('an untouched draft writes nothing but the date', () => {
+  // The skip-everything promise, at the level below the DOM: a draft nobody
+  // answered must not put a single choice into any file.
+  const files = {
+    personality: '---\nwarmth: high\n---\n\nProse.\n',
+    identity: '---\nname: Anna\n---\n\nProse.\n',
+    voice: '---\nvoice: Aoede\n---\n\nProse.\n',
+    mood: '---\nbaseline_valence: 0.25\n---\n\nProse.\n',
+    relationship: '---\nmet: the day they installed you\n---\n\nProse.\n',
+    boundaries: '---\n---\n\nProse.\n',
+  };
+
+  const changed = applyWizard(files, draftToAnswers(emptyDraft()), '2026-08-28');
+
+  for (const [name, text] of Object.entries(changed)) {
+    if (name === 'relationship') continue;
+    assert.equal(text, files[name as keyof typeof files], `${name} was rewritten`);
+  }
 });
