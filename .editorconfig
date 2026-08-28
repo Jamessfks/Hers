@@ -1,0 +1,15 @@
+# Keeps whitespace consistent across editors. There is no linter in this
+# project on purpose; this is the part worth enforcing anyway.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Two trailing spaces are a line break in Markdown.
+trim_trailing_whitespace = false
