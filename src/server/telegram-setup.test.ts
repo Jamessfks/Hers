@@ -118,10 +118,10 @@ test('the chat that spoke is written down as the only one allowed', async () => 
   const beforeToken = process.env.TELEGRAM_BOT_TOKEN;
   try {
     process.env.TELEGRAM_BOT_TOKEN = '987:XYZ';
-    const config = await rememberChatId(8836261192, file);
+    const config = await rememberChatId(1000000001, file);
 
-    assert.match(await readFile(file, 'utf8'), /^TELEGRAM_ALLOWED_CHAT_IDS=8836261192$/m);
-    assert.deepEqual(config.telegram?.allowedChatIds, [8836261192]);
+    assert.match(await readFile(file, 'utf8'), /^TELEGRAM_ALLOWED_CHAT_IDS=1000000001$/m);
+    assert.deepEqual(config.telegram?.allowedChatIds, [1000000001]);
     assert.equal(
       config.warnings.some((w) => /TELEGRAM_ALLOWED_CHAT_IDS is not set/.test(w)),
       false,

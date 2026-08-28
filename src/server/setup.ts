@@ -214,8 +214,13 @@ export async function applyBotToken(token: string, envFile = '.env'): Promise<Co
  * keep it. This makes it durable instead of asking somebody to edit a file, and
  * says so on the page rather than in a log nobody is reading.
  *
- * Only ever widens from empty. An allowlist that already names somebody is a
- * decision already taken, and a second chat messaging the bot must not join it.
+ * This overwrites rather than appends, and that is safe because of where it is
+ * called from rather than anything it does itself: `TelegramBridge#permitted`
+ * returns before pinning whenever the allowlist already has somebody in it, so
+ * `onChatPinned` — the only caller — can fire only from empty. An allowlist
+ * that already names somebody is a decision already taken, and a second chat
+ * messaging the bot must not join it. A future caller that skips that check
+ * would need the guard moved in here.
  */
 export async function rememberChatId(chatId: number, envFile = '.env'): Promise<Config> {
   await setEnvValue(envFile, 'TELEGRAM_ALLOWED_CHAT_IDS', String(chatId));

@@ -4,9 +4,50 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
-## Unreleased
+## v1.2.0 — 27 August 2026
 
-Filled in as v1.2 lands.
+Nothing she does changed. Everything written about what she does did.
+
+**The documentation now says what the code does.** Every factual claim in the
+README, PRIVACY, TROUBLESHOOTING and `.env.example` was checked against the code
+that implements it. Seven disagreed. The one that mattered: PRIVACY.md promised
+"No access to your files, your email, your calendar, or your browser history",
+while **Setup → Let her read your files** has always read the folders you tick
+and sent excerpts to Google to be distilled. The README described that feature
+honestly; the privacy page contradicted it, which is the worst direction for a
+contradiction to point. It is now scoped to what happens, the upload is listed
+in the table of what leaves the machine, and two files the page never mentioned
+— `intimacy.state.json` and `knowledge.json`, which records the absolute paths
+of folders you approved — are listed too.
+
+Also corrected: she has four tools and not three (`recall` shipped in v1.1), the
+test count was 382 and is 414, the gallery has always accepted `.jpeg`, `.gif`
+and `.mov`, and `GOOGLE_API_KEY` has always worked as an alias for
+`GEMINI_API_KEY` and was documented nowhere.
+
+**Comments sit above the code they describe again.** The same editing mistake had
+happened six times — a new declaration pasted in above an existing one, leaving
+the older declaration's comment stranded above it, describing something else.
+The worst was in `gallery.ts`, where a stale block ending "the newest gallery
+image is kept only as the fallback" sat directly above the block explaining that
+the fallback had been removed and why. In `protocol.ts` the same thing at the
+level of a union: four comments above four members in exactly reverse order.
+
+Three comments cited things that do not exist: a `move` tool that went with
+Hedra, an `HERS_LIVEKIT_*` variable that never existed, and
+`docs/adr/0002-memory-storage.md`, along with a rationale about Electron ABI
+bumps inherited from a different codebase. This has never been an Electron app.
+
+**New:** `CHANGELOG.md`, `SECURITY.md`, `.editorconfig`, licence and version
+badges, and a table of contents. `npm run probe:client-content` asks whether a
+mid-session `sendClientContent` still reaches her, because Google documents that
+channel as startup-only on the default model and five of her behaviours depend
+on it. That question is **open** — the answer needs an API key that is not over
+its spending cap.
+
+**Removed:** `RecallQuery`, imported by nothing. The web UI's second copy of the
+list of three senses. A real Telegram chat id from a test file — it is not a
+credential, but it did not belong in a public repository.
 
 ## v1.1.0 — 19 August 2026
 
