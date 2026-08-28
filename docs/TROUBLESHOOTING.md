@@ -7,9 +7,14 @@ npm run doctor
 ```
 
 It checks the key, the model, the profile folder, the memory database and the
-bridges, then opens a real Gemini session, says one thing and waits for audio.
-If that passes, the only things between you and her talking are the browser's
-own permissions.
+bridges, prints every path she writes to and every host this build can reach,
+then opens a real Gemini session, says one thing and waits for audio. If that
+passes, the only things between you and her talking are the browser's own
+permissions.
+
+Everything except that last step runs offline. `GEMINI_API_KEY= npm run doctor`
+stops before it and still prints both lists, which is the cheap way to answer
+"where is my stuff and who can she talk to" without spending anything.
 
 ---
 

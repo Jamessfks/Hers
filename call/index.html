@@ -121,6 +121,25 @@
     </footer>
 
     <script type="module">
+      /*
+        This line is an outbound request, and it is the only one on this page
+        that is not to LiveKit. Opening a call link makes the phone fetch
+        livekit-client from jsDelivr before anything else happens, so jsDelivr
+        sees the phone's IP and the fact that it asked for this file. It sees
+        nothing else: the token is in the fragment, which is not sent anywhere,
+        and the `Referer` on a module import carries no fragment either.
+
+        It is here because "one static file with no build step" was the whole
+        design of this page, and a bundler would have undone that. That is a
+        real trade and it is named in `docs/PRIVACY.md` and printed by
+        `npm run doctor` rather than left for someone to find with a proxy.
+        The honest fix, if the trade stops being worth it, is to vendor the
+        file next to this one and import it relatively.
+
+        Pinned to an exact version rather than a range, so what arrives is the
+        same bytes every time. Subresource integrity is not available here —
+        SRI does not apply to a bare `import` specifier.
+      */
       import {
         Room,
         RoomEvent,
