@@ -115,13 +115,6 @@ export const DESTINATIONS: readonly Destination[] = [
     requires: 'call-page',
     fromPhone: true,
   },
-  {
-    host: 'cdn.jsdelivr.net',
-    what: 'A download of livekit-client 2.21.0, which the call page imports as a module. jsDelivr sees your phone’s IP and that it asked for this file.',
-    when: 'Every time the call page loads, before the call starts. The page is one static file with no build step, so it fetches the library rather than bundling it.',
-    requires: 'call-page',
-    fromPhone: true,
-  },
 ];
 
 /**
@@ -136,6 +129,10 @@ export const MENTIONED_ONLY: readonly { host: string; why: string }[] = [
   { host: 'aistudio.google.com', why: 'Where you get a Gemini key. A link on the setup page and a line the doctor prints.' },
   { host: 't.me', why: 'The link that opens your bot in Telegram, and @BotFather. Shown to you; opened by you.' },
   { host: 'ai.google.dev', why: "Google's Live API documentation, cited in comments." },
+  {
+    host: 'cdn.jsdelivr.net',
+    why: 'Named in a comment in `call/index.html` saying why it is no longer used. The call page used to import LiveKit\'s client from here at run time, which was a request made by the phone rather than by this machine — so a network monitor here would never have shown it. The library is a devDependency now and is copied in beside the page at build time. Nothing fetches it.',
+  },
   { host: 'docs.cloud.google.com', why: "Google's voice documentation, cited in a comment." },
   { host: 'localhost', why: 'This machine. Where the server binds and what the browser talks to.' },
   { host: '127.0.0.1', why: 'The same machine, written the other way.' },

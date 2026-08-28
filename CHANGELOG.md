@@ -4,6 +4,31 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## Unreleased
+
+**The camera light cannot be made to lie.** The sense buttons were drawn from a
+WebSocket message, so anything that reached that socket could darken the sight
+indicator and hide the self-preview while the camera stayed open and frames kept
+going to Google. They are drawn from `MediaStreamTrack.readyState` now — the
+device's own account, read-only per the specification — and a claim that
+contradicts the hardware is refused in both directions.
+
+**The WebSocket requires an `Origin`.** It used to accept a connection that sent
+none, reasoning that a page always sends one. True, and it does not follow: any
+other process on the machine could find the port and read the last forty turns,
+every stored fact, her mood and the key hint, then send back `say`,
+`memory.forget`, `intimacy.pin` and `profile.save`, which rewrites the
+instruction she is built from. `HERS_ALLOW_HEADLESS=1` for anybody writing their
+own client.
+
+**Nothing is fetched from a CDN any more.** The call page imported LiveKit's
+client from `cdn.jsdelivr.net` at run time. That was the hardest outbound request
+in this project to notice, because the *phone* made it — so the "unplug your
+network and watch" check this project invites people to run would have come back
+clean. `livekit-client` is a devDependency now, pinned in the lockfile, and the
+build copies it in beside the page. One fewer party in the call path, and the
+list of hosts this program can reach is one shorter.
+
 ## v1.4.0 — 28 August 2026
 
 **Every host she can reach, and every file she writes, in a list the tests hold
@@ -14,7 +39,7 @@ confirm all of it. `npm test` now fails if the program can dial a host, or write
 a file, that the document does not name — so the page is not an assertion, it is
 something the build will not pass without.
 
-That turned up `cdn.jsdelivr.net`, which the phone's call page fetches
+That turned up `cdn.jsdelivr.net`, which the phone's call page then fetched
 `livekit-client` from before a call starts. It was documented nowhere, and it is
 invisible to a network monitor on the machine Hers runs on, because that machine
 is not the one making the request.

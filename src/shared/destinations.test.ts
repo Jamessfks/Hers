@@ -98,13 +98,21 @@ test('each destination says what is sent and what triggers it', () => {
   }
 });
 
-test('the two destinations reached from a phone are marked as such', () => {
-  // They are not visible to a network monitor on this machine, so a document
-  // that lumps them in with the rest is telling the reader to look in the
-  // wrong place.
+test('the one destination reached from a phone is marked as such', () => {
+  /*
+   * It is not visible to a network monitor on this machine, so a document that
+   * lumps it in with the rest is telling the reader to look in the wrong place.
+   *
+   * There were two. The other was `cdn.jsdelivr.net`, which the call page
+   * imported LiveKit's client from at run time — the hardest outbound request in
+   * this project to notice, because the phone made it and no monitor here would
+   * ever have shown it. The library is a devDependency now, copied in beside the
+   * page at build time, so the only thing the phone still fetches is the page
+   * you told it to open.
+   */
   const phone = DESTINATIONS.filter((destination) => destination.fromPhone);
   assert.deepEqual(
     phone.map((destination) => destination.host),
-    ['<HERS_CALL_PAGE_URL>', 'cdn.jsdelivr.net'],
+    ['<HERS_CALL_PAGE_URL>'],
   );
 });

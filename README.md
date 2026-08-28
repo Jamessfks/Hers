@@ -487,8 +487,8 @@ and the code disagree. The short version:
   files sit and nothing else.
 - Three hosts, and that is the whole list: `generativelanguage.googleapis.com` always,
   `api.telegram.org` if you set a bot token, and your LiveKit project if you set one up.
-  The phone's call page also fetches `livekit-client` from `cdn.jsdelivr.net` before a
-  call starts. Nothing checks for updates, counts a launch, or reports a crash.
+  That is the whole list — the call page used to pull LiveKit's client from a CDN and
+  no longer does. Nothing checks for updates, counts a launch, or reports a crash.
 - No sense is on until you switch it on, your operating system asks its own permission on
   top of that, and turning one off stops the frames at the source. Video and audio are
   streamed and never written to disk.

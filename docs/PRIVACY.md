@@ -375,26 +375,28 @@ claim is "LiveKit's infrastructure", not a single hostname.
 Minting the tokens for a call is local arithmetic. `AccessToken.toJwt()` signs
 with the secret you configured and makes no request.
 
-### `cdn.jsdelivr.net` — reached by your phone, not by this machine
+### `cdn.jsdelivr.net` — no longer reached, and worth saying why
 
-The call page is one static HTML file with no build step, and it imports
-`livekit-client` 2.21.0 from jsDelivr as an ES module. So opening a call link
-makes **your phone** fetch that file before the call starts, and jsDelivr sees
-your phone's IP and that it asked for it. It sees nothing else: the room name
-and token are in the URL fragment, which is never sent to any server and does
-not survive into a `Referer`.
+Until v1.4.0 the call page imported `livekit-client` from jsDelivr as an ES
+module, so opening a call link made **your phone** fetch that file before the
+call started. It is gone: the library is a devDependency, the build copies it in
+beside the page, and nothing is fetched at run time.
 
-A network monitor on the machine Hers runs on will not show this, because it is
-not this machine making the request. That is precisely why it is written down.
-The version is pinned exactly, so the same bytes arrive every time; subresource
-integrity is not available for a bare `import` specifier. If the trade stops
-being worth it, the fix is to vendor the file next to `call/index.html` and
-import it relatively.
+It is written up here rather than quietly deleted because of *how* it was found,
+which is the useful part. A network monitor on the machine Hers runs on would
+never have shown it — the phone made the request, not this machine — so the
+"unplug your network and watch" check this page invites you to run would have
+come back clean while a third party was serving executable JavaScript into the
+call path. It was version-pinned, which pins the name and not the bytes;
+subresource integrity does not apply to a bare `import` specifier.
+
+An audit of the code found it, not a monitor. That is the argument for the test
+this page is enforced by, and against trusting any single method.
 
 The host serving the call page itself — whatever `HERS_CALL_PAGE_URL` points at,
-usually GitHub Pages — sees a request for one static file, from your phone, with
-no fragment on it. That is the whole reason the token is in the fragment: the
-hosting is not ours and the token is a credential.
+usually GitHub Pages — still sees a request for two static files, from your
+phone, with no fragment on them. That is the whole reason the token is in the
+fragment: the hosting is not ours and the token is a credential.
 
 ### What is never contacted
 
@@ -511,7 +513,7 @@ grep -rhoE "(https?|wss?)://[A-Za-z0-9._~%-]+" \
 
 Nine lines, at the time of writing, and every one is accounted for above. Three
 are hosts the program dials: `generativelanguage.googleapis.com`,
-`api.telegram.org`, `cdn.jsdelivr.net`. Two are this machine: `localhost` and
+`api.telegram.org`. Two are this machine: `localhost` and
 `127.0.0.1`. Four reach nothing on their own — `ai.google.dev` and
 `docs.cloud.google.com` are cited in comments to explain why the code does what
 it does, and `aistudio.google.com` and `t.me` are anchors on the setup page that

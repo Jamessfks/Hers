@@ -122,29 +122,28 @@
 
     <script type="module">
       /*
-        This line is an outbound request, and it is the only one on this page
-        that is not to LiveKit. Opening a call link makes the phone fetch
-        livekit-client from jsDelivr before anything else happens, so jsDelivr
-        sees the phone's IP and the fact that it asked for this file. It sees
-        nothing else: the token is in the fragment, which is not sent anywhere,
-        and the `Referer` on a module import carries no fragment either.
+        LiveKit's client, from the file next to this one.
 
-        It is here because "one static file with no build step" was the whole
-        design of this page, and a bundler would have undone that. That is a
-        real trade and it is named in `docs/PRIVACY.md` and printed by
-        `npm run doctor` rather than left for someone to find with a proxy.
-        The honest fix, if the trade stops being worth it, is to vendor the
-        file next to this one and import it relatively.
+        It used to be an `import` from `cdn.jsdelivr.net`, and the comment here
+        used to explain the trade and name this as the honest fix if the trade
+        stopped being worth it. It stopped being worth it: jsDelivr was the only
+        outbound host in this project that no document mentioned, and the worst
+        kind to leave undocumented, because the request comes from the *phone* —
+        so the "unplug your network and watch" test that this project invites
+        people to run would never have caught it. It was also third-party
+        executable JavaScript with no integrity hash. `import` specifiers cannot
+        carry subresource integrity, so pinning the version pinned the name and
+        not the bytes.
 
-        Pinned to an exact version rather than a range, so what arrives is the
-        same bytes every time. Subresource integrity is not available here —
-        SRI does not apply to a bare `import` specifier.
+        `livekit-client` is a devDependency now, so the version is in the
+        lockfile, and `vite.config.ts` copies the published ESM bundle in beside
+        this file at build time. Nothing is fetched at run time and there is one
+        fewer party in the call path.
+
+        This page is still a single static file with no build step of its own —
+        the copy is one line in a config that was already copying the folder.
       */
-      import {
-        Room,
-        RoomEvent,
-        createLocalTracks,
-      } from 'https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.esm.mjs';
+      import { Room, RoomEvent, createLocalTracks } from './livekit-client.esm.mjs';
 
       const $ = (id) => document.getElementById(id);
       const status = $('status');

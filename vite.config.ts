@@ -22,6 +22,27 @@ function copyCallPage() {
       await cp(path.join(root, 'call'), path.join(root, 'dist', 'web', 'call'), {
         recursive: true,
       });
+
+      /*
+       * LiveKit's client, copied in beside the page rather than fetched from a
+       * CDN at run time.
+       *
+       * The page used to `import` it from `cdn.jsdelivr.net`, which was the one
+       * outbound host in this project that nobody had written down — and the
+       * hardest kind to notice, because the request comes from the *phone*, so
+       * a network monitor on the machine Hers runs on never sees it. It was
+       * also third-party executable JavaScript arriving with no integrity hash:
+       * version-pinned, not content-pinned.
+       *
+       * `livekit-client` is a devDependency now, so the version is in the
+       * lockfile and the file is the one on this disk. The published ESM bundle
+       * is self-contained — no bare imports — which is why a single file works
+       * without a bundler, and is why this is a copy rather than a build step.
+       */
+      await cp(
+        path.join(root, 'node_modules', 'livekit-client', 'dist', 'livekit-client.esm.mjs'),
+        path.join(root, 'dist', 'web', 'call', 'livekit-client.esm.mjs'),
+      );
     },
   };
 }

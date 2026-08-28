@@ -2,7 +2,7 @@
   "name": "hers",
   "version": "1.4.0",
   "private": true,
-  "description": "Hers \u2014 a fully customizable AI companion that runs entirely on your own computer. She sees your screen, sees you, hears you, remembers, and speaks first.",
+  "description": "Hers — a fully customizable AI companion that runs entirely on your own computer. She sees your screen, sees you, hears you, remembers, and speaks first.",
   "author": "Zicheng Zhao",
   "license": "MIT",
   "type": "module",
@@ -38,6 +38,7 @@
     "@types/ws": "^8.18.1",
     "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
+    "livekit-client": "^2.22.1",
     "typescript": "^5.9.0",
     "vite": "^7.1.14"
   }
