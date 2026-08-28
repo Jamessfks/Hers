@@ -37,14 +37,28 @@ import { WebBridge } from './ws.ts';
 import type { Config } from './config.ts';
 import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
-import { CallBridge } from '../bridges/livekit/bridge.ts';
+import type { CallBridge } from '../bridges/livekit/bridge.ts';
 
 export const VERSION = '1.3.0';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
 
-export async function main(): Promise<void> {
+/**
+ * A server that is up, and the one thing you can do to it from outside.
+ *
+ * Returned rather than only wired to `SIGINT`, because the desktop build is not
+ * sent one. Quitting an application closes a window; the process that owns her
+ * memory has to be told, and this is how it is told.
+ */
+export interface Running {
+  /** The address the window, or a browser, should open. */
+  url: string;
+  /** Closes every bridge, the conversation, the database and the socket. */
+  stop(): Promise<void>;
+}
+
+export async function main(): Promise<Running> {
   loadDotEnv();
 
   // Before the config is read, because it decides which folder the config will
@@ -202,7 +216,23 @@ export async function main(): Promise<void> {
     telegram: () => telegramView(),
   });
 
-  calls = config.livekit ? new CallBridge({ brain, livekit: config.livekit }) : null;
+  /*
+   * Loaded only if calls are configured, which for almost everybody is never.
+   *
+   * The import is dynamic and that is not about startup time, though it saves
+   * some. `@livekit/rtc-node` is a sixteen-megabyte prebuilt binary containing
+   * its own copy of WebRTC, and inside the desktop application Chromium has
+   * already loaded another. Both register Objective-C classes under the same
+   * names — `RTCVideoFrame`, `RTCVideoCapturer`, nine of them — and macOS
+   * prints a warning saying this may cause "mysterious crashes", which is a
+   * fair description of what duplicate class registration does. Nobody who has
+   * not set up LiveKit should be exposed to that, and before this line they
+   * were: the import ran whether or not the bridge was ever built.
+   */
+  if (config.livekit) {
+    const { CallBridge } = await import('../bridges/livekit/bridge.ts');
+    calls = new CallBridge({ brain, livekit: config.livekit });
+  }
 
   /**
    * Brings the bot up, or back up on a new token, without a restart.
@@ -272,6 +302,11 @@ export async function main(): Promise<void> {
     server.listen(config.port, config.host, resolve);
   });
 
+  // The URL is needed twice: printed here, and returned so the desktop window
+  // knows what to load. The banner itself lives in a function so it can be
+  // tested — the keys line was wrong for two releases precisely because nothing
+  // read it back.
+  const url = `http://${displayHost(config.host)}:${config.port}`;
   for (const line of startupBanner(config)) console.log(line);
 
   startTelegram();
@@ -288,15 +323,29 @@ export async function main(): Promise<void> {
   }
 
   let shuttingDown = false;
-  const shutdown = async (signal: string) => {
+
+  /**
+   * Everything closed, in the order it has to close in.
+   *
+   * Deliberately without the `process.exit` the signal handlers add. A window
+   * closing is not a process ending — the desktop build waits for this and then
+   * quits itself — and an exit call in here would take the application down
+   * mid-quit and make "did her last turn get written" a question.
+   */
+  const stop = async (): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`\n${signal} — closing.`);
     telegram?.stop();
     await calls?.close();
     await web.close();
     await brain.close();
     server.close();
+  };
+
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    console.log(`\n${signal} — closing.`);
+    await stop();
     // Anything still holding the loop open (a socket mid-close, a pending
     // write) gets a moment, and then this exits regardless.
     setTimeout(() => process.exit(0), 1500).unref();
@@ -304,6 +353,8 @@ export async function main(): Promise<void> {
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  return { url, stop };
 }
 
 /**

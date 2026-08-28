@@ -53,11 +53,6 @@ export const PROFILE_DIR = 'hers-profile';
  */
 export const ENV_FILE = '.env';
 
-/** {@link ENV_FILE} as an absolute path, which is the only useful form to print. */
-export function envFilePath(cwd = process.cwd()): string {
-  return path.resolve(cwd, ENV_FILE);
-}
-
 /**
  * Whether a host only accepts connections from this machine.
  *
@@ -257,8 +252,31 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return config;
 }
 
-/** Reads `.env` if there is one. Real environment variables always win. */
-export function loadDotEnv(file = ENV_FILE): void {
+/**
+ * Which file the keys are read from and written back to.
+ *
+ * `.env`, beside the clone, for everybody who runs this from a terminal — which
+ * is where every other secret in this project already lives and where the
+ * documentation points. The one caller who needs to say otherwise is the
+ * desktop build: a packaged application's own folder is read-only on macOS and
+ * inside `Program Files` on Windows, so the key pasted into the Setup panel has
+ * to be written somewhere else or the first run is the only run.
+ *
+ * Read through a function rather than captured once, so that the desktop entry
+ * point can set the variable before the server starts and every later write
+ * lands in the same file as the first.
+ *
+ * Resolved to an absolute path, because the two places this is shown to a
+ * person — `npm run doctor` and the first lines `npm start` prints — are worth
+ * nothing if they say `.env` to somebody who does not know which directory they
+ * were in.
+ */
+export function envFilePath(env: NodeJS.ProcessEnv = process.env): string {
+  return path.resolve(str(env.HERS_ENV_FILE ?? env.ANNA_ENV_FILE, ENV_FILE));
+}
+
+/** Reads the key file if there is one. Real environment variables always win. */
+export function loadDotEnv(file = envFilePath()): void {
   try {
     process.loadEnvFile(file);
   } catch {

@@ -54,10 +54,22 @@ it checkable.
 
 ## Where everything she knows about you lives
 
-Two folders, and they are not in an application-support directory. They are
-**next to wherever you started her from**, because the defaults are the relative
-paths `hers-profile` and `data`, resolved against the working directory at
-startup (`src/server/config.ts`).
+Two folders. Where they are depends on how you started her, and there are
+exactly two answers.
+
+**From a clone**, they are **next to wherever you started her from**, because
+the defaults are the relative paths `hers-profile` and `data`, resolved against
+the working directory at startup (`src/server/config.ts`).
+
+**From the downloaded application**, they are in the folder the operating system
+sets aside for it — `~/Library/Application Support/Hers` on macOS,
+`%APPDATA%\Hers` on Windows — because an application cannot write next to its
+own executable: the bundle is read-only on macOS and lives under `Program Files`
+on Windows. The keys file moves with them, which is what `HERS_ENV_FILE` is for.
+
+`HERS_PROFILE`, `HERS_DATA` and `HERS_ENV_FILE` override either answer. Nothing
+else on this page changes between the two: same files, same contents, same
+machine, nothing sent anywhere it would not otherwise go.
 
 If you cloned into `~/hers` and run `npm start` from there:
 

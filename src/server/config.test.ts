@@ -233,8 +233,18 @@ test('every way of writing this machine counts as this machine', () => {
   }
 });
 
-test('the keys file is one name, resolved against where Hers was started', () => {
+test('the keys file is one name, resolved absolute, and the desktop build can move it', () => {
   assert.equal(ENV_FILE, '.env');
-  assert.equal(envFilePath('/somewhere'), path.join('/somewhere', '.env'));
   assert.ok(path.isAbsolute(envFilePath()), 'a relative path is the thing nobody can find');
+  assert.equal(envFilePath({} as NodeJS.ProcessEnv), path.resolve('.env'));
+
+  // The packaged application cannot write beside its own executable, so it sets
+  // this before the server starts. Every later write has to land in the same
+  // file as the first, or the key you pasted is gone on the second launch.
+  const moved = { HERS_ENV_FILE: '/somewhere/keys.env' } as NodeJS.ProcessEnv;
+  assert.equal(envFilePath(moved), '/somewhere/keys.env');
+
+  // The old name still works, for an install that predates the rename.
+  const legacy = { ANNA_ENV_FILE: '/somewhere/old.env' } as NodeJS.ProcessEnv;
+  assert.equal(envFilePath(legacy), '/somewhere/old.env');
 });

@@ -4,6 +4,66 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## Unreleased
+
+**She is a download now.** `npm run package` builds a double-clickable
+application — a `.dmg` on macOS, an NSIS installer on Windows once somebody
+runs that build — with Electron
+carrying its own Node inside it. Eleven steps became three, and the three hard
+gates went: no Node to install, no git, no terminal. The same server, the same
+page, the same everything, in a window that opens itself.
+
+Nothing about running her from a clone changed. `npm start` still serves on
+5175 out of `hers-profile/` and `data/` beside the code, still reads and writes
+`.env` there, and an install that works today goes on working.
+
+**Where the application keeps things**, because it cannot keep them beside
+itself — macOS puts an application inside a read-only signed bundle and Windows
+puts it under `Program Files`, and an upgrade replaces both:
+
+| What            | macOS                                             | Windows                       |
+| --------------- | ------------------------------------------------- | ----------------------------- |
+| Profile         | `~/Library/Application Support/Hers/hers-profile` | `%APPDATA%\Hers\hers-profile` |
+| Memory          | `…/Hers/data`                                      | `%APPDATA%\Hers\data`         |
+| Keys            | `…/Hers/.env`                                      | `%APPDATA%\Hers\.env`         |
+| Log of last run | `…/Hers/hers.log`                                  | `%APPDATA%\Hers\hers.log`     |
+
+`HERS_PROFILE` and `HERS_DATA` still win over all of it, which is the point: an
+existing install is not orphaned by installing the application, and pointing the
+application at a clone's folders is how you move. Nothing is migrated
+automatically, because guessing which of two profile folders is the real person
+is how somebody loses her.
+
+**New:** `HERS_ENV_FILE`, which is where the Setup panel writes the key. It
+defaults to `.env` and exists because the application needs somewhere writable
+that is not next to the executable. That was the subtle half of this work: a
+first run that ends at "paste your key" and then cannot store it is a first run
+that is also the last one.
+
+**The LiveKit binding is loaded only when calls are configured.** It was
+imported unconditionally before. Inside the application that meant a second copy
+of WebRTC alongside Chromium's, registering nine Objective-C classes under names
+Chromium had already taken, which macOS warns "may cause mysterious crashes".
+Nobody who has not set up LiveKit is exposed to it now.
+
+**The build is not signed**, and the README says which two clicks get past
+Gatekeeper rather than pretending the warning is not there — plus the `xattr
+-dr com.apple.quarantine` line, which cannot fail and which the first draft of
+that page left out. It *is* ad-hoc signed, which is a different thing and the
+reason macOS says "unverified developer" rather than "damaged": an unsealed
+bundle fails verification outright, and that message is unrecoverable advice.
+Install to `/Applications` — anywhere else, App Translocation runs a quarantined
+app from a randomized read-only copy of itself and the exception you granted
+does not stick.
+
+**One artifact exists: `Hers-1.3.0-arm64.dmg`, 127.5 MiB, 294 MB installed.**
+Windows and Intel Mac are configured and have never been compiled or run.
+LiveKit's binding is a per-architecture package that `npm install` picks for the
+machine doing the installing, so each artifact has to be built on its own
+machine; a Windows installer built on a Mac would carry a macOS `.node` and fail
+on the first import. `.github/workflows/release.yml` does one runner per
+platform on a tag, and it has never run either.
+
 ## v1.3.0 — 27 August 2026
 
 **A voice menu.** Fourteen prebuilt Gemini voices, each with Google's own one-word
