@@ -461,6 +461,8 @@ Everything is an environment variable and everything has a default.
 | `HERS_DATA`                 | `data`         | What she remembers                                    |
 | `HERS_ENV_FILE`             | `.env`         | Where the keys are written. The application uses its own folder |
 | `HERS_MAX_SILENCE_MS`       | `180000`       | The three-minute rule's ceiling                       |
+| `HERS_ALLOW_HEADLESS`       | off            | Lets a client with no `Origin` open the socket. Leave it off |
+| `HERS_DEBUG`                | off            | Every frame, tool call and socket event, to the console |
 | `TELEGRAM_BOT_TOKEN`        | —              | The bot. Settable in the UI                           |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | —              | Who she may talk to. Written for you on first contact  |
 | `LIVEKIT_URL` + key/secret  | —              | Phone calls                                           |

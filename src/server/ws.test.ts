@@ -28,7 +28,7 @@ import { applyWizard } from '../shared/wizard.ts';
  * the attacker is already on localhost. So these tests are about one question:
  * does an `Origin` we do not serve get refused.
  */
-async function bridge() {
+async function bridge(allowHeadless = false) {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-ws-'));
   const config = loadConfig({
     HERS_PROFILE: path.join(root, 'profile'),
@@ -46,6 +46,7 @@ async function bridge() {
     server,
     version: 'test',
     allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]),
+    allowHeadless,
   });
 
   return {
@@ -102,10 +103,40 @@ test('the page she serves is allowed in, under either name for localhost', async
   }
 });
 
-test('a client with no Origin at all is allowed, because a page always sends one', async () => {
+test('a client with no Origin at all is refused', async () => {
+  /*
+   * This used to be allowed, and the reasoning was half right: a page always
+   * sends the header, so absence does mean the caller is not a page. It does not
+   * mean the caller is trustworthy. Any other process on this machine, holding
+   * no secret, could find the port and get the last forty turns, every stored
+   * fact, her mood and the key hint — and could send back `say`, `memory.forget`,
+   * `intimacy.pin` and `profile.save`, which rewrites the instruction she is
+   * built from.
+   */
   const app = await bridge();
   try {
+    assert.equal(await tryConnect(app.url), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test('unless somebody asks for a headless client out loud', async () => {
+  // `HERS_ALLOW_HEADLESS=1`. Off by default, and a deliberate sentence to turn
+  // on rather than a hole that was always there.
+  const app = await bridge(true);
+  try {
     assert.equal(await tryConnect(app.url), true);
+  } finally {
+    await app.close();
+  }
+});
+
+test('a page on an allowed origin is unaffected by any of this', async () => {
+  const app = await bridge();
+  try {
+    assert.equal(await tryConnect(app.url, `http://127.0.0.1:${app.port}`), true);
+    assert.equal(await tryConnect(app.url, `http://localhost:${app.port}`), true);
   } finally {
     await app.close();
   }

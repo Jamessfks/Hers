@@ -40,6 +40,13 @@ function need<T extends HTMLElement>(id: string): T {
 
 export interface UiHandlers {
   onToggleSense(sense: SenseName, on: boolean): void;
+  /**
+   * Whether that sense's device is open right now, asked of the device.
+   *
+   * The indicator is drawn from this and not from the argument, so nothing that
+   * reaches the socket can darken a light while the camera is still on.
+   */
+  senseIsLive(sense: SenseName): boolean;
   onWake(): void;
   onSay(text: string): void;
   onLoadProfile(): void;
@@ -471,7 +478,27 @@ export class Ui {
     document.documentElement.style.setProperty('--mood-lift', lift.toFixed(2));
   }
 
-  setSense(sense: SenseName, on: boolean): void {
+  /**
+   * Draws a sense as on or off — subject to the device agreeing.
+   *
+   * `on` is a request, not a fact. The browser owns the microphone, the camera
+   * and the screen share; the server is told about them and never the other way
+   * round. So a claim that contradicts the hardware is dropped rather than
+   * drawn, in both directions: a message cannot switch a light off over a live
+   * track, and it cannot switch one on over a device that was never opened.
+   *
+   * The direction that matters is the first one. Anything that reached this
+   * socket could otherwise send `{t:'sense',sense:'sight',on:false}` and leave
+   * the button dark, the self-preview hidden, and the camera wide open with
+   * frames still going to Google — an interface lying about the one thing a
+   * person would check.
+   */
+  setSense(sense: SenseName, requested: boolean): void {
+    // `requested` is what somebody asked for and is deliberately not used to
+    // draw anything. Keeping it in the signature keeps the call sites honest
+    // about their intent; the device decides what appears.
+    void requested;
+    const on = this.#handlers.senseIsLive(sense);
     const button = this.#senseButtons.get(sense);
     button?.setAttribute('aria-pressed', String(on));
     const any = [...this.#senseButtons.values()].some(

@@ -218,6 +218,7 @@ export async function main(): Promise<Running> {
     server,
     version: VERSION,
     allowedOrigins: origins,
+    allowHeadless: config.allowHeadless,
     telegram: () => telegramView(),
   });
 

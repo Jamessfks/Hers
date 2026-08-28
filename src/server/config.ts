@@ -34,6 +34,8 @@ export interface Config {
   /** Frames per second sent to Gemini. The API accepts at most one. */
   cameraFps: number;
   screenFps: number;
+  /** Whether a client sending no `Origin` may open the WebSocket. Off. */
+  allowHeadless: boolean;
   telegram: { token: string; allowedChatIds: number[] } | null;
   livekit: { url: string; apiKey: string; apiSecret: string; callPageUrl: string } | null;
   warnings: string[];
@@ -188,6 +190,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ),
     // The Live API accepts at most one frame per second and bills for every one
     // of them, so the ceiling here is the API's, not a preference.
+    allowHeadless: setting(env, 'ALLOW_HEADLESS').value?.trim() === '1',
     cameraFps: rate(cameraFps.value, 1, cameraFps.name, warnings),
     screenFps: rate(screenFps.value, 0.5, screenFps.name, warnings),
     telegram: telegramToken

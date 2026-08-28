@@ -66,6 +66,14 @@ export interface WebBridgeOptions {
   server: Server;
   /** Origins the handshake will accept. */
   allowedOrigins: Set<string>;
+  /**
+   * Whether a client that sends no `Origin` at all may connect.
+   *
+   * Off. A browser cannot suppress the header, so absence means the caller is
+   * not a page — which is not the same as the caller being trustworthy. See the
+   * note in `verifyClient`.
+   */
+  allowHeadless?: boolean;
   version: string;
   /**
    * The bot as the page may know it.
@@ -91,10 +99,22 @@ export class WebBridge {
       path: '/ws',
       maxPayload: MAX_PAYLOAD_BYTES,
       verifyClient: ({ origin, req }, done) => {
-        // A non-browser client (curl, a test, the doctor command) sends no
-        // Origin at all. That is allowed: the header exists to stop *pages*
-        // from reaching in, and a page always sends one.
-        if (!origin) return done(true);
+        /*
+         * A missing Origin used to be allowed, on the reasoning that a page
+         * always sends one so absence must mean `curl` or the doctor. The first
+         * half is true and the conclusion does not follow: it also meant any
+         * other process on the machine, holding no secret, could find the port
+         * with one scan and get everything this socket carries — the last forty
+         * turns, every stored fact, her mood, the key hint — and, on the way
+         * back, `say`, `memory.forget`, `intimacy.pin` and `profile.save`, which
+         * rewrites the system instruction she is built from.
+         *
+         * Nothing legitimate needed it. The website is a page and sends one; the
+         * doctor speaks HTTP and never opens this socket; the audit scripts send
+         * one. So it is refused, and anybody who genuinely wants a headless
+         * client can say so out loud with `HERS_ALLOW_HEADLESS=1`.
+         */
+        if (!origin) return done(options.allowHeadless === true, 403, 'Origin required');
         if (options.allowedOrigins.has(origin)) return done(true);
         done(false, 403, 'Origin not allowed');
         void req;

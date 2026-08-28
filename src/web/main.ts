@@ -35,6 +35,17 @@ let awake = false;
 
 const ui = new Ui({
   onToggleSense: (sense, on) => void toggleSense(sense, on),
+  /*
+   * Asked of the devices, every time the indicator is drawn. `senses` — the
+   * local record of what was requested — is deliberately not consulted: it is
+   * another thing that can be wrong, and the point is to have exactly one
+   * account of whether a camera is open, given by the camera.
+   */
+  senseIsLive: (sense) => {
+    if (sense === 'hearing') return microphone.isLive();
+    if (sense === 'sight') return vision.isLive('camera');
+    return vision.isLive('screen');
+  },
   onWake: () => void toggleWake(),
   onSay: (text) => {
     connection.send({ t: 'say', text });

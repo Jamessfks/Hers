@@ -89,6 +89,24 @@ export class Microphone {
     }
   }
 
+  /**
+   * Whether the device is actually open, as the device reports it.
+   *
+   * `readyState` is `"live"` while an input is connected and providing data, and
+   * `"ended"` once it never will again — read-only, and the only account of this
+   * that cannot be talked out of. Deliberately not `enabled`: a track can be
+   * live with its output switched off, and for an indicator whose whole job is
+   * to say whether the camera is *open*, "open but muted" is on, not off.
+   *
+   * This exists because the sense buttons used to be drawn from a WebSocket
+   * message. Anything that reached that socket could darken the camera light
+   * while the camera stayed open and frames kept going to Google, which is the
+   * one lie this interface must not be able to tell.
+   */
+  isLive(): boolean {
+    return (this.#stream?.getTracks() ?? []).some((track) => track.readyState === 'live');
+  }
+
   async stop(): Promise<void> {
     if (this.#levelTimer !== null) {
       clearInterval(this.#levelTimer);
