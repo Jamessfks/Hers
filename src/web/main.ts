@@ -204,6 +204,15 @@ function onMessage(message: ServerMessage): void {
   if (message.t === 'ready') {
     vision.setRates(message.cameraFps, message.screenFps);
     /*
+     * Asked for immediately, not when the settings dialog opens.
+     *
+     * The reply is what says whether this folder has ever been used, and the
+     * page cannot decide whether to offer the first-run wizard without it. It
+     * also means the profile editor is populated before anybody clicks it,
+     * which it was not before.
+     */
+    connection.send({ t: 'profile.load' });
+    /*
      * Tell the server about any device that is actually open.
      *
      * `ready` carries the server's view of the senses, and after a reconnect or

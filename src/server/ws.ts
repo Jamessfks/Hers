@@ -42,6 +42,7 @@ import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
 import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
+import { isFirstRun } from '../core/profile/first-run.ts';
 
 /** A screen frame at 1080p JPEG is comfortably under this; nothing legitimate is not. */
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -373,20 +374,14 @@ export class WebBridge {
         return;
 
       case 'profile.load':
-        sendJson(socket, {
-          t: 'profile',
-          files: await readProfileFiles(this.#options.brain.config.profileDir),
-        });
+        sendJson(socket, await this.#profile());
         return;
 
       case 'profile.save': {
         if (typeof message.files !== 'object' || message.files === null) return;
         await saveProfileFiles(this.#options.brain.config.profileDir, message.files);
         await this.#options.brain.reloadProfile();
-        sendJson(socket, {
-          t: 'profile',
-          files: await readProfileFiles(this.#options.brain.config.profileDir),
-        });
+        sendJson(socket, await this.#profile());
         // Honest about when it lands: a Live session's system instruction is
         // fixed at setup, so this is the next wake, not this sentence.
         this.#send({
@@ -399,6 +394,24 @@ export class WebBridge {
       default:
         return;
     }
+  }
+
+  /**
+   * The profile folder, and whether anybody has ever used it.
+   *
+   * The two travel together because the browser needs both at once: the wizard
+   * only opens on a fresh folder, and the first thing it does is edit the files
+   * in that same message. Answered from the files on disk rather than from the
+   * loaded `Profile`, because one of the three signals is a frontmatter key
+   * nothing else reads and `loadProfile` therefore does not keep.
+   */
+  async #profile(): Promise<ServerMessage> {
+    const files = await readProfileFiles(this.#options.brain.config.profileDir);
+    return {
+      t: 'profile',
+      files,
+      firstRun: isFirstRun({ files, hasHistory: this.#options.brain.hasHistory }),
+    };
   }
 
   #memory(): ServerMessage {

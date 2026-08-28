@@ -129,7 +129,9 @@ She needs one, and it is the only account involved in any of this. Create it at
 key is checked against Google before it is written down, so a typo is a message on the
 page rather than a mystery ten minutes later. Two ways to supply it:
 
-- **In the browser.** The **Setup** panel asks on first run. Paste it in and press
+- **In the browser.** On a profile nobody has used yet the key is the last card of
+  the first-run wizard, after the seven about her; otherwise the **Setup** panel
+  asks as soon as the page loads. Paste it in and press
   **Save**; once Google accepts it, it is written to `.env` for you. It never travels
   back to the browser — the page can be told the last four characters of the key in
   force, and that is all it ever learns.
@@ -231,6 +233,13 @@ app reads with prose underneath that goes to the model.
 | `mood.md`         | Her baseline temperament and how hard events move her    |
 | `relationship.md` | Who you are to her                                       |
 | `boundaries.md`   | What she does not play, and what she will not lie about   |
+
+The first time you open the page on a folder nobody has used, a wizard walks those six
+files in order and then asks for a photograph — seven questions, one per thing she is
+made of, and every one of them skippable. It shows the exact sentence each answer puts
+in her file, because that sentence is what reaches the model. Skip all seven and you get
+the profile above, unchanged. It does not ask her name: she still chooses that herself
+on the first conversation, and the last card is about why.
 
 Edit them in a text editor or under **Profile**; changes take effect the next time she
 wakes, because a Live session's system instruction is fixed when the session opens. She

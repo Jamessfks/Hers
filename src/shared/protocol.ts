@@ -255,7 +255,23 @@ export type ServerMessage =
   | { t: 'trouble'; message: string }
   /** A picture or clip she chose to show. Served from /gallery. */
   | { t: 'show'; url: string; kind: 'image' | 'clip'; caption?: string }
-  | { t: 'profile'; files: Record<string, string> }
+  | {
+      t: 'profile';
+      files: Record<string, string>;
+      /**
+       * Nothing has ever happened in this profile, so the browser should offer
+       * the first-run wizard.
+       *
+       * On this message rather than on `ready` because it is a fact about the
+       * folder, and this is the message that carries the folder. It also makes
+       * the ordering unambiguous: the page asks for the profile the moment it is
+       * ready, and the answer arrives with the files the wizard needs to edit,
+       * so there is no window in which the page knows it is a first run and has
+       * nothing to write into. See `core/profile/first-run.ts` for what the
+       * server means by fresh.
+       */
+      firstRun: boolean;
+    }
   /** Her photograph, as the page needs to draw it. */
   | { t: 'avatar'; avatar: AvatarView }
   | { t: 'memory'; facts: RememberedFact[]; summary: string }

@@ -4,6 +4,29 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## Unreleased
+
+**A first run that is about her.** The first time the page opens on a profile folder
+nobody has used, a wizard asks seven questions — one for each of the six files in
+`hers-profile/`, in the order the editor shows them, and a seventh for the photograph.
+Every step skips, and skipping writes nothing: take the shortest path through it and the
+folder is byte-for-byte the one that ships, plus the date under `met:` in
+`relationship.md`. Closing it or pressing Escape keeps whatever was answered so far.
+
+Every choice shows the exact sentence it will put in her file, and that sentence is what
+gets written — into the prose, where Gemini reads it, rather than as an adjective in a
+header nothing reads. The three headers that *are* read get written properly:
+`identity.md` for age and where she is from, `voice.md` for the voice, `mood.md` for the
+five numbers behind a temperament.
+
+It does not ask her name. She still chooses that herself on the first conversation, and
+the last card is about why — and carries the Gemini key, which is the only question in
+the whole flow that is not about her.
+
+Fresh is three things, not one: she has not named herself, memory holds nothing at all,
+and `met:` is still the sentence it ships with. Deleting everything under **Start over**
+makes a folder fresh again, and the wizard comes back with it.
+
 ## v1.3.0 — 27 August 2026
 
 **A voice menu.** Fourteen prebuilt Gemini voices, each with Google's own one-word

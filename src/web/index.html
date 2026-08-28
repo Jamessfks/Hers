@@ -297,6 +297,43 @@
       </div>
     </dialog>
 
+    <!--
+      The first run.
+
+      Deliberately the same dialog as every other panel — same head, same note,
+      same buttons — because it is not a separate product with its own manners.
+      Everything inside it is drawn by `wizard.ts`: the steps are data, and
+      markup for eight of them written out by hand here would be eight places to
+      forget to change something.
+    -->
+    <dialog class="settings wizard" id="wizard">
+      <!--
+        The only dialog head here that is not a `method="dialog"` form.
+
+        That form closes the dialog by submitting it, and the `close` event it
+        raises is a *queued* task — which is a fine way to hear about a closed
+        panel and a bad way to be told to save somebody's answers. A page that is
+        not visible defers those tasks, so the answers were written or not
+        depending on whether the window happened to be in front. This button
+        finishes the wizard in its own click handler, and closes it afterwards.
+      -->
+      <div class="settings-head">
+        <h2 id="wizard-title" tabindex="-1">Before you meet her</h2>
+        <button class="ghost" id="wizard-close" type="button" aria-label="Close">Close</button>
+      </div>
+      <p class="settings-note" id="wizard-note"></p>
+      <div class="wizard-body" id="wizard-body"></div>
+      <div class="wizard-foot">
+        <div class="wizard-pips" id="wizard-pips" aria-hidden="true"></div>
+        <span class="wizard-count" id="wizard-count" aria-live="polite"></span>
+        <div class="wizard-nav">
+          <button class="ghost" id="wizard-back" type="button">Back</button>
+          <button class="ghost" id="wizard-skip" type="button">Skip</button>
+          <button class="primary" id="wizard-next" type="button">Next</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="takeover" id="takeover" hidden>
       <div class="takeover-card">
         <h2>She's in another tab</h2>
