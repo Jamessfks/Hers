@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_VOICE, PREBUILT_VOICES, VOICES } from './voices.ts';
+import { DEFAULT_VOICE, FEMALE_VOICES, PREBUILT_VOICES, VOICES } from './voices.ts';
 
 test('every voice Google documents is offered, once', () => {
   assert.equal(VOICES.length, 30);
@@ -30,4 +30,35 @@ test('each one says how it sounds, in one word', () => {
 
 test('the two lists cannot drift, because one is made from the other', () => {
   assert.deepEqual([...PREBUILT_VOICES], VOICES.map((voice) => voice.name));
+});
+
+test('the menu offers her the fourteen Google labels female', () => {
+  assert.equal(FEMALE_VOICES.length, 14);
+  assert.ok(FEMALE_VOICES.every((voice) => voice.gender === 'female'));
+  assert.deepEqual(
+    FEMALE_VOICES.map((voice) => voice.name),
+    [
+      'Zephyr', 'Kore', 'Leda', 'Aoede', 'Callirrhoe', 'Autonoe', 'Despina',
+      'Erinome', 'Laomedeia', 'Achernar', 'Gacrux', 'Pulcherrima',
+      'Vindemiatrix', 'Sulafat',
+    ],
+  );
+});
+
+test('every voice carries one of the two labels Google publishes', () => {
+  for (const { name, gender } of VOICES) {
+    assert.ok(gender === 'female' || gender === 'male', `${name}: ${gender}`);
+  }
+  assert.equal(VOICES.filter((voice) => voice.gender === 'male').length, 16);
+});
+
+test('the voice she ships with is one the menu offers', () => {
+  // Otherwise a fresh profile opens the menu on a name that is not in it.
+  assert.ok(FEMALE_VOICES.some((voice) => voice.name === DEFAULT_VOICE));
+});
+
+test('the other sixteen are still accepted, just not offered', () => {
+  // voice.md is a file somebody may already have edited. Narrowing the menu
+  // must not quietly reset a profile that says `voice: Puck`.
+  assert.ok(PREBUILT_VOICES.includes('Puck'));
 });

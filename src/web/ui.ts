@@ -20,7 +20,7 @@ import type {
 import { SENSE_NAMES } from '../shared/protocol.ts';
 import { PROFILE_FILES } from '../shared/profile-files.ts';
 import { frontmatterValue, setFrontmatterValue } from '../shared/frontmatter.ts';
-import { DEFAULT_VOICE, VOICES } from '../shared/voices.ts';
+import { DEFAULT_VOICE, FEMALE_VOICES, VOICES } from '../shared/voices.ts';
 
 /**
  * How long one of her faces stays up.
@@ -174,13 +174,6 @@ export class Ui {
 
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
-
-    for (const { name, character } of VOICES) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = `${name} — ${character}`;
-      this.#voiceSelect.append(option);
-    }
 
     /*
      * The menu edits the same text the editor is showing rather than saving on
@@ -1031,12 +1024,35 @@ export class Ui {
     // time: someone who types a voice name by hand should see the menu agree.
     const isVoice = this.#openFile === 'voice';
     this.#voicePick.hidden = !isVoice;
-    if (isVoice) {
-      const chosen = frontmatterValue(files.voice ?? '', 'voice')?.trim() ?? '';
-      const known = VOICES.some((voice) => voice.name.toLowerCase() === chosen.toLowerCase());
-      this.#voiceSelect.value = known
-        ? VOICES.find((voice) => voice.name.toLowerCase() === chosen.toLowerCase())!.name
-        : DEFAULT_VOICE;
+    if (isVoice) this.#renderVoices(frontmatterValue(files.voice ?? '', 'voice')?.trim() ?? '');
+  }
+
+  /**
+   * The menu, and whatever the file actually says.
+   *
+   * Offers the female voices, because she is a woman. But `voice.md` is a file
+   * somebody may have edited by hand, and a menu that silently displayed
+   * `Aoede` over a file reading `voice: Puck` would be lying about the thing it
+   * is sitting on top of. So a voice the file names that is not on the offered
+   * list is added to the menu as its own option, and stays until it is changed.
+   */
+  #renderVoices(chosen: string): void {
+    const match = (name: string): boolean => name.toLowerCase() === chosen.toLowerCase();
+    const offered = [...FEMALE_VOICES];
+    if (chosen && !offered.some((voice) => match(voice.name))) {
+      const known = VOICES.find((voice) => match(voice.name));
+      offered.push(known ?? { name: chosen, character: 'from your file', gender: 'female' });
     }
+
+    this.#voiceSelect.replaceChildren();
+    for (const { name, character } of offered) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = `${name} — ${character}`;
+      this.#voiceSelect.append(option);
+    }
+    this.#voiceSelect.value = offered.some((voice) => match(voice.name))
+      ? (offered.find((voice) => match(voice.name))?.name ?? DEFAULT_VOICE)
+      : DEFAULT_VOICE;
   }
 }

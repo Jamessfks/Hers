@@ -256,11 +256,12 @@ of contact, four years, and absence drains it slowly after three days of grace. 
 → How close she is** has a slider; **Let it develop** hands back to the earned number
 underneath, which never stopped counting.
 
-**Her voice** is a menu on the **voice** tab of **Who she is** — thirty prebuilt
-Gemini voices, each labelled with Google's own word for how it sounds, from
-`Achernar — Soft` to `Algenib — Gravelly`. Picking one writes it into `voice.md`,
-which is still a file you can edit by hand; the menu shows whatever is in it. A
-Live session fixes its voice when it opens, so a change lands on her next wake.
+**Her voice** is a menu on the **voice** tab of **Who she is** — the fourteen
+prebuilt Gemini voices Google labels female, each with Google's own word for how
+it sounds, from `Achernar — Soft` to `Sulafat — Warm`. Picking one writes it into
+`voice.md`, which is still a file you can edit by hand; the menu shows whatever
+is in it, including one of the other sixteen if that is what you typed. A Live
+session fixes its voice when it opens, so a change lands on her next wake.
 
 **Her gallery** is `hers-profile/gallery/`. Drop `.jpg`, `.jpeg`, `.png`, `.webp` or
 `.gif` images in, or `.mp4`, `.webm` or `.mov` clips, named like captions — `laughing-kitchen.jpg` — because the name is

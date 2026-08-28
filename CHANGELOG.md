@@ -4,14 +4,24 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
-## Unreleased
+## v1.3.0 — 27 August 2026
 
-**A voice menu.** Thirty prebuilt Gemini voices, each with Google's own one-word
+**A voice menu.** Fourteen prebuilt Gemini voices, each with Google's own one-word
 description of how it sounds — `Sulafat — Warm`, `Algenib — Gravelly`,
 `Achernar — Soft` — on the **voice** tab of **Who she is**. Picking one writes it
 into `voice.md`, so it is still a file you can edit by hand, and the menu reads
 back whatever is in that file. She picks it up the next time she wakes, because
 a Live session fixes its voice at setup.
+
+Fourteen and not thirty because she is a woman, and those are the ones Google
+labels female. The other sixteen are still accepted if you type one into
+`voice.md` yourself — narrowing the menu must not quietly reset a profile that
+already chose one — and a voice the file names that the menu does not offer is
+shown in the menu anyway rather than hidden behind a name it never chose.
+
+Google publishes that label on Cloud Text-to-Speech's pages for the same thirty
+names, not on the Gemini page, which lists only a name and a character word.
+Verified against the raw table on two of its pages, which agree.
 
 The voice list and the frontmatter parser moved to `shared/`, so the browser and
 the server read one copy rather than two.
