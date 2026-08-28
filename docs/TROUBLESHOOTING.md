@@ -1,6 +1,19 @@
 # When something is wrong
 
-Start here:
+**If you installed the application,** start with its log. It is rewritten on
+every launch and holds everything a terminal would have printed — where her
+folders are, which model she is on, every configuration warning, and the reason
+she would not start if she would not.
+
+| Platform | Log                                            |
+| -------- | ---------------------------------------------- |
+| macOS    | `~/Library/Application Support/Hers/hers.log`   |
+| Windows  | `%APPDATA%\Hers\hers.log`                       |
+
+Nothing secret is in it. The key is written masked to its last four characters
+and the bot token is never written at all, so it is safe to send to somebody.
+
+**If you are running from a clone,** start here:
 
 ```bash
 npm run doctor
@@ -10,6 +23,59 @@ It checks the key, the model, the profile folder, the memory database and the
 bridges, then opens a real Gemini session, says one thing and waits for audio.
 If that passes, the only things between you and her talking are the browser's
 own permissions.
+
+---
+
+## The downloaded application
+
+### macOS says it cannot verify the developer
+
+Expected. The builds are not signed — see the README for why, and for the exact
+clicks. In short: on macOS Sequoia and later, **System Settings → Privacy &
+Security**, scroll to **Security**, **Open Anyway**, then **Open**. On macOS 14
+and earlier, Control-click her in Applications and choose **Open**.
+
+### macOS says Hers is damaged and should be moved to the Bin
+
+That is a *different* message and it does not mean what it says. It means the
+signature did not verify — almost always an incomplete or corrupted download.
+Delete the file and download it again. If a build you made yourself does this,
+the ad-hoc signing step in `build/adhoc-sign.cjs` did not run.
+
+### Windows says "Windows protected your PC"
+
+SmartScreen, for the same reason. **More info**, then **Run anyway**. If it asks
+every single launch, right-click the file → **Properties** → tick **Unblock** on
+the General tab.
+
+### The icon bounced once and nothing opened
+
+Read `hers.log`. If it is empty or ends without the `Hers is at http://…` line,
+she did not finish starting and the last thing in the file is why. If there is
+no log file at all, the folder it lives in could not be created — check that
+`~/Library/Application Support` (or `%APPDATA%`) is writable.
+
+### She started fresh and does not know me
+
+The application and a clone are two separate installs and nothing is migrated
+between them, because guessing which of two profile folders holds the real
+person is how somebody loses her. Point the application at the clone's folders
+instead: set `HERS_PROFILE` and `HERS_DATA` to their full paths. Those win over
+everything, in the application exactly as in a clone.
+
+### I closed the window and she is still running
+
+On macOS that is deliberate. Closing a window is not quitting, and if you have
+her on Telegram, closing the desk window should not end a conversation happening
+on your phone. **Cmd-Q**, or **Hers → Quit**, actually stops her. On Windows,
+closing the last window quits.
+
+### Where did she put my key?
+
+`~/Library/Application Support/Hers/.env` on macOS, `%APPDATA%\Hers\.env` on
+Windows, `.env` beside the clone otherwise. Never next to the program: on macOS
+that folder is inside a read-only bundle and on Windows it is under `Program
+Files`, and on both an upgrade replaces it.
 
 ---
 
@@ -76,14 +142,15 @@ character went missing or came along with a paste. Copy it again from
 ### "That value has characters in it that do not belong in a key"
 
 Something came with the paste — a space, a quote, a newline. Hers refuses to
-write it rather than guessing at the escaping and leaving you with a `.env` that
-reads back subtly wrong.
+write it rather than guessing at the escaping and leaving you with a key file
+that reads back subtly wrong.
 
 ### I set the key but she still says she needs one
 
-The setup panel writes to `.env` **and** updates the running process, so it
-should take effect immediately. If it did not: a real environment variable beats
-the file. Check for `GEMINI_API_KEY` already set in your shell.
+The setup panel writes to the key file **and** updates the running process, so
+it should take effect immediately. If it did not: a real environment variable
+beats the file. Check for `GEMINI_API_KEY` already set in your shell — or, if
+you launch her from a terminal with one exported, in that terminal.
 
 ---
 
@@ -92,13 +159,24 @@ the file. Check for `GEMINI_API_KEY` already set in your shell.
 ### The button will not light up
 
 A denied permission arrives as an exception, and she says which one plainly.
-The browser only asks once per site — after a refusal you have to allow it from
-the address bar and try again.
+Where you undo the refusal depends on how you are running her.
+
+**In a browser**, it only asks once per site — after a refusal you have to allow
+it from the address bar and try again.
+
+**In the application**, there is no address bar and the refusal was your
+operating system's, not the page's. On macOS: **System Settings → Privacy &
+Security**, then **Microphone**, **Camera** or **Screen & System Audio
+Recording**, and switch **Hers** on. macOS asks for each of the three separately
+and only the first time, so a decision made in a hurry months ago is the usual
+cause. Screen recording needs her restarted afterwards. On Windows: **Settings →
+Privacy & security → Microphone / Camera**, and allow desktop apps.
 
 ### Screen sharing shares the wrong thing
 
-You pick the window or screen in the browser's own picker, not in Hers. Switch
-the sense off and on to be asked again.
+You pick the window or screen in the picker, not in Hers. Switch the sense off
+and on to be asked again. In the application on macOS that picker is macOS's own
+share sheet; in a browser it is the browser's.
 
 ### The camera light is on but she cannot see me
 
@@ -219,6 +297,8 @@ the folder Hers is running from. Point them at folders of their own.
 ---
 
 ## Nothing here matches
+
+From a clone:
 
 ```bash
 npm run audit

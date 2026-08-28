@@ -1,0 +1,71 @@
+# Builds the downloadable applications.
+#
+# `npm run package` only ever produces an application for the machine it runs
+# on, and not because electron-builder cannot cross-compile — it can. The
+# blocker is one dependency: LiveKit's media binding ships as a separate
+# prebuilt package per platform and architecture, and `npm install` fetches only
+# the one matching the machine doing the installing. A Windows installer built
+# on a Mac would carry a macOS `.node` file and would fail on the first import.
+# So each artifact is built on its own runner, which does its own install.
+#
+# This has never run. It was written on a Mac, alongside the macOS build it
+# describes, and the Windows half of it is untested in the strict sense that
+# nobody has watched it succeed. It is here because a workflow somebody can push
+# a tag at and correct is worth more than a paragraph saying Windows is possible.
+#
+# Nothing here is signed. See the README for what that means and what to click.
+
+name: Build the applications
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      # One failing platform should not take the other's artifact with it —
+      # a macOS build that worked is still worth downloading.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS (Apple Silicon)
+            artifact: release/*.dmg
+          - os: windows-latest
+            name: Windows (x64)
+            artifact: release/*.exe
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The same gate as `npm run check` locally. A build that ships is not the
+      # place to find out a test was red.
+      - run: npm run check
+
+      - run: npm run package
+        env:
+          # Never go looking in a keychain for a certificate. There isn't one,
+          # and a runner that finds a stray identity would produce an artifact
+          # signed by somebody nobody meant.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hers-${{ matrix.os }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error

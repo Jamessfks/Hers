@@ -15,7 +15,7 @@
 
 import type { Brain } from '../core/session/brain.ts';
 import { setEnvValue } from './env-file.ts';
-import { loadConfig } from './config.ts';
+import { envFilePath, loadConfig } from './config.ts';
 import type { Config } from './config.ts';
 
 /** Where a key is checked. Free, and the error it returns is worth reading. */
@@ -86,7 +86,7 @@ export async function checkGeminiKey(key: string): Promise<KeyCheck> {
 export async function applyGeminiKey(
   brain: Brain,
   key: string,
-  envFile = '.env',
+  envFile = envFilePath(),
 ): Promise<Config> {
   const trimmed = key.trim();
   await setEnvValue(envFile, 'GEMINI_API_KEY', trimmed);
@@ -198,7 +198,7 @@ export function botLink(username: string): string {
  * one thing that must not happen: the Bot API hands `getUpdates` to the newest
  * caller and terminates the other.
  */
-export async function applyBotToken(token: string, envFile = '.env'): Promise<Config> {
+export async function applyBotToken(token: string, envFile = envFilePath()): Promise<Config> {
   const trimmed = token.trim();
   await setEnvValue(envFile, 'TELEGRAM_BOT_TOKEN', trimmed);
   process.env.TELEGRAM_BOT_TOKEN = trimmed;
@@ -222,7 +222,7 @@ export async function applyBotToken(token: string, envFile = '.env'): Promise<Co
  * messaging the bot must not join it. A future caller that skips that check
  * would need the guard moved in here.
  */
-export async function rememberChatId(chatId: number, envFile = '.env'): Promise<Config> {
+export async function rememberChatId(chatId: number, envFile = envFilePath()): Promise<Config> {
   await setEnvValue(envFile, 'TELEGRAM_ALLOWED_CHAT_IDS', String(chatId));
   process.env.TELEGRAM_ALLOWED_CHAT_IDS = String(chatId);
   return loadConfig();
