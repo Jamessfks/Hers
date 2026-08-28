@@ -105,6 +105,14 @@ and grants access to one room.
 
 ## What is kept, and where
 
+Paths below are relative to two folders, and which two depends on how you
+started her. From a clone they sit beside the code. In the downloaded
+application they sit in the folder the operating system set aside for it —
+`~/Library/Application Support/Hers` on macOS, `%APPDATA%\Hers` on Windows —
+because an application cannot write next to its own executable. `HERS_PROFILE`
+and `HERS_DATA` override both. Nothing else about this page changes between the
+two: same files, same contents, same machine.
+
 | Path | What it is |
 | --- | --- |
 | `hers-profile/*.md` | Who she is. Written on first run, then yours. Plain text. |
@@ -131,10 +139,12 @@ disk is not encrypted, neither is this.
 
 ## The API key
 
-`GEMINI_API_KEY` is read from the environment or from `.env`, which is
-gitignored. It is held in memory and used to open the Gemini socket. It is never
-written to `data/` and never logged — the doctor command prints its *length*
-rather than the key.
+`GEMINI_API_KEY` is read from the environment or from the key file — `.env`
+beside the clone, which is gitignored, or `.env` in her own folder if you
+installed the application. `HERS_ENV_FILE` overrides both. It is held in memory
+and used to open the Gemini socket. It is never written to `data/` and never
+logged — the doctor command prints its *length* rather than the key, and the
+application's `hers.log` records only its last four characters.
 
 It can also be pasted into the website, under **Setup**. That path is one
 direction only: the browser can *send* a key, and can be told the **last four
@@ -144,8 +154,8 @@ in anything client-side, and a page served from localhost is still client-side.
 
 Before anything is written, the key is checked with a metadata call to Google —
 which is also the only request the app makes with a key you have not confirmed yet.
-It is then written to `.env` with owner-only permissions, and every other line
-in that file is left exactly as it was.
+It is then written to the key file with owner-only permissions, and every other
+line in that file is left exactly as it was.
 
 **Starting over does not delete your keys.** They are yours, not hers.
 
