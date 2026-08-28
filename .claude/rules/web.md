@@ -22,4 +22,7 @@ with a build step.
 - `call/index.html` is a single static file with no build step, published to
   GitHub Pages because a phone cannot reach the user's machine.
 
-The interface carries fourteen colours. Adding a fifteenth needs a reason.
+The interface carries twelve declared colours. Adding a thirteenth needs a
+reason — and watch for the ones you did not declare: Chrome will paint a focus
+ring, a range track and a checkbox border in its own greys and blues if you let
+it, which is how four arrived without anybody choosing them.

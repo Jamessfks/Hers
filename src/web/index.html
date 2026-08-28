@@ -18,7 +18,7 @@
         </div>
         <div class="bar-actions">
           <span class="state" id="state">asleep</span>
-          <button class="ghost" id="face-open" type="button">Face</button>
+          <button class="ghost" id="face-open" type="button">Avatar</button>
           <button class="ghost" id="memory-open" type="button">Memory</button>
           <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
           <button class="ghost" id="setup-open" type="button" aria-label="Setup">Setup</button>
@@ -44,8 +44,23 @@
         </div>
 
         <section class="conversation">
-          <div class="transcript" id="transcript" aria-live="polite" aria-label="Conversation">
-            <p class="empty" id="empty">Nothing yet.</p>
+          <div class="transcript" id="transcript" role="log" aria-label="Conversation">
+            <!--
+              The empty pane speaks as the application, never as her.
+
+              It is set at the top of the column, above where the first
+              bubble will land. Rejected: putting it in a bubble of her own.
+              A greeting the application wrote, in the shape her words arrive
+              in, is the one thing this product does not do.
+            -->
+            <div class="pane-empty" id="empty">
+              <p class="pane-empty-lead">Nothing yet.</p>
+              <p class="pane-empty-note">
+                Her words appear here as she says them, and yours beside them.
+                Nothing is written on her behalf, which is why this is empty
+                rather than welcoming.
+              </p>
+            </div>
           </div>
 
           <div class="previews" id="previews" hidden>
@@ -116,7 +131,7 @@
 
     <dialog class="settings face" id="face">
       <form method="dialog" class="settings-head">
-        <h2>Her face</h2>
+        <h2>Avatar</h2>
         <button class="ghost" value="close" aria-label="Close">Close</button>
       </form>
       <p class="settings-note">
@@ -126,10 +141,22 @@
       </p>
 
       <div class="face-body">
+        <!--
+          The input is transparent rather than hidden. `hidden` and
+          `display: none` both tell assistive technology the control is not
+          interactive, which is why there was no keyboard path to giving her a
+          face at all — MDN says to use opacity for exactly this reason. It
+          still covers the whole zone, so a click anywhere opens the picker and
+          the drop target is unchanged.
+        -->
         <label class="dropzone" id="dropzone">
-          <input type="file" id="face-file" accept="image/jpeg,image/png,image/webp" hidden />
+          <input class="file-input" type="file" id="face-file"
+                 accept="image/jpeg,image/png,image/webp" aria-label="Choose a photograph of her" />
           <img id="face-preview" alt="" hidden />
-          <span id="dropzone-label">Drop a picture here, or click to choose one</span>
+          <span class="dropzone-body" id="dropzone-label">
+            <span class="dropzone-hint">Drop a picture here</span>
+            <span class="dropzone-button">Choose a picture</span>
+          </span>
         </label>
       </div>
 
@@ -140,6 +167,10 @@
           photograph above, takes a few seconds, and costs about four pence — the same
           Gemini key, nothing else to sign up for. Once it exists she chooses when to
           use it, the way a face moves while talking.
+        </p>
+        <p class="faces-empty" id="faces-empty">
+          Nothing to generate from yet — give her a photograph above and the
+          expressions appear here.
         </p>
         <div class="face-list" id="face-list"></div>
         <p class="setup-status" id="face-status"></p>
@@ -263,6 +294,7 @@
           <p class="intimacy-readout" id="intimacy-readout">—</p>
           <div class="setup-row">
             <input
+              class="intimacy-range"
               id="intimacy-range"
               type="range"
               min="0"
