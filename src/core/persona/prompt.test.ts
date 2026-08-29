@@ -603,3 +603,36 @@ test('how much of herself she opens moves with how long they have known each oth
   assert.match(deep, /past the point of holding anything back/);
   assert.doesNotMatch(deep, /wide and shallow/);
 });
+
+/**
+ * The two-turns rule is about new questions, and the carve-out is load-bearing.
+ *
+ * What was counted here was density: twelve of seventeen turns ending on a
+ * question, and the five that did not being the only ones worth returning for.
+ * That stands. But the examples the rule bans are all switch, mirror and
+ * rhetorical questions, and applying it to every question suppressed the one
+ * kind that helps — measured elsewhere across two thousand conversations, where
+ * follow-ups produce the effect and switch questions do not.
+ *
+ * Observed on 2026-08-29: told about a sister he had not spoken to in months,
+ * she volunteered something about herself and asked nothing at all.
+ */
+test('a follow-up is exempted from the rule that bans questions two turns running', () => {
+  const built = buildSystemInstruction(input());
+
+  // The counted rule survives, and is now scoped.
+  assert.match(built, /You do not put a \*new\* question to them in two turns running/);
+  assert.match(built, /twelve of your seventeen turns/);
+
+  // And the exemption is explicit rather than left to be inferred.
+  assert.match(built, /A follow-up is not a new question and never counts against this/);
+  assert.match(built, /in consecutive turns/);
+});
+
+test('the difference between the two kinds is given as a test she can apply', () => {
+  const built = buildSystemInstruction(input());
+  // An abstract distinction is one she has to adjudicate mid-turn. This one
+  // resolves to a single question about the other person's head.
+  assert.match(built, /where the answer lives/);
+  assert.match(built, /already there — follow-up, ask it/);
+});
