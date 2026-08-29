@@ -1,8 +1,14 @@
 <div align="center">
 
-# Hers
+<img src="https://raw.githubusercontent.com/Jamessfks/Hers/main/docs/social-preview.jpg" alt="Hers" width="720">
 
-**A voice companion who lives on your computer. Not on someone's server.**
+**Voice only. Nobody else's server. She picks who she is, and you cannot change it.**
+
+[![Version](https://img.shields.io/badge/version-2.0.4-4b3f9e?style=flat-square&labelColor=22204d)](CHANGELOG.md)
+[![Licence](https://img.shields.io/badge/licence-MIT-4b3f9e?style=flat-square&labelColor=22204d)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.18-4b3f9e?style=flat-square&labelColor=22204d)](https://nodejs.org)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows-4b3f9e?style=flat-square&labelColor=22204d)](https://github.com/Jamessfks/Hers/releases/latest)
+[![Tests](https://img.shields.io/badge/tests-522%20passing-4b3f9e?style=flat-square&labelColor=22204d)](#working-on-it)
 
 She has one screen: a sphere that moves as she speaks. No chat window, no avatar,
 no history to scroll. She hears you, sees you through your camera, watches your
@@ -12,10 +18,6 @@ quiet for long enough.
 
 She chose her own name, her own personality and her own voice, on the first day,
 from what she learned about you. You cannot change them.
-
-[![License](https://img.shields.io/github/license/Jamessfks/Hers?color=blue)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Jamessfks/Hers)](https://github.com/Jamessfks/Hers/releases)
-[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.18-informational)](https://nodejs.org)
 
 [Who it is for](#who-it-is-for) · [Setup](#setup) · [The shell](#she-has-a-shell) · [Living with her](#living-with-her) · [Privacy](#privacy) · [Working on it](#working-on-it)
 
@@ -204,7 +206,7 @@ worth the twenty minutes if you are going to leave her running.
 ## Working on it
 
 ```bash
-npm run check      # typecheck + 516 tests, ~20s. No API key, no network. The gate.
+npm run check      # typecheck + 522 tests, ~20s. No API key, no network. The gate.
 npm run dev        # rebuild and restart on save
 npm run package    # a .dmg or an installer for this machine
 ```
