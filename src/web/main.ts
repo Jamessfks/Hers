@@ -119,7 +119,26 @@ function onMessage(message: ServerMessage): void {
     player.flush();
   }
   if (message.t === 'state') {
+    const was = awake;
     awake = message.state !== 'asleep' && message.state !== 'error';
+    /*
+     * She reached her own bedtime, so the hardware goes off here too.
+     *
+     * The server closing its session is not enough: the microphone and the
+     * camera belong to this tab, and leaving them open would light the camera
+     * indicator for a companion who is asleep. That is the one thing the
+     * indicator must never do — a light that is on while the product says
+     * nothing is watching is worse than no light at all.
+     *
+     * Driven by the state message rather than a message of its own, because
+     * `asleep` already means exactly this and a second way of saying it is a
+     * second thing that can disagree.
+     */
+    if (was && !awake) {
+      mic.stop();
+      vision.stop();
+      player.flush();
+    }
   }
   ui.apply(message);
 }

@@ -50,6 +50,7 @@ import { homedir } from 'node:os';
 
 import type { ConnectionState, MoodReadout, SenseName } from '../../shared/protocol.ts';
 import { isFirstRun } from '../profile/first-run.ts';
+import { Bedtime } from '../sleep/bedtime.ts';
 import { SetupSession } from '../setup/session.ts';
 import { Companion } from './companion.ts';
 import type { Brain } from './brain.ts';
@@ -90,6 +91,9 @@ export interface ConversationOptions {
   brain: Brain;
   /** Injected by tests so nothing opens a socket. */
   connect?: LiveConnector;
+  /** Injected by tests so the bedtime clock does not arm a real timer. */
+  setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
 }
 
 export class Conversation {
@@ -108,8 +112,31 @@ export class Conversation {
    */
   #origin: Origin = null;
 
+  /**
+   * The one thing in this program that watches the clock.
+   *
+   * It lives here rather than on `Companion` because a `Companion` is thrown
+   * away every time she sleeps, and a scheduler that goes with it can only ever
+   * put her to bed once. The conversation outlives the sessions inside it,
+   * which is the property a bedtime needs.
+   */
+  readonly #bedtime: Bedtime;
+
   constructor(options: ConversationOptions) {
     this.#options = options;
+    this.#bedtime = new Bedtime({
+      rhythm: () => options.brain.rhythm,
+      isAwake: () => this.awake,
+      onBedtime: () => void this.sleep(),
+      ...(options.setTimer ? { setTimer: options.setTimer } : {}),
+      ...(options.clearTimer ? { clearTimer: options.clearTimer } : {}),
+    });
+    this.#bedtime.start();
+  }
+
+  /** Stops the clock. Called when the server is shutting down. */
+  close(): void {
+    this.#bedtime.stop();
   }
 
   attach(surface: Surface): void {

@@ -286,6 +286,9 @@ export async function main(): Promise<Running> {
     if (shuttingDown) return;
     shuttingDown = true;
     telegram?.stop();
+    // Before the sockets: the bedtime clock is the one timer that outlives a
+    // session, so it is the one that has to be told the program is going.
+    conversation.close();
     await web.close();
     await brain.close();
     server.close();
