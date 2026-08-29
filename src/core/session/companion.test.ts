@@ -826,3 +826,66 @@ test('a sense the caller switched off stays off through a wake', async () => {
   assert.equal(frames.length, 0, 'a frame arrived for a sense the caller turned off');
   await f.companion.sleep();
 });
+
+// ---------------------------------------------------------------------------
+// The gap between them and her
+// ---------------------------------------------------------------------------
+
+/*
+ * `thinking` and `speaking` were in the protocol from v1 and neither was ever
+ * emitted. The state the page saw went straight from `listening` to
+ * `listening`, so the second between somebody finishing a sentence and her
+ * first sound — measured at 1211ms on the doctor's own round trip — looked
+ * exactly like a companion who had not heard them.
+ *
+ * There is no field in the Live API that marks the start of generation;
+ * `generationComplete` and `turnComplete` both mark the end. So the gap is
+ * inferred from the two boundaries that are observable, and these pin it.
+ */
+
+test('their turn ending puts her into thinking, and her first sound ends it', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+  const from = f.states.length;
+
+  f.socket().emit({
+    serverContent: { inputTranscription: { text: 'are you still there' } },
+  } as unknown as LiveServerMessage);
+  f.socket().emit({ serverContent: { turnComplete: true } } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.ok(f.states.slice(from).includes('thinking'), 'the gap was never shown');
+  await f.companion.sleep();
+});
+
+test('a tool call is thinking, because the turn is stopped until it answers', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+  const from = f.states.length;
+
+  f.socket().emit({
+    toolCall: { functionCalls: [{ id: 'a', name: 'recall', args: { about: 'his sister' } }] },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.ok(
+    f.states.slice(from).includes('thinking'),
+    'function calling is sequential on this model, so a tool call is dead air',
+  );
+  await f.companion.sleep();
+});
+
+test('the turn ending puts her back to listening', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  f.socket().emit({
+    toolCall: { functionCalls: [{ id: 'a', name: 'recall', args: { about: 'x' } }] },
+  } as unknown as LiveServerMessage);
+  await settled();
+  f.socket().emit({ serverContent: { turnComplete: true } } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.equal(f.states.at(-1), 'listening');
+  await f.companion.sleep();
+});

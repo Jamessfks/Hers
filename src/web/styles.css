@@ -324,9 +324,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 
 /* One button in a corner needs no breakpoint. What the narrow case does need is
    a smaller sphere, and that is `min(64vh, 420px)` doing its job. */
-  .state { margin-right: 0; }
-}
-.state { color: var(--ink-faint); font-size: 11px; font-weight: 500; font-variant: small-caps; letter-spacing: 0.08em; margin-right: 4px; }
 
 /* Identified by its label, not by its edge: `--ink-soft` on `--raised` is 8.05:1
    and a word inside a pill is what tells you it is a button, so 1.4.11 has no
@@ -544,6 +541,97 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * Sleep is the one state where nothing is arriving, so there is nothing for
  * `--level` to say, and it has to be said in the styling instead.
  */
+/*
+ * Thinking: a regular breath and one arc going round, and the regularity is the
+ * whole idea.
+ *
+ * There is no field in the Live API that says the model has started — only
+ * `generationComplete` and `turnComplete`, which are both the end — so this
+ * state is inferred from their turn closing with no audio yet, and from a tool
+ * call, which on this model stops the turn dead until it answers. Measured at
+ * 1211ms on the doctor's own round trip. Vapi puts the line where a voice agent
+ * starts feeling sluggish at 800ms, and Nielsen puts the one where a person
+ * stops believing the system is responding at a second; the gap sits past both,
+ * and until now the sphere sat perfectly still through it, which is the shape
+ * of a companion who did not hear you.
+ *
+ * Why a *regular* pulse rather than a livelier one: `--level` already drives the
+ * sphere while she talks, and speech is jagged and unpredictable. A slow even
+ * breath is the one motion that cannot be mistaken for it. The person watching
+ * needs to tell "she is working" from "she is talking" without being told which
+ * is which, and rate is the cheapest signal that carries it.
+ *
+ * The arc is the second half. A breath alone reads as idling; something
+ * travelling reads as work in progress, and it is one rotating conic gradient
+ * on a layer that already exists.
+ */
+.app[data-state='thinking'] .orb-core {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.app[data-state='thinking'] .orb-bloom {
+  animation: breathe-glow 2.4s ease-in-out infinite;
+}
+.app[data-state='thinking'] .orb-horizon { opacity: 0.14; }
+
+/*
+ * One arc, travelling. Drawn as a conic gradient masked to the ring's own
+ * width, so it is the ring lighting up section by section rather than a second
+ * object orbiting a sphere.
+ */
+.app[data-state='thinking'] .orb-ring {
+  border-color: transparent;
+  background: conic-gradient(
+    from 0deg,
+    /*
+     * The head stops short of the wrap, and that last four degrees is not
+     * decoration. A conic that is brightest at 360 abuts its own transparent
+     * start at 0, which renders as a hard seam — a 1px speck detached from the
+     * arc and running ahead of it, which reads as a rendering fault rather than
+     * as a comet. Fading out before the join removes it.
+     */
+    transparent 0deg,
+    transparent 265deg,
+    color-mix(in oklab, var(--accent) 75%, transparent) 342deg,
+    color-mix(in oklab, var(--ink) 70%, var(--accent)) 356deg,
+    transparent 360deg
+  );
+  /*
+   * `closest-side`, and it is the difference between a ring and a pie slice.
+   *
+   * A bare `circle` is `farthest-corner`, so on a square box 100% lands at the
+   * corner and the stop meant for the ring's edge falls well inside it — which
+   * masks away nothing near the rim and leaves a 120-degree wedge lying over
+   * the sphere. `closest-side` puts 100% on the inscribed circle, where the
+   * border actually is.
+   */
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
+  /* Matches the keyframes' function list, for the reason given at `sweep`. */
+  transform: rotate(0deg);
+  animation: sweep 1.6s linear infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); filter: brightness(0.86); }
+  50% { transform: scale(1.035); filter: brightness(1.06); }
+}
+@keyframes breathe-glow {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.16); opacity: 1; }
+}
+/*
+ * `from` is stated, and it has to be.
+ *
+ * `to { transform: rotate(1turn) }` on its own takes the start from the base
+ * rule, which is a `scale()`. Mismatched transform function lists interpolate
+ * as matrices, and the matrix for a full turn is the identity — so the
+ * animation ran, reported itself as running, and produced no motion at all.
+ * Two rotations with matching function lists interpolate the angle instead.
+ */
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .app[data-state='asleep'] .orb-core { filter: saturate(0.28) brightness(0.62); }
 .app[data-state='asleep'] .orb-bloom { opacity: 0.28; }
 .app[data-state='asleep'] .orb-horizon { opacity: 0.12; }
@@ -591,7 +679,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 }
 .setup-row input:focus { background: var(--raised); border-color: var(--accent); }
 .setup-row .danger { border-radius: var(--pill); padding: 9px 18px; font-size: 14px; font-weight: 500; }
-.setup-row button:disabled { opacity: 0.45; }
 /*
  * Not `.stage` — that class is already the main two-column page grid, and a
  * span that inherits `display: grid` from it lays the sentence out in columns.
@@ -731,7 +818,12 @@ input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
  * faded — it reads as unavailable because it is flat and grey, not because it
  * is disappearing.
  */
-.setup-row button:disabled,
+.setup-row button:disabled {
+  background: var(--sunken);
+  border-color: var(--hairline);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -739,6 +831,25 @@ input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /*
+   * Thinking still has to be visible when the motion is taken away.
+   *
+   * The blanket rule above stops every animation, which for every other state
+   * here is right — they are decoration. This one is not: it is the only thing
+   * telling somebody that she heard them and is working, and a person who has
+   * asked for less motion has not asked to be left staring at a still sphere
+   * wondering whether it is broken. So the moving version becomes a held one —
+   * the ring at full strength all the way round, the ball a step dimmer than
+   * it sits at when she talks — which says the same thing without moving.
+   */
+  .app[data-state='thinking'] .orb-ring {
+    background: none;
+    mask: none;
+    border-color: color-mix(in oklab, var(--accent) 85%, transparent);
+  }
+  .app[data-state='thinking'] .orb-core { filter: brightness(0.88); }
+  .app[data-state='thinking'] .orb-bloom { opacity: 0.75; }
 }
 /* The gutter is the section's now, so the note inside it must not add its own. */
 

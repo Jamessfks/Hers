@@ -193,6 +193,14 @@ export class Companion {
   /** True between a `⟦director⟧` cue and the turn it produces. */
   #openerInFlight = false;
   #speaking = false;
+  /**
+   * When the gap between their turn ending and her first sound began.
+   *
+   * Zero when she is not in it. Kept as a timestamp rather than a flag because
+   * a tool call re-enters the same state and the reason a person is waiting is
+   * worth being able to tell apart later.
+   */
+  #thinkingSince = 0;
   #userTalking = false;
   #lastNotifiedMood: MoodReadout | null = null;
   #memories: string[] = [];
@@ -373,7 +381,13 @@ export class Companion {
       // the conversation started.
       systemInstruction: () => this.#systemInstruction(),
       handlers: {
-        onAudio: (pcm) => this.#sink.audio(pcm),
+        onAudio: (pcm) => {
+          // The first byte of her voice is the only signal that she has begun.
+          // The Live API defines no field for it — `generationComplete` and
+          // `turnComplete` both mark the end — so the audio itself is it.
+          this.#beginSpeaking();
+          this.#sink.audio(pcm);
+        },
         onUserText: (text, final) => this.#onUserText(text, final),
         onHerText: (text, final) => this.#onHerText(text, final),
         onTurnComplete: () => this.#onTurnComplete(),
@@ -607,6 +621,21 @@ export class Companion {
       return;
     }
     this.#userTalking = false;
+    /*
+     * They have stopped; she has not started. This is the gap.
+     *
+     * Nothing in the Live API says "the model is thinking" — there is no field
+     * that marks the start of generation, only `generationComplete` and
+     * `turnComplete` at the end — so the state is inferred from the boundary
+     * that *is* observable: their turn closed and no audio has arrived yet.
+     * Measured at 1211ms on the doctor's own round trip, which is past every
+     * threshold that matters. Vapi puts the sluggish line at 800ms; Nielsen
+     * puts the one where a person stops feeling the system is responding at a
+     * second. In that window the sphere used to sit at rest, which is the
+     * shape of a companion who has not heard you.
+     */
+    this.#thinkingSince = this.#now();
+    if (!this.#closed) this.#sink.state('thinking');
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', text);
     this.#brain.intimacy.noteTurn();
@@ -624,8 +653,17 @@ export class Companion {
     this.#brain.memory.record('her', text);
   }
 
+  /** Her first sound of this turn: thinking is over, whatever it was doing. */
+  #beginSpeaking(): void {
+    if (this.#speaking || this.#closed) return;
+    this.#speaking = true;
+    this.#thinkingSince = 0;
+    this.#sink.state('speaking');
+  }
+
   #onTurnComplete(): void {
     this.#speaking = false;
+    this.#thinkingSince = 0;
     const wasOpener = this.#openerInFlight;
     this.#openerInFlight = false;
     this.#initiative.noteHerFinished(wasOpener);
@@ -640,6 +678,7 @@ export class Companion {
 
   #onInterrupted(): void {
     this.#speaking = false;
+    this.#thinkingSince = 0;
     this.#sink.interrupted();
     this.#emitMood(false, () => this.#brain.mood.feel('interrupted'));
   }
@@ -674,6 +713,25 @@ export class Companion {
    * finds out a tool did not work, and adapts instead of repeating herself.
    */
   async #onToolCall(name: string, args: Record<string, unknown>): Promise<unknown> {
+    /*
+     * A tool call is the longest kind of thinking she does, and the only kind
+     * with a cause worth showing.
+     *
+     * Function calling on 3.1 is sequential — the model will not start
+     * answering until the tool response is back — so a `recall` sits an
+     * embedding round trip inside the turn, and `run` sits a shell command with
+     * a thirty-second deadline inside it. Those are seconds of silence with a
+     * reason, and the reason is exactly what the person waiting cannot see.
+     *
+     * Re-entered rather than guarded: she can call a tool part way through
+     * speaking, and going back to thinking is the truthful thing to show when
+     * she does.
+     */
+    if (!this.#closed) {
+      this.#speaking = false;
+      this.#thinkingSince = this.#thinkingSince || this.#now();
+      this.#sink.state('thinking');
+    }
     switch (name) {
       case FEEL: {
         const mood = this.#brain.mood.nudge({

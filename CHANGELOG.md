@@ -4,6 +4,50 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.4 — 29 August 2026
+
+**She used to go completely still in the second where she was thinking.** The
+protocol has carried `thinking` and `speaking` since v1 and neither was ever
+emitted: the page went from `listening` straight back to `listening`, so the gap
+between somebody finishing a sentence and her first sound looked exactly like a
+companion who had not heard them. That gap is not small. The doctor measures
+1211ms to first sound; Vapi puts the line where a voice agent starts feeling
+sluggish at 800ms, and Nielsen puts the one where a person stops believing the
+system is responding at a second.
+
+**Nothing in the Live API says the model has started.** `generationComplete` and
+`turnComplete` both mark the end, and there is no field for the beginning — so
+the state is inferred from the two boundaries that are observable: their turn
+closing with no audio yet, and her first byte of audio ending it. A tool call
+re-enters it, because function calling on this model is sequential and the turn
+is stopped dead until the tool answers — a `recall` sits an embedding round trip
+inside the turn and `run` sits a shell command with a thirty-second deadline
+inside it.
+
+**The sphere breathes and one arc travels round it, and the regularity is the
+point.** Speech already drives the sphere through the level the app computes
+every frame, and speech is jagged. A slow even breath is the one motion that
+cannot be mistaken for it, so a person can tell "she is working" from "she is
+talking" without being told which is which. The arc is the other half: a breath
+alone reads as idling, and something travelling reads as work in progress.
+
+**`prefers-reduced-motion` has done nothing since v2.0.** A selector left
+dangling with a trailing comma — `.setup-row button:disabled,` with its
+declarations lost — swallowed the `@media` block that follows it, so the built
+stylesheet contained an at-rule inside a selector list, which browsers discard
+whole. Every animation in the interface has been ignoring the setting for three
+releases. The rule the orphaned comment describes is written out, and with it
+the reduced-motion block is a top-level at-rule again.
+
+Thinking keeps a still version for that case rather than disappearing with the
+rest: it is the one state whose whole job is to say she is there, and somebody
+who asked for less motion did not ask to be left staring at a still sphere
+wondering whether it is broken.
+
+### Migrating from v2.0.3
+
+Nothing to do.
+
 ## v2.0.3 — 29 August 2026
 
 **She was never choosing her own hours.** The first run has now been driven end
