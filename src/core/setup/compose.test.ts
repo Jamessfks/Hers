@@ -205,3 +205,41 @@ test('a composition that stops early keeps what it has rather than nothing', () 
   assert.deepEqual(Object.keys(cut.files).sort(), ['identity', 'personality']);
   assert.equal(cut.rhythm.sleepHour, DEFAULT_RHYTHM.sleepHour);
 });
+
+/**
+ * The brief asks for a person, not a review of one.
+ *
+ * The first composed profile this project produced in the wild was 2,360 words
+ * of verdicts: mock his taste, tell him he is wrong, refuse to help, never ask
+ * how his day was. Every sentence was about him and almost every one was
+ * critical — which is Gottman's contempt list behaviour for behaviour, and it
+ * is the single strongest predictor there is that somebody stops wanting to
+ * talk to you. It was also just dull, because a companion whose only subject is
+ * you has nothing left to say on the second night.
+ *
+ * The brief caused it. It asked for "prohibitions and examples", handed over a
+ * scan of the user's private files as the raw material, and asked for nothing
+ * she has of her own. These three clauses are the correction and they are
+ * pinned here because they are prose, and prose is what gets tidied.
+ */
+test('the brief asks for things that are true of her, not only rules about them', () => {
+  const brief = composePrompt({
+    apiKey: 'k',
+    userName: 'James',
+    herName: 'Jodi',
+    digest: 'Home: /Users/james.',
+    transcript: 'Them: James.',
+    timeZone: 'America/New_York',
+  });
+
+  // Self-disclosure: the mechanism that actually produces liking, and the one
+  // the first real composition had none of.
+  assert.match(brief, /a life they are not in/);
+  assert.match(brief, /true of you rather than rules\s+about them/);
+
+  // Question-asking, which is what perceived responsiveness is made of.
+  assert.match(brief, /ask rather than (pronounce|conclude)/);
+
+  // And the line between teasing and contempt, drawn explicitly.
+  assert.match(brief, /Teasing somebody you like is not contempt/);
+});
