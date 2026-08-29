@@ -169,3 +169,39 @@ test('the prompt only offers voices that exist', () => {
   assert.match(prompt, /Aoede \(breezy\)/);
   assert.doesNotMatch(prompt, /Scarlett/);
 });
+
+/**
+ * Her hours are asked for before her personality, and that is not cosmetic.
+ *
+ * `rhythm` is the shortest section in the brief and the only one the user can
+ * never edit afterwards, so it is the one that must survive a short answer. It
+ * used to be last. On the first live first run — 2026-08-29, against a real
+ * device scan — the answer ran out of room before reaching it, and she composed
+ * six good files and then kept the shipped default hours. Nothing failed;
+ * `parseComposed` is tolerant by design, so a section that was cut is
+ * indistinguishable from one nobody asked for.
+ */
+test('her hours are asked for before anything with a good default', () => {
+  const prompt = composePrompt({
+    apiKey: 'k',
+    userName: 'James',
+    herName: 'Jodi',
+    digest: 'Home: /Users/james.',
+    transcript: 'Them: James.',
+    timeZone: 'America/New_York',
+  });
+
+  const order = [...prompt.matchAll(/^===\s*(\w+)/gm)].map((match) => match[1]);
+  assert.equal(order[0], 'rhythm', 'the section that cannot be edited goes first');
+  assert.ok(order.includes('personality') && order.includes('boundaries'));
+});
+
+test('a composition that stops early keeps what it has rather than nothing', () => {
+  // Six files and no rhythm is the shape of a truncated answer. It has to come
+  // back as six files and the default hours, not as a failed first run.
+  const cut = parseComposed(
+    ['=== personality', 'You are specific.', '', '=== identity', 'You are twenty-seven.'].join('\n'),
+  );
+  assert.deepEqual(Object.keys(cut.files).sort(), ['identity', 'personality']);
+  assert.equal(cut.rhythm.sleepHour, DEFAULT_RHYTHM.sleepHour);
+});

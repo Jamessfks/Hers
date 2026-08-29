@@ -31,7 +31,7 @@
  *   has no editor. See `core/sleep/rhythm.ts` for why she gets to decide.
  */
 
-import { GoogleGenAI } from '@google/genai';
+import { FinishReason, GoogleGenAI } from '@google/genai';
 import { PROFILE_FILES } from '../../shared/profile-files.ts';
 import { VOICES } from '../../shared/voices.ts';
 import { DISTILLER_MODEL } from '../gemini/text.ts';
@@ -43,11 +43,23 @@ import type { Rhythm } from '../sleep/rhythm.ts';
  * Generous, and it needs to be.
  *
  * Six files of prose plus a voice and a rhythm, over a scan digest, on a model
- * that spends part of its output budget thinking before it writes. A cap sized
- * for the visible text truncates the last file, and the last file is
- * `boundaries.md`.
+ * that spends part of its output budget thinking before it writes — and spends
+ * most of it. Measured on 2026-08-29: 5,578 tokens of thought against 1,570 of
+ * visible text, from a cap of 8,000. That cap was set before `rhythm` existed
+ * and the comment here still named `boundaries.md` as the section at risk.
+ *
+ * The real first run showed what that costs. Against a genuine scan digest the
+ * answer ran out of room before the last section, so she composed six good
+ * files and then fell back to the shipped default hours — silently, because
+ * {@link parseComposed} is tolerant by design and a missing section is
+ * indistinguishable from one that was never asked for.
+ *
+ * Three things changed together: the cap is 24,000, which leaves room for the
+ * thinking this genuinely benefits from and the prose as well; `=== rhythm` is
+ * asked for first; and a truncated answer now says so instead of being quietly
+ * absorbed.
  */
-const COMPOSE_TOKENS = 8_000;
+const COMPOSE_TOKENS = 24_000;
 const COMPOSE_TIMEOUT_MS = 120_000;
 
 /** What one composition produced. */
@@ -104,6 +116,23 @@ async function askGemini(apiKey: string, prompt: string): Promise<string> {
       abortSignal: AbortSignal.timeout(COMPOSE_TIMEOUT_MS),
     },
   });
+
+  /*
+   * Say it out loud rather than parsing whatever arrived.
+   *
+   * This is the one generation in the program with no second chance — it runs
+   * once, on the first run, and what it writes is who she is from then on. A
+   * truncated answer still parses into most of a person, which is exactly why
+   * it went unnoticed for three releases. The text is still returned, because
+   * five good files beat none, but the line goes to the log so that a first run
+   * that quietly produced default hours is a thing somebody can find.
+   */
+  if (response.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS) {
+    console.warn(
+      `[setup] composition hit the ${String(COMPOSE_TOKENS)}-token cap; ` +
+        'sections near the end may have fallen back to their defaults.',
+    );
+  }
   return response.text ?? '';
 }
 
@@ -134,6 +163,22 @@ export function composePrompt(input: ComposeInput): string {
     '',
     'WRITE EXACTLY THESE SECTIONS, EACH OPENED WITH ITS OWN LINE OF THREE EQUALS',
     '',
+    /*
+     * Her hours come first, and the order is the point.
+     *
+     * This section is the shortest one here and the only one nobody can edit
+     * afterwards, so it is the one that must not be the casualty when the model
+     * runs out of room. It was last, and on a real device scan it was cut: the
+     * live first run on 2026-08-29 wrote six good files and fell back to the
+     * shipped default hours without anything failing.
+     */
+    '=== rhythm',
+    'Open with two lines reading `sleep: H` and `wake: H`, whole hours 0-23 in their',
+    `local time (their timezone is ${input.timeZone}). Infer them from when the files`,
+    'below were last touched and from anything said. Then one sentence, in the third',
+    'person, on why those hours. These are your hours, not theirs, and they cannot',
+    'change them.',
+    '',
     '=== personality',
     'Who you are, in the second person, as prohibitions and examples rather than',
     'adjectives. "Be warm" does nothing; "never say is there anything else" does.',
@@ -163,13 +208,6 @@ export function composePrompt(input: ComposeInput): string {
     '=== boundaries',
     'What you refuse, and what you do if they are in trouble. Be specific about the',
     'crisis case: you are the only thing in the room.',
-    '',
-    '=== rhythm',
-    'Open with two lines reading `sleep: H` and `wake: H`, whole hours 0-23 in their',
-    `local time (their timezone is ${input.timeZone}). Infer them from when the files`,
-    'below were last touched and from anything said. Then one sentence, in the third',
-    'person, on why those hours. These are your hours, not theirs, and they cannot',
-    'change them.',
     '',
     '--- WHAT WAS SAID ---',
     input.transcript.slice(0, 20_000) || '(nothing was said)',

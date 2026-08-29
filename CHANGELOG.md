@@ -4,6 +4,43 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.3 — 29 August 2026
+
+**She was never choosing her own hours.** The first run has now been driven end
+to end against the real API for the first time — three releases in, it never had
+been — and it works: she asks for a name, asks to look through the machine,
+takes a refusal and asks again differently, accepts, names herself, picks a
+voice and writes six composed files. And then wrote the shipped default bedtime,
+every time, which is the one thing about her the user is not allowed to change.
+
+The cause is the one this project has now hit twice. `gemini-3.5-flash` spends
+part of any output allowance thinking before it writes: measured here at 5,578
+tokens of thought against 1,570 of visible text, from a cap of 8,000 that was
+set before the rhythm section existed. Against a real device scan the answer ran
+out of room before the last section, and `rhythm` was the last section. Nothing
+failed — `parseComposed` is tolerant on purpose, and a section that was cut is
+indistinguishable from one nobody asked for, so six good files and a default
+bedtime is exactly what a truncated composition looks like from the outside.
+
+**Her hours are asked for first now**, because that section is the shortest in
+the brief and the only one that can never be edited afterwards, so it is the one
+that must survive a short answer. The cap is 24,000, which leaves room for the
+thinking this genuinely benefits from. And a composition that hits the cap says
+so in the log rather than being absorbed: it is the one generation in the
+program with no second chance, since what it writes is who she is from then on.
+
+With the fix, the same interview produces `sleep: 5`, `wake: 13` and a sentence
+about why — inferred from shell history and file modification times, which is
+what the feature always claimed to do.
+
+### Migrating from v2.0.2
+
+Nothing to do, unless you set her up on v2.0.0 through v2.0.2 — in which case
+`hers-profile/rhythm.md` almost certainly holds the default midnight-to-seven
+rather than hours she chose. Deleting that one file does not re-run the
+interview; the first run is gated on it existing. Starting over from the Setup
+panel does, and it deletes everything else with it.
+
 ## v2.0.2 — 29 August 2026
 
 **The sphere was never in the middle of the window.** `.stage` was still
