@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,43 +9,67 @@ import { WRITERS, WRITE_CALL_PATTERN } from './writers.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /**
- * The modules that touch the filesystem, found the same way a reader would.
+ * The modules that touch the filesystem.
  *
- * `grep` rather than a hand-rolled walk, because the point is that anyone can
- * run the identical command from `docs/PRIVACY.md` and get the identical
- * answer. A test that used its own private matching would prove something
- * nobody else can reproduce.
+ * Walked in Node rather than shelled out to `grep`, since v2.0.1. The original
+ * reason for `grep` was a good one — `docs/PRIVACY.md` quotes the command so a
+ * reader can run the identical thing and get the identical answer — but `grep`
+ * is not on a Windows runner, and this test failed there for every release
+ * anybody ever tagged. The guarantee was never the program; it was the
+ * *pattern*, which both this walk and the documented command take from
+ * {@link WRITE_CALL_PATTERN}, and which a separate test below pins to the copy
+ * printed in the document.
  */
+function writePattern(): RegExp {
+  // `WRITE_CALL_PATTERN` is a POSIX extended regular expression, because that is
+  // what `grep -E` in the document takes. `[[:space:]]` is the one construct
+  // JavaScript does not share, and it means exactly `\s`.
+  return new RegExp(WRITE_CALL_PATTERN.replaceAll('[[:space:]]', String.raw`\s`));
+}
+
+/** Every `.ts` and `.js` file under a directory, as absolute paths. */
+function sourceFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...sourceFiles(full));
+    } else if (/\.(ts|js)$/.test(entry.name)) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
 function modulesThatWrite(): string[] {
-  const output = execFileSync(
-    'grep',
-    [
-      '-rlE',
-      WRITE_CALL_PATTERN,
-      '--include=*.ts',
-      // `.js` as well as `.ts`, and `electron/` as well as `src/`, because the
-      // desktop entry point is plain JavaScript outside `src/` and it writes
-      // `hers.log`. Scanning only `src/**/*.ts` meant the one module added in
-      // the same round as this test was the one module it could not see, and
-      // the whole suite stayed green while `docs/PRIVACY.md` failed to name a
-      // file the program writes on every launch.
-      '--include=*.js',
-      '--exclude=*.test.ts',
+  const pattern = writePattern();
+  const files = [
+    // `electron/` as well as `src/`, because the desktop entry point is plain
+    // JavaScript outside `src/` and it writes `hers.log`. Scanning only
+    // `src/**/*.ts` meant the one module added in the same round as this test
+    // was the one module it could not see.
+    ...sourceFiles(path.join(root, 'src')),
+    ...sourceFiles(path.join(root, 'electron')),
+  ];
+
+  return files
+    .filter((file) => {
+      const name = path.basename(file);
       // `writers.ts` states the pattern, so it contains the pattern, so it
       // matches itself. A rule cannot be its own subject. The test below keeps
       // this carve-out from turning into a hiding place.
-      '--exclude=writers.ts',
-      'src/',
-      'electron/',
-    ],
-    { cwd: root, encoding: 'utf8' },
-  );
-  return output
-    .split('\n')
-    .filter(Boolean)
-    // `src/` is stripped so entries read `core/profile/profile.ts`; anything
-    // outside it keeps its directory, so `electron/main.js` stays itself.
-    .map((file) => (file.startsWith('src/') ? file.slice('src/'.length) : file))
+      if (name === 'writers.ts' || name.endsWith('.test.ts')) return false;
+      return pattern.test(readFileSync(file, 'utf8'));
+    })
+    .map((file) => {
+      // Forward slashes whatever the platform, so an entry reads
+      // `core/profile/profile.ts` on Windows as well as everywhere else and
+      // `WRITERS` does not need two spellings of every module.
+      const relative = path.relative(root, file).split(path.sep).join('/');
+      // `src/` is stripped so entries read `core/profile/profile.ts`; anything
+      // outside it keeps its directory, so `electron/main.js` stays itself.
+      return relative.startsWith('src/') ? relative.slice('src/'.length) : relative;
+    })
     .sort();
 }
 

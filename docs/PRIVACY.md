@@ -254,9 +254,17 @@ true, this paragraph is the thing that was wrong.
 ### `hers-actions.log`, and everything she did to this machine
 
 New in v2.0, and the most sensitive file this program writes after `.env`. It
-lives beside the memory database, it is owner-only, and it is opened for append
-and never for truncate — nothing in this program rewrites or shortens it, which
-is the property that makes it worth having at all.
+lives beside the memory database, and it is opened for append and never for
+truncate — nothing in this program rewrites or shortens it, which is the
+property that makes it worth having at all.
+
+It is created owner-only, `0600`, **on macOS and Linux**. On Windows it is not,
+and that is worth stating rather than leaving to be discovered: Node's `chmod`
+there can only toggle the read-only bit, because "owner only" is an access
+control list and not a mode. On Windows the file is protected by whatever
+protects the folder around it, which for a per-user application data directory
+is the account itself. The test that checks the mode is skipped there rather
+than quietly asserting something untrue.
 
 One tab-separated line per action: the time, which of the three tools, the exit
 code, the command or path itself, and the first four hundred characters of what

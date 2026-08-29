@@ -259,7 +259,17 @@ test('a command containing a newline cannot forge a second log line', async () =
   assert.match(log, /\\n/);
 });
 
-test('the log is owner-only', async () => {
+/**
+ * On POSIX. Windows has no equivalent and the claim is not made there.
+ *
+ * Node's `chmod` on Windows only toggles the read-only bit — it cannot express
+ * "owner only", because that is an ACL rather than a mode — so the file comes
+ * back 0o666 and asserting 0o600 fails. Skipping is the honest answer, and
+ * `docs/PRIVACY.md` says the same thing in words: the log holds absolute paths
+ * and command output, and on Windows it is protected by the profile directory
+ * around it rather than by its own permissions.
+ */
+test('the log is owner-only', { skip: process.platform === 'win32' }, async () => {
   const { hands: h, dir } = hands({ stdout: 'x' });
   await h.run('date');
   const { statSync } = await import('node:fs');

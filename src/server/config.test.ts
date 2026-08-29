@@ -213,10 +213,16 @@ test('the keys file is one name, resolved absolute, and the desktop build can mo
   // The packaged application cannot write beside its own executable, so it sets
   // this before the server starts. Every later write has to land in the same
   // file as the first, or the key you pasted is gone on the second launch.
+  //
+  // Compared through `path.resolve` rather than to the literal, because on
+  // Windows `/somewhere/keys.env` resolves to `C:\somewhere\keys.env` and the
+  // literal comparison failed there for every release anybody tagged. What is
+  // being asserted is that the value is taken and made absolute, not which
+  // separator the platform writes it with.
   const moved = { HERS_ENV_FILE: '/somewhere/keys.env' } as NodeJS.ProcessEnv;
-  assert.equal(envFilePath(moved), '/somewhere/keys.env');
+  assert.equal(envFilePath(moved), path.resolve('/somewhere/keys.env'));
 
   // The old name still works, for an install that predates the rename.
   const legacy = { ANNA_ENV_FILE: '/somewhere/old.env' } as NodeJS.ProcessEnv;
-  assert.equal(envFilePath(legacy), '/somewhere/old.env');
+  assert.equal(envFilePath(legacy), path.resolve('/somewhere/old.env'));
 });
