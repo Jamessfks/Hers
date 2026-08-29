@@ -990,6 +990,8 @@ export class Companion {
       ...(this.#brain.memory.runningSummary()
         ? { summary: this.#brain.memory.runningSummary() }
         : {}),
+      hersOwn: this.#brain.memory.hersOwn(),
+      openThreads: this.#brain.memory.openThreads(),
       senses: snapshot.senses,
       seeing: snapshot.seeing,
       localTime: snapshot.localTime,

@@ -558,3 +558,48 @@ test('the prompt never carries a window title as narration', () => {
     'the caption escaped its envelope',
   );
 });
+
+/**
+ * The three mechanisms, in the instruction rather than only in the brief.
+ *
+ * Self-disclosure is what produces closeness and it is reciprocal; follow-up
+ * questions are what being listened to is made of; and how far either of those
+ * goes is a function of how long two people have known each other, which is the
+ * curve `intimacy.ts` was already computing and nobody was reading.
+ */
+test('she is handed what she has already claimed about herself', () => {
+  const built = buildSystemInstruction({
+    ...input(),
+    hersOwn: ['I lived in Chengdu until I was twelve.'],
+  });
+  assert.match(built, /WHAT YOU HAVE TOLD THEM ABOUT YOURSELF/);
+  assert.match(built, /Chengdu until I was twelve/);
+  // The instruction that makes it continuity rather than a script.
+  assert.match(built, /Do not contradict any of it/);
+});
+
+test('a thread she let go is offered as a question, not as a list to clear', () => {
+  const built = buildSystemInstruction({
+    ...input(),
+    openThreads: ['He never said how the interview went.'],
+  });
+  assert.match(built, /THINGS YOU NEVER CAME BACK TO/);
+  assert.match(built, /how the interview went/);
+  assert.match(built, /Not a list to work through/);
+});
+
+test('neither section appears when there is nothing to put in it', () => {
+  const built = buildSystemInstruction(input());
+  assert.doesNotMatch(built, /WHAT YOU HAVE TOLD THEM ABOUT YOURSELF/);
+  assert.doesNotMatch(built, /THINGS YOU NEVER CAME BACK TO/);
+});
+
+test('how much of herself she opens moves with how long they have known each other', () => {
+  const shallow = buildSystemInstruction(input({ intimacy: { ...input().intimacy, percent: 1 } }));
+  const deep = buildSystemInstruction(input({ intimacy: { ...input().intimacy, percent: 60 } }));
+
+  assert.match(shallow, /wide and shallow/);
+  assert.doesNotMatch(shallow, /past the point of holding anything back/);
+  assert.match(deep, /past the point of holding anything back/);
+  assert.doesNotMatch(deep, /wide and shallow/);
+});

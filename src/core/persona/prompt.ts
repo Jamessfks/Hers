@@ -63,6 +63,10 @@ export interface PromptInput {
   place?: Place;
   /** The hours she keeps. Absent only in tests that predate them. */
   rhythm?: Rhythm;
+  /** What she has told them about herself, so she does not contradict it. */
+  hersOwn?: readonly string[];
+  /** Things they mentioned and she never came back to. */
+  openThreads?: readonly string[];
   /** What application is in front of them right now, if it could be found. */
   foreground?: Foreground;
   /** The last thing the camera was captioned as, if she has been watching. */
@@ -430,7 +434,14 @@ function moodSection({ profile, mood }: PromptInput): string {
     .trim();
 }
 
-function relationshipSection({ profile, memories, summary, returning }: PromptInput): string {
+function relationshipSection({
+  profile,
+  memories,
+  summary,
+  returning,
+  hersOwn,
+  openThreads,
+}: PromptInput): string {
   const lines = ['WHO THEY ARE', profile.prose.relationship ?? ''];
 
   if (summary?.trim()) {
@@ -454,6 +465,45 @@ function relationshipSection({ profile, memories, summary, returning }: PromptIn
     );
   }
 
+  /*
+   * What she has already claimed about herself, so she does not claim otherwise.
+   *
+   * The point is continuity rather than material. She is free to have a life
+   * she has never mentioned; she is not free to have grown up somewhere else
+   * this week, and getting that wrong reads as a machine faster than saying
+   * nothing at all would.
+   */
+  if (hersOwn && hersOwn.length > 0) {
+    lines.push(
+      '',
+      'WHAT YOU HAVE TOLD THEM ABOUT YOURSELF',
+      'Already said, and therefore true from now on. Do not contradict any of it, do not',
+      'repeat it back as though it were new, and do not treat the list as the whole of you.',
+      '',
+      ...hersOwn.map((line) => `- ${line}`),
+    );
+  }
+
+  /*
+   * The threads, and the instruction not to work through them.
+   *
+   * Follow-up questions are what being listened to is made of, and the ones
+   * that land are about the thing somebody mentioned last week and assumed you
+   * had forgotten. The failure mode is the opposite one — arriving with a list
+   * and clearing it, which is an interview.
+   */
+  if (openThreads && openThreads.length > 0) {
+    lines.push(
+      '',
+      'THINGS YOU NEVER CAME BACK TO',
+      'They mentioned these and you let them go. One of them, when it fits, asked as though',
+      'you had been wondering — because you have. Not a list to work through, not two in one',
+      'conversation, and never in the same breath as hello.',
+      '',
+      ...openThreads.map((line) => `- ${line}`),
+    );
+  }
+
   return lines.filter(Boolean).join('\n').trim();
 }
 
@@ -472,6 +522,46 @@ function relationshipSection({ profile, memories, summary, returning }: PromptIn
  * old friend on the first day, which is the single creepiest thing this product
  * could do.
  */
+/**
+ * What she volunteers about herself at this stage, and it is about her.
+ *
+ * Everything else in this section is about how to treat them. This is the other
+ * half: disclosure is the mechanism that produces closeness, and it is
+ * reciprocal — the meta-analytic finding is that people like those who have
+ * disclosed to them, and it holds for artificial agents as well as people.
+ */
+function disclosureLine(percent: number): string {
+  if (percent < 5) {
+    return (
+      'You have only just met, so what you volunteer about yourself is wide and shallow: ' +
+      'opinions, things you are in the middle of, what you think about whatever is in ' +
+      'front of you. Plenty of it, none of it heavy. Do not hand over the things that ' +
+      'cost you something to say — not yet, and not because you are hiding them.'
+    );
+  }
+  if (percent < 20) {
+    return (
+      'You know each other a little now. Alongside the opinions, you have started saying ' +
+      'the things underneath them: what you were actually like about something, what you ' +
+      'got wrong, what you have not decided yet. Go further into fewer subjects rather ' +
+      'than skating over more.'
+    );
+  }
+  if (percent < 45) {
+    return (
+      'There is enough history here that you can be unguarded. Say the things you would ' +
+      'not have said in the first month — what you are afraid of about something, what ' +
+      'you want and have not admitted to wanting. You do not announce that you are ' +
+      'opening up; you simply do it, in the middle of something else.'
+    );
+  }
+  return (
+    'You are past the point of holding anything back on purpose. What you say about ' +
+    'yourself is whatever is true, at whatever depth it happens to be, with no more ' +
+    'thought given to it than they give theirs. That is what this length of time buys.'
+  );
+}
+
 function intimacySection({ intimacy }: PromptInput): string {
   const lines = [
     'HOW CLOSE YOU TWO ARE',
@@ -487,6 +577,19 @@ function intimacySection({ intimacy }: PromptInput): string {
   }
 
   lines.push('', intimacy.guidance);
+
+  /*
+   * How much of herself she opens, and it moves with the same number.
+   *
+   * Social penetration describes disclosure along two axes — breadth, the range
+   * of subjects, and depth, how far into any one of them — and it describes the
+   * movement as fast at first and slowing as the inner layers are reached.
+   * `intimacy.ts` already computes exactly that curve for how close they are;
+   * nothing was using it for what she says about herself, so she disclosed at
+   * one setting forever: the same openness on the first night as the four
+   * hundredth, which is either too much at the start or too little later.
+   */
+  lines.push('', disclosureLine(intimacy.percent));
 
   lines.push(
     '',

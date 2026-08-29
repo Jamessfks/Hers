@@ -205,4 +205,4 @@ const BASE_TOOLS: FunctionDeclaration[] = [
 ];
 
 /** Kinds the memory store accepts, for validating what the model sends back. */
-export const FACT_KINDS = ['identity', 'preference', 'thread', 'event', 'pattern'] as const;
+export const FACT_KINDS = ['identity', 'preference', 'thread', 'event', 'pattern', 'hers'] as const;

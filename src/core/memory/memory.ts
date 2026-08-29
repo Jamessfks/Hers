@@ -41,7 +41,14 @@ const LIVE_TRANSCRIPT_TURNS = 24;
  */
 const SESSION_GAP_MS = 45 * 60 * 1000;
 
-const VALID_KINDS = new Set<FactKind>(['identity', 'preference', 'thread', 'event', 'pattern']);
+const VALID_KINDS = new Set<FactKind>([
+  'identity',
+  'preference',
+  'thread',
+  'event',
+  'pattern',
+  'hers',
+]);
 
 export interface MemoryOptions {
   store: MemoryStore;
@@ -266,6 +273,45 @@ export class Memory {
     return this.#store.allFacts().sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /**
+   * What she has told them about herself, newest first.
+   *
+   * Pulled by kind rather than by relevance, and handed over on every wake
+   * rather than searched for. Her own life is not something she should have to
+   * recall on the way to mentioning it — the failure it prevents is not
+   * forgetting, it is contradiction, and contradiction happens in exactly the
+   * moments nobody thought to run a query.
+   */
+  hersOwn(limit = 6): string[] {
+    return this.#store
+      .allFacts(['hers'])
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit)
+      .map((fact) => fact.text);
+  }
+
+  /**
+   * Threads she has not picked up, oldest first.
+   *
+   * `thread` has been a fact kind since v1 — "an open thread she should follow
+   * up on" — and nothing ever treated it as one. It was recalled by the same
+   * semantic ranking as everything else, which means it surfaced when the
+   * conversation was already about it, which is the one moment a follow-up is
+   * not a follow-up.
+   *
+   * Oldest first because that is what a follow-up is. The thing measured across
+   * two thousand conversations is that follow-up questions are what make a
+   * person feel listened to, and the ones that land are about the thing they
+   * mentioned last week and assumed you had forgotten.
+   */
+  openThreads(limit = 3): string[] {
+    return this.#store
+      .allFacts(['thread'])
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, limit)
+      .map((fact) => fact.text);
+  }
+
   /** Rewrites one fact. Re-embedded, so recall follows the new wording. */
   async reword(id: number, text: string): Promise<boolean> {
     const clean = text.trim();
@@ -381,14 +427,20 @@ Return exactly two sections and nothing else.
 
 FACTS
 One fact per line, formatted: kind | confidence | sentence
-  kind is one of: identity, preference, thread, event, pattern
+  kind is one of: identity, preference, thread, event, pattern, hers
   confidence is 0.0 to 1.0
-  sentence is one short third-person sentence about the person, not about her
+  sentence is one short third-person sentence about the person — except "hers",
+  which is one short first-person sentence about the companion herself
 
 Record only things that will still matter in a month. A durable fact is their
 sister's name, the job they are interviewing for, that they hate being asked how
-they slept. Not "they said hello", not "they seem tired today", and never
-anything the companion said about herself.
+they slept. Not "they said hello", not "they seem tired today".
+
+Use "hers" for anything the companion said about her own life, tastes or
+opinions — "I lived in Chengdu until I was twelve", "I think most crime novels
+are the same book". This used to be forbidden and that was the mistake: she
+volunteers things about herself, and with nowhere to put them she contradicted
+herself the following week. Record what she claimed, not what she felt.
 
 Prefer no facts over weak facts. Zero lines is a valid answer.
 

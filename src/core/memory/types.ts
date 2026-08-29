@@ -37,12 +37,29 @@ export type FactKind =
   /** Something that happened to them. */
   | 'event'
   /** A pattern she has noticed over time. */
-  | 'pattern';
+  | 'pattern'
+  /**
+   * Something she said about herself, in the first person.
+   *
+   * The only kind that is not about the user, and the reason it exists is
+   * continuity rather than vanity. Disclosure is what produces closeness — the
+   * meta-analytic finding is that people like those who have disclosed to them,
+   * and that it works reciprocally with artificial agents too — but a companion
+   * who discloses without remembering it grew up somewhere different every
+   * week, and inconsistent autobiography reads as a machine faster than
+   * silence does. So what she says about herself is written down like anything
+   * else, and handed back to her.
+   */
+  | 'hers';
 
 export interface Fact {
   id: number;
   kind: FactKind;
-  /** One sentence, written in the third person: "He is dreading Thursday's demo." */
+  /**
+   * One sentence. Third person for facts about them — "He is dreading
+   * Thursday's demo." — and first person for `hers`, because that is how she
+   * will say it again: "I have never been able to finish a Le Carré."
+   */
   text: string;
   /**
    * 0..1. Facts the user stated plainly score high; things she inferred from

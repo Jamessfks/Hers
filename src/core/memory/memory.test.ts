@@ -484,3 +484,39 @@ test('recall no longer rewards a fact for having been recalled', () => {
     RECALL_WEIGHTS.similarity + RECALL_WEIGHTS.recency + RECALL_WEIGHTS.confidence + RECALL_WEIGHTS.usage;
   assert.ok(Math.abs(total - 1) < 1e-9, `weights must still sum to 1, got ${total}`);
 });
+
+// ---------------------------------------------------------------------------
+// Her own life, and the threads she let go
+// ---------------------------------------------------------------------------
+
+test('what she said about herself is kept, and kept apart from what they said', async () => {
+  const { memory: m } = fixture();
+  await m.remember('identity', 'His sister is a doctor in Chengdu.', { confidence: 0.9 });
+  await m.remember('hers', 'I have never been able to finish a Le Carré.', { confidence: 0.8 });
+  await m.remember('hers', 'I lived in Chengdu until I was twelve.', { confidence: 0.9 });
+
+  const hers = m.hersOwn();
+  assert.equal(hers.length, 2, 'only her own');
+  assert.ok(hers.every((line) => line.startsWith('I ')), 'first person, because that is how she says it');
+  assert.ok(!hers.some((line) => line.includes('His sister')), 'their facts are not hers');
+});
+
+/*
+ * Oldest first, and that is the whole mechanism.
+ *
+ * A follow-up is only a follow-up if it is about the thing they assumed had
+ * been forgotten. Ranked by relevance — which is how `thread` facts surfaced
+ * before this existed — it can only arrive once the conversation is already
+ * about it, which is the one moment it is not worth asking.
+ */
+test('the oldest unfinished thread is the one she is handed first', async () => {
+  const { memory: m } = fixture();
+  await m.remember('thread', 'He never said how the interview went.', { confidence: 0.8 });
+  await new Promise((r) => setTimeout(r, 5));
+  await m.remember('thread', 'He was going to call his mother back.', { confidence: 0.8 });
+  await m.remember('event', 'He got a haircut.', { confidence: 0.7 });
+
+  const threads = m.openThreads();
+  assert.equal(threads[0], 'He never said how the interview went.');
+  assert.equal(threads.length, 2, 'only threads');
+});
