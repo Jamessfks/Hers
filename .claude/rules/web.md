@@ -28,7 +28,15 @@ with a build step.
   `ready` message carries `desktop` so the page knows which it is. Do not sniff
   the user agent for this.
 
-The interface carries twelve declared colours. Adding a thirteenth needs a
-reason — and watch for the ones you did not declare: Chrome will paint a focus
-ring, a range track and a checkbox border in its own greys and blues if you let
-it, which is how four arrived without anybody choosing them.
+- **There is one object on the page and it is centred.** The sphere is the
+  content, not an element within a layout. Anything else — her name, her mood,
+  the Setup button — is a caption or a control and must not push her off the
+  axis of the window. The caption is out of flow beneath her for exactly that
+  reason.
+
+The interface carries twelve declared colours on a dark ground. Adding a
+thirteenth needs a reason — and watch for the ones you did not declare: Chrome
+will paint a focus ring, a range track and a checkbox border in its own greys
+and blues if you let it, which is how four arrived without anybody choosing
+them. Raw `oklch()` outside `:root` is the other way one arrives; the sphere's
+highlight is `--ink` mixed toward `--accent` rather than a new white.

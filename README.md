@@ -46,8 +46,9 @@ explains every decision below that would otherwise look like a missing feature.
 There is no transcript because rereading a conversation is not what you want at
 eleven at night. There is no personality editor because a companion you can
 configure is a configuration. There is no avatar because a picture of a person is
-not company. What is left is a voice in the room, and a sphere so you can see it
-is listening.
+not company. What is left is a voice in the room, and a sphere on a dark field so
+you can see it is listening — one object, centred, that brightens and widens its
+glow as she speaks and goes cool and dim when she sleeps.
 
 v1.4.1 was a chat application with an avatar panel, a photo gallery and a
 seven-card setup wizard. v2.0 removed all of it. If you are upgrading, read the

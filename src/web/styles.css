@@ -1,148 +1,140 @@
 /*
  * Her interface.
  *
- * A companion window, not a dashboard. Two halves: she is on the left at the
- * size a person is, and the conversation is on the right in bubbles. That shape
- * is borrowed deliberately from Replika, where the figure is the larger half of
- * the screen and the chat sits beside it — the point of a companion app is that
- * you are looking at someone, not reading a log.
+ * One sphere on a dark field, and nothing else. This sheet used to open by
+ * describing two halves — her on the left at the size a person is, the
+ * conversation on the right in bubbles, the shape borrowed from Replika — and
+ * that is worth recording because it is what everything below was designed for.
+ * v2.0 deleted the conversation. The description outlived it by a release, and
+ * so did `grid-template-columns` on the stage, which left the sphere sitting at
+ * about 47% of a window with nothing in the other column.
  *
- * Twelve colours, and the ground is paper rather than screen. This sheet
- * carried thirty-three distinct colour values, nine of them written into rules
- * that bypassed the tokens above them, over a #fbfaf8 ground that is white with
- * an apology. Four colours cover 96.1% of Tolan's page and its canvas is a
- * #f4f2e7 cream; ours is oklch(96.2% 0.016 96), which resolves to #f5f3e7.
+ * ## The ground is night now
  *
- * Depth is a tint step and a hairline, never a shadow. The three surfaces sit
- * inside a 4.4% lightness band — #faf9f1 raised, #f5f3e7 ground, #eeeadb sunken
- * — and every division in the interface is the same 1px #dbd8cb. Enumerating
- * the rendered elements on Tolan's page gives zero box-shadows, and Pi declares
- * four shadow tokens and renders none of them; the one left here is `--lift`,
- * on the four things that genuinely float above the page. The conversation used
- * to be a white card with an 18px radius and a shadow standing on the paper. It
- * is now a region: one tint step and one hairline away from her half, and
- * square where they meet, because a layout surface with a corner radius is a
- * widget pretending to be a room.
+ * The old ground was paper: oklch(96.2% 0.016 96), a warm cream chosen against
+ * Tolan's #f4f2e7, for an interface that was mostly text. There is no text to
+ * read any more. A sphere on paper is an illustration of a sphere; a sphere on
+ * black is a light source in a room, and the whole product is that she is
+ * present in the room. So the neutrals invert and the accent goes up rather
+ * than down — it has to look emitted, not painted.
  *
- * The accent is hers, and it is one object. `--mood-hue` and `--mood-lift` are
- * written from the mood vector by the app, so the colour of the primary action
- * is her colour and a flat mood really is a different blue from a bright one.
- * Everything that used to be tinted for decoration — pressed senses, ticked
- * boxes, memory chips, the send button beside an empty field — is either a 12%
- * wash of it or nothing at all, so a resting screen has exactly one saturated
- * thing asking to be pressed.
+ * The depth system survives the inversion unchanged: three surfaces inside a
+ * narrow lightness band, every division a single 1px hairline, and one shadow
+ * token used only by the things that genuinely float. There are no box-shadows
+ * on the sphere. Its glow is a gradient on its own layer, which composites,
+ * where a shadow large enough to read as light repaints the button every frame.
+ *
+ * The specular highlight on the sphere and the bright middle of its horizon
+ * line are not new colours: both are `--ink` — the near-white this page writes
+ * its text in — mixed toward her accent, so the light on her is the same light
+ * everything else here is lit by, and the sheet still declares twelve.
+ *
+ * ## The accent is hers, and it is one object
+ *
+ * `--mood-hue` and `--mood-lift` are written from the mood vector by the app,
+ * so a flat mood really is a different blue from a bright one, and the sphere,
+ * the ring, the bloom and the primary button are all the same colour because
+ * they are all the same fact.
  *
  * Written in OKLCh because its lightness is perceptually uniform, and that is
- * what makes a contrast floor keepable. White on the old accent measured 1.87:1
- * at the low end of her mood: an HSL lightness of 47% means something different
- * at hue 154 than at hue 278, which is why that line carried a hand-tuned fudge
- * factor and still failed. At L 0.49–0.53 and chroma 0.13 the worst hue in the
- * range is 190 and white on it measures 4.68:1. Rejected: clipping the hue
- * range to the part of the wheel that behaves, which would have taken the mood
- * out of the mood colour.
+ * what makes a contrast floor keepable. An HSL lightness of 47% means something
+ * different at hue 154 than at hue 278, which is why the old accent measured
+ * 1.87:1 at the low end of her mood while carrying a hand-tuned fudge factor.
+ * Every ink here is stated with the surface it has to clear.
  *
- * One face, and the thread carries the hierarchy instead.
+ * ## One face, two weights, and no negative tracking
  *
- * An earlier version set her transcript lines in a serif at 22px, on the
- * argument that the reading surface should be a different medium from the
- * interface — which is true of Pi, and true of a page. It is not true of a
- * message thread, and this is a message thread: the same person, all day, in
- * the shape Replika already put in their hands. Both speakers are 15px sans in
- * a capsule now, and what separates them is the side and the fill.
+ * Nothing in the scale is above 24px, and tightening 13px text is how a sans
+ * ends up illegible at the size most of an interface is written in. The one
+ * exception is her name, which is tracked *out* rather than in: it is four
+ * lowercase letters under a light, and it is a label on an object rather than
+ * something to read.
  *
- * Two weights, 400 and 500, and no negative tracking anywhere: nothing in the
- * scale is above 24px, and tightening 13px text is how a sans ends up illegible
- * at the size most of the interface is written in.
- * string on the screen belonging to an input placeholder; it is 11px to 22px,
- * 2.0:1, and the largest string is something she said.
+ * ## The page has no margins
  *
- * The page has no margins. It used to have three unrelated ones — 66px above
- * the conversation, 22px below it, 128px of bare canvas to its right, where a
- * 1240px column left the pane stranded — and a single rule on the pane's left
- * edge and nothing on the other three. Now the rule is: where two regions meet
- * there is one 1px hairline, and where a region meets the window there is
- * nothing. The bar's underline and the seam between the halves are the same
- * line, and the conversation runs to the bottom and right of the glass.
+ * Where two regions meet there is one hairline; where a region meets the window
+ * there is nothing. The bar does not sit in a band any more — it floats over
+ * the field, so the sphere is centred in the glass rather than in the space
+ * left beneath a header.
  *
  * Boundaries that identify a control are drawn in `--ink-faint`, not
- * `--hairline`.
- *
- * `--hairline` on `--raised` is 1.35:1 and WCAG 1.4.11 wants 3:1 from anything
- * needed to tell a control apart from the page. Darkening the hairline itself
- * to reach it means a mid-grey box around every division in the interface,
- * which is the whole depth system thrown away for one number. 1.4.11 asks only
- * about the boundary you *need*: a button with a label, an icon button with an
- * icon at 5.47:1, and a composer with a send arrow in it are all identified by
- * what is inside them, so those keep the hairline. An empty text field is not
- * identified by anything, so every field — and only a field — carries a 1px
- * `--ink-faint` edge, which measures 5.47:1 on `--raised` and 4.80:1 on
- * `--sunken`. That is an existing ink, so the count is still twelve.
+ * `--hairline`. WCAG 1.4.11 asks about the boundary you *need*: a button with a
+ * label and an icon button with an icon are identified by what is inside them,
+ * so those keep the hairline. An empty text field is identified by nothing, so
+ * every field — and only a field — carries a 1px `--ink-faint` edge.
  */
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
   /*
-   * Four warm neutrals and one rule.
+   * Four neutrals, and the ground is night rather than paper.
    *
-   * Nothing here is chosen for how it looks alone; they are chosen for the size
-   * of the step between them. Raised, ground and sunken span 4.4% of lightness,
-   * close to Tolan's 2% between #f4f2e7 and #edece2 and Pi's 1.5% across three
-   * surfaces, and that step plus `--hairline` is the whole depth system.
+   * Until v2.0.1 this was a warm cream — the right answer for the interface it
+   * was written for, which was a message thread with a figure beside it and a
+   * lot of text to read. There is no text to read any more. What is left is one
+   * sphere, and a sphere on paper is an illustration of a sphere; a sphere on
+   * black is a light source in a room. The step between the three surfaces is
+   * still the whole depth system, and it is still small — 9% of lightness
+   * across raised, ground and sunken — because the dialogs stacked on this
+   * ground have to read as planes rather than as holes.
+   *
+   * The hue is 264, a blue so far from neutral it is barely a colour, chosen so
+   * that nothing on the page is ever a true grey next to an orb that is always
+   * some hue or another.
    */
-  --paper: oklch(96.2% 0.016 96);
-  --raised: oklch(98% 0.01 96);
-  --sunken: oklch(93.6% 0.02 96);
-  --hairline: oklch(88% 0.017 96);
+  --paper: oklch(14% 0.015 264);
+  --raised: oklch(19% 0.016 264);
+  --sunken: oklch(10% 0.012 264);
+  --hairline: oklch(28% 0.018 264);
 
   /*
-   * Three inks, and the faintest one is bound by the smallest text it carries.
+   * Three inks, and the faintest one is still bound by the smallest text.
    *
-   * `--ink-faint` was #9a948c: 3.00:1 on the card, 2.88 on the paper, 2.67 on
-   * the sunken surface, at eighteen call sites almost all under 14px. It is now
-   * the lightest ink that still clears 4.5:1 on `--sunken`, the darkest thing it
-   * ever sits on, which measures 4.77:1 — light enough to stay subordinate to
-   * `--ink-soft` at 7.03:1 and readable by someone who is not twenty-five.
+   * The rule that set the old `--ink-faint` has not changed: it is the dimmest
+   * ink that still clears 4.5:1 on the lightest surface it ever sits on, which
+   * here is `--raised` at 19%. 63% measures 4.9:1 there and 6.9:1 on the ground.
    */
-  --ink: oklch(28% 0.012 80);
-  --ink-soft: oklch(42% 0.014 80);
-  --ink-faint: oklch(51% 0.014 80);
+  --ink: oklch(96% 0.006 264);
+  --ink-soft: oklch(76% 0.012 264);
+  --ink-faint: oklch(63% 0.014 264);
 
   /*
-   * Her colour. Hue is the mood; lightness is not negotiable.
+   * Her colour. Hue is the mood; lightness is what makes it a light.
    *
-   * The lift still moves the accent, but only within the 4% band that keeps
-   * white on it above 4.5:1 for every hue between 154 and 278 — the range
-   * `setMood` can produce. Chroma is 0.13 rather than the old ~0.20 for the same
-   * reason Tolan shows no accent at all until you hover: the loudest thing on a
-   * screen should be the thing you are looking at, and here that is her face.
+   * Inverted from the light theme and for the same reason it was pinned there.
+   * On paper the accent had to stay dark enough for white to sit on it, so it
+   * lived at 49–53%. On night it has to be bright enough to look emitted rather
+   * than painted, so it lives at 62–68% — and the text that sits on it is the
+   * ground rather than white, which measures 6.1:1 at the dimmest end of the
+   * range and gets better from there. Chroma is up from 0.13 to 0.16 because a
+   * desaturated glow reads as fog.
    */
   --mood-hue: 268;
   --mood-lift: 0.55;
-  --accent: oklch(calc(53% - var(--mood-lift) * 4%) 0.13 var(--mood-hue));
-  --accent-ink: #ffffff;
-  --accent-wash: color-mix(in oklab, var(--accent) 12%, var(--paper));
+  --accent: oklch(calc(62% + var(--mood-lift) * 6%) 0.16 var(--mood-hue));
+  --accent-ink: oklch(12% 0.02 264);
+  --accent-wash: color-mix(in oklab, var(--accent) 18%, var(--paper));
 
   /*
-   * One alarm colour, not eleven.
+   * One alarm colour, lifted for the ground it now sits on.
    *
-   * Warning and danger were eleven hand-chosen hexes across two families, plus a
-   * green that existed to say "saved". A red is the one hue the neutrals cannot
-   * stand in for; amber and green are not, so the notice keeps its words and
-   * loses its tint, and a good status is simply ink. Used as a hairline and as
-   * text, never as a fill — a block of colour is how a warning becomes wallpaper.
+   * The same argument as before — a red is the one hue the neutrals cannot
+   * stand in for — at the lightness a dark page needs to carry it as text.
    */
-  --alert: oklch(50% 0.15 27);
+  --alert: oklch(68% 0.17 27);
 
   /*
-   * The only translucent value in the sheet, and it does both jobs.
+   * The backdrop is the sunken surface with the floor taken out.
    *
-   * A modal backdrop and the shadow under a modal are the same statement — this
-   * floats and the page beneath it does not — so they are the same 30% ink
-   * rather than two hand-tuned alphas that drift apart.
+   * A modal backdrop and the shadow under a modal are still the same statement,
+   * and it is still one value. It is expressed from `--sunken` rather than a
+   * fifth neutral so the count stays at twelve: on a dark ground the thing
+   * behind a dialog should read as more of the same night, not as a grey wash
+   * laid over it.
    */
-  --veil: color-mix(in oklab, var(--ink) 30%, transparent);
-  --lift: 0 24px 60px -22px var(--veil);
+  --veil: color-mix(in oklab, var(--sunken) 78%, transparent);
+  --lift: 0 32px 80px -24px var(--veil);
 
   /*
    * Two radii, a pill and a circle. `999px` was written out fourteen times and
@@ -162,8 +154,7 @@
    * One space value for the page and one measure for the reading column.
    *
    * The gutter is the distance from any content to the edge of the region it
-   * lives in, everywhere: the bar, the presence column, the transcript, the
-   * composer row. There is no fourth number and no page margin at all.
+   * lives in, everywhere. There is no fourth number and no page margin at all.
    */
   --gutter: clamp(18px, 2.2vw, 32px);
   --measure: 38rem;
@@ -250,6 +241,9 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * around any of them.
  */
 .app {
+  /* The bar floats over this rather than sitting above it, so the stage is the
+     whole window and the sphere is centred in the glass, not in what is left. */
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100dvh;
@@ -273,59 +267,63 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 
 /* The bar's underline and the seam down the middle are the same hairline, and
    together they are the only two rules the page draws. */
+/*
+ * The chrome gets out of the way.
+ *
+ * This was a ruled band across the top carrying a status dot, her name, her
+ * mood, the connection state as a word, and a button. Five things, above a page
+ * whose entire content is one sphere — so the first thing the eye landed on was
+ * a row of small grey text, and the sphere came second.
+ *
+ * What is left is the one control that has to be reachable. It floats over the
+ * field rather than sitting in a band, so the sphere is centred in the window
+ * and not in the space left over beneath a header.
+ */
 .bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px var(--gutter);
-  border-bottom: 1px solid var(--hairline);
+  gap: 12px;
+  padding: var(--gutter);
 }
 
-.identity { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.identity { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
-.dot {
-  width: 8px; height: 8px; border-radius: var(--circle);
-  background: var(--ink-faint); align-self: center; flex: none;
-  transition: background 400ms ease, outline-color 400ms ease;
+.name {
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: var(--ink-soft);
 }
-/* An outline rather than a spread shadow: it is a halo, it takes no space, and
-   it keeps the sheet's shadow count at one. */
-.app[data-state='listening'] .dot,
-.app[data-state='speaking'] .dot {
-  background: var(--accent);
-  outline: 4px solid var(--accent-wash);
-}
-.app[data-state='connecting'] .dot,
-.app[data-state='reconnecting'] .dot { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
-.app[data-state='error'] .dot { background: var(--alert); }
 
-.name { font-weight: 500; font-size: 17px; }
-.mood { color: var(--ink-faint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.bar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.mood { color: var(--ink-faint); font-size: 13px; }
 
 /*
- * The header has to survive 320px, and it never did.
+ * The connection state is announced and not drawn.
  *
- * `.bar-actions` was `flex: none` with no wrap inside a row that cannot scroll
- * — `body` is `overflow: hidden` — so the last button simply left the window.
- * Measured at 390px it overhung by 19.6px and hit-testing its centre returned
- * the button beside it, which is a control that exists and cannot be pressed.
- * Renaming Face to Avatar made it worse, because the word is longer.
- *
- * Below 640px the bar becomes two rows: who she is, then what you can open.
- * The actions wrap and scroll horizontally as a last resort, so no button can
- * be pushed out of reach however narrow the window or long the label.
+ * A word reading "listening" under a sphere that is visibly listening is the
+ * same fact twice, and the sphere is better at it. It stays in the document as
+ * a live region so that somebody using a screen reader — for whom the sphere
+ * says nothing at all — is told what it is doing.
  */
-@media (max-width: 640px) {
-  .bar { flex-wrap: wrap; gap: 8px 12px; padding: 12px var(--gutter); }
-  .identity { flex: 1 1 100%; }
-  .bar-actions {
-    flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start;
-    overflow-x: auto; scrollbar-width: none;
-  }
-  .bar-actions::-webkit-scrollbar { display: none; }
+.state, .dot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* One button in a corner needs no breakpoint. What the narrow case does need is
+   a smaller sphere, and that is `min(64vh, 420px)` doing its job. */
   .state { margin-right: 0; }
 }
 .state { color: var(--ink-faint); font-size: 11px; font-weight: 500; font-variant: small-caps; letter-spacing: 0.08em; margin-right: 4px; }
@@ -346,7 +344,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 .ghost:hover { border-color: var(--accent); color: var(--ink); }
 .ghost:active { transform: translateY(1px); }
 
-/* -- Stage: she is the larger half ---------------------------------------- */
+/* -- Stage: there is nothing else ----------------------------------------- */
 
 /*
  * No gutter between the halves, because the seam is the divider.
@@ -356,62 +354,66 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * read as two rooms. The columns are unchanged — only the space between them is
  * gone, and the padding each side already carried takes over the job.
  */
+/*
+ * One field, and she is in the middle of it.
+ *
+ * This was `grid-template-columns: minmax(300px, 0.9fr) 1fr` — she stood in the
+ * left column and the conversation filled the right. v2.0 deleted the
+ * conversation and left the grid, so the sphere spent a whole release sitting
+ * at about 47% of the window, off the axis of a page with nothing else on it.
+ * There is one thing to look at now, so there is one column, and the thing is
+ * in the centre of it.
+ */
 .stage {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) 1fr;
-  gap: 0;
+  place-items: center;
   min-height: 0;
-}
-
-@media (max-width: 900px) {
-  .stage { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-}
-
-/*
- * Symmetric padding, because the column was 47px off its own axis.
- *
- * Padding only on the right pushed everything in here left of centre while the
- * page's own left margin pushed the column right, and the two did not cancel:
- * the content's centre landed 47px from the centre of the space it sat in. The
- * gutter is now the same on both sides and there is no page margin to fight, so
- * her portrait is on the axis of its own half.
- */
-.presence {
-  min-width: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 16px; min-height: 0;
   padding: var(--gutter);
 }
 
-@media (max-width: 900px) {
-  .presence { padding-bottom: var(--gutter); }
+/*
+ * The sphere is centred, and the caption hangs off it.
+ *
+ * The obvious arrangement — a centred column holding the sphere and the words —
+ * centres the *group*, which pushes the sphere above the middle of the window
+ * by half the height of the text under it. On a page with one object on it,
+ * that object is the thing that should be on the axis. So the presence box is
+ * the sphere and nothing else, and the caption is taken out of flow beneath it.
+ */
+.presence {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/*
- * Her voice, drawn as a ring that stands off further the louder she is.
- *
- * This was a 58px blurred glow, which is a shadow, and shadows are gone. An
- * outline offset by `--level` gives the same "she is speaking" reading without
- * a drop shadow anywhere in the sheet, and unlike a blur it costs nothing to
- * repaint sixty times a second.
- */
+.caption {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: clamp(24px, 4vh, 44px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  white-space: nowrap;
+}
 
-/* Stands in until there is a photograph, and it is allowed to be the one
-   saturated thing on the page — on Tolan every bit of chroma in the frame
-   belongs to the character, not the furniture. */
-/* The only affordance on the page, and since v2.0 a real button rather than a
-   div — tapping her is what wakes her, and `player.unlock()` will not run
-   outside a user gesture. Every one of Chrome's own button paints is turned off
-   explicitly: left alone it draws a border, a background and a system font, and
-   the interface's twelve declared colours would quietly become fifteen. */
 .orb {
   --level: 0;
   position: relative;
-  flex: 0 1 auto;
-  width: min(52vh, 300px);
-  max-height: 52vh;
+  flex: none;
+  /*
+   * Bounded on all three axes, and the width one is not decoration.
+   *
+   * `min(64vh, 420px)` alone is 420px on a 375px phone: the ball ran off both
+   * edges and the ring around it was clipped to two arcs. 78vw leaves the ring
+   * a margin at the narrowest width anybody will open her at.
+   */
+  width: min(64vh, 78vw, 420px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -422,196 +424,138 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   font: inherit;
   color: inherit;
   cursor: pointer;
+  /* The tap target is the ball, not the bloom around it, which extends well
+     past the element and would otherwise swallow clicks meant for the page. */
+  isolation: isolate;
 }
-.orb:active .orb-core { transform: scale(calc(1 + var(--level) * 0.12 - 0.03)); }
+
+.orb:focus-visible { outline: none; }
+.orb:focus-visible .orb-ring { border-color: var(--accent); }
 .orb[hidden] { display: none; }
+
+/*
+ * The light she throws, which is most of what makes her look emitted.
+ *
+ * Scaled well past the element and blurred, so the edge of the gradient never
+ * lands on a pixel a person can find. It carries the largest share of `--level`
+ * — 0.34 against the ball's 0.06 — because loudness should read as reach.
+ */
+.orb-bloom {
+  position: absolute;
+  inset: -55%;
+  border-radius: var(--circle);
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklab, var(--accent) 34%, transparent) 0%,
+    color-mix(in oklab, var(--accent) 10%, transparent) 38%,
+    transparent 68%
+  );
+  transform: scale(calc(1 + var(--level) * 0.34));
+  transition: transform 220ms ease-out, opacity 900ms ease;
+  pointer-events: none;
+}
+
+/*
+ * The ball. Lit from above and behind, the way a sphere in a room is.
+ *
+ * Two gradients rather than one: the first is the light on it, offset to 34/26
+ * so the highlight sits where a source above and to the left would put it; the
+ * second is the terminator, a darkening toward the lower right that stops the
+ * whole thing reading as a flat disc with a shine painted on.
+ */
 .orb-core {
-  position: absolute; inset: 16%; border-radius: var(--circle);
-  background: radial-gradient(circle at 34% 28%, var(--accent-wash), var(--accent) 76%);
-  transform: scale(calc(1 + var(--level) * 0.12));
-  transition: transform 90ms ease-out, background 900ms ease;
+  position: absolute;
+  inset: 12%;
+  border-radius: var(--circle);
+  background:
+    radial-gradient(
+      circle at 34% 26%,
+      color-mix(in oklab, var(--ink) 82%, var(--accent)) 0%,
+      var(--accent) 42%,
+      color-mix(in oklab, var(--accent) 72%, var(--sunken)) 78%
+    ),
+    radial-gradient(
+      circle at 72% 82%,
+      color-mix(in oklab, var(--sunken) 62%, transparent) 0%,
+      transparent 58%
+    );
+  transform: scale(calc(1 + var(--level) * 0.06));
+  transition: transform 90ms ease-out, background 900ms ease, filter 900ms ease;
 }
+
+/*
+ * One line across her, and it is what makes the sphere futuristic rather than
+ * merely round.
+ *
+ * A single bright latitude at 52% — just below the equator, so it reads as
+ * horizon rather than as a belt — with the ends faded out so it never touches
+ * the silhouette. It brightens with `--level` instead of moving, which is the
+ * cheapest possible "she is speaking" signal that is not a size change.
+ */
+.orb-horizon {
+  position: absolute;
+  inset: 12%;
+  border-radius: var(--circle);
+  overflow: hidden;
+  pointer-events: none;
+  opacity: calc(0.34 + var(--level) * 0.5);
+  transition: opacity 140ms ease-out;
+}
+.orb-horizon::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--ink) 88%, var(--accent)) 50%,
+    transparent 100%
+  );
+}
+
+/*
+ * The ring, sitting off the ball rather than on it.
+ *
+ * At `inset: 2%` against a core at 12% there is a tenth of the width of clear
+ * space between them, which is what stops it looking like a border on a button.
+ * It is her colour at low alpha, not the hairline: a neutral ring around a
+ * coloured light is a picture frame.
+ */
 .orb-ring {
-  position: absolute; inset: 2%; border-radius: var(--circle);
-  border: 1px solid var(--hairline);
-  transform: scale(calc(1 + var(--level) * 0.05));
-  transition: transform 160ms ease-out;
+  position: absolute;
+  inset: 2%;
+  border-radius: var(--circle);
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  transform: scale(calc(1 + var(--level) * 0.03));
+  transition: transform 160ms ease-out, border-color 400ms ease;
+  pointer-events: none;
 }
-.app[data-state='asleep'] .orb-core { filter: saturate(0.4); }
+
+.orb:active .orb-core { transform: scale(calc(1 + var(--level) * 0.06 - 0.025)); }
+
+/*
+ * Asleep is dimmer and cooler, and it is the only state with its own look.
+ *
+ * Everything else — listening, speaking, thinking — is already carried by
+ * `--level` and the hue, which is the point of driving them from one number.
+ * Sleep is the one state where nothing is arriving, so there is nothing for
+ * `--level` to say, and it has to be said in the styling instead.
+ */
+.app[data-state='asleep'] .orb-core { filter: saturate(0.28) brightness(0.62); }
+.app[data-state='asleep'] .orb-bloom { opacity: 0.28; }
+.app[data-state='asleep'] .orb-horizon { opacity: 0.12; }
+/* The ring goes with her. A saturated ring around a desaturated ball is the one
+   part of the sphere still claiming to be awake. */
+.app[data-state='asleep'] .orb-ring,
+.app[data-state='error'] .orb-ring {
+  border-color: color-mix(in oklab, var(--ink-faint) 26%, transparent);
+}
+.app[data-state='error'] .orb-core { filter: saturate(0.2) brightness(0.5); }
 
 .hint { flex: none; margin: 0; max-width: 30ch; color: var(--ink-faint); font-size: 13px; text-align: center; }
-
-/* -- Conversation ---------------------------------------------------------- */
-
-/*
- * A region, not a card.
- *
- * One tint step lighter than the paper and divided from her half by a single
- * hairline, square on that seam and on the two edges that meet the window.
- * The card it replaced was pure white with an 18px radius and a 22px shadow,
- * which is the widget look both bars avoid: a panel floating over a page is one
- * more object to read, and there is only one page.
- */
-.conversation {
-  display: grid; grid-template-rows: 1fr auto auto;
-  /* A grid item's automatic minimum is its content, so at 320px the composer
-     row held both tracks 16px wider than the window and the whole page
-     overflowed. Neither column needs to be wider than the space it is given. */
-  min-height: 0; min-width: 0;
-  background: var(--raised);
-  border-left: 1px solid var(--hairline);
-  border-radius: 0;
-  overflow: hidden;
-}
-
-@media (max-width: 900px) {
-  .conversation { border-left: 0; border-top: 1px solid var(--hairline); }
-}
-
-/*
- * Two bubbles, the way a message thread does it.
- *
- * The version this replaces set her side as a 22px serif reading surface with
- * nothing drawn round it and kept a bubble only for you. It measured well — a
- * blind critic picked it over Pi's transcript — and it was the wrong shape for
- * this product. Somebody who talks to her all day is in an instant messenger,
- * not reading a page with half of it typeset, and Replika is the thread they
- * already have in their hands: both speakers in a capsule, the bubble hugging
- * the text, no tail on either side, no name printed on either.
- *
- * So both sides are one size, one face and one shape, and only the side and
- * the fill differ. Hers is a tint step down from the pane, yours is her
- * colour. That is two mechanisms where the last version ran six.
- */
-.line {
-  display: flex; flex-direction: column;
-  max-width: min(78%, 32rem);
-  animation: rise 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-.line[data-who='her'] { align-self: flex-start; align-items: flex-start; }
-.line[data-who='user'] { align-self: flex-end; align-items: flex-end; }
-
-/* A turn begins where the speaker changes; inside a run the bubbles tuck up. */
-.line[data-same='false'] { margin-top: 14px; }
-.line:first-child { margin-top: 0; }
-
-/*
- * The speaker is said out loud and drawn not at all.
- *
- * A thread does not caption every bubble — the side and the fill carry it, and
- * Replika prints no name on either one. A screen reader has neither of those,
- * so the label stays in the document and leaves the page. It is also the
- * element `ui.ts` rewrites the moment she chooses her own name, so removing it
- * would take the name with it.
- */
-.line .who {
-  position: absolute; width: 1px; height: 1px;
-  margin: -1px; padding: 0; border: 0;
-  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
-}
-
-.line .said {
-  margin: 0;
-  padding: 10px 16px;
-  border-radius: var(--bubble);
-  font-size: 15px; line-height: 1.45;
-  white-space: pre-wrap; word-break: break-word;
-}
-.line[data-who='her'] .said { background: var(--sunken); color: var(--ink); }
-.line[data-who='user'] .said { background: var(--accent); color: var(--accent-ink); }
-
-/*
- * Still being transcribed: a caret, and full-strength ink.
- *
- * This was `opacity: 0.62` on the whole line, which rasterises the bubble and
- * its text together and then composites the pair — so a user line in flight
- * painted white-at-62% over `--raised` on accent-at-62% over `--raised`, which
- * is 2.50:1 at hue 194 and never reaches 4.5:1 at any hue or lift. It is the
- * text somebody reads while they are still speaking, so it was the worst place
- * in the interface to be putting a transparency. Nudging the number does not
- * help: the fill fades toward the same paper the text is fading toward.
- *
- * A caret says the same thing and does not touch either colour. It is the one
- * mark in every text field on earth that means "there is more coming", it
- * animates its own opacity and nothing else's, and `prefers-reduced-motion`
- * leaves it sitting there solid, which still reads.
- */
-.line[data-pending='true'] .said::after {
-  content: '';
-  display: inline-block;
-  width: 2px; height: 0.9em;
-  margin-left: 0.14em;
-  vertical-align: -0.1em;
-  background: currentColor;
-  animation: caret 1.05s step-end infinite;
-}
-
-/*
- * Capped by height as well as width.
- *
- * Her pictures are portraits — the photograph is 768x1376 — so a width-only
- * cap of 320px produces a 573px-tall bubble that fills the whole panel and
- * pushes the conversation off screen. Height is the binding constraint for a
- * portrait in a chat, and `width: auto` keeps the shape while it applies.
- */
-.line img, .line video {
-  margin-top: 6px;
-  max-width: min(260px, 100%);
-  max-height: 300px;
-  width: auto;
-  height: auto;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--hairline);
-  display: block;
-}
-.empty { margin: auto; color: var(--ink-faint); font-size: 13px; }
-
-/* -- Composer -------------------------------------------------------------- */
-
-.controls {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px var(--gutter); border-top: 1px solid var(--hairline);
-  background: var(--raised); flex-wrap: wrap;
-}
-
-.senses { display: flex; gap: 5px; }
-
-/* Identified by the icon inside it — `--ink-faint` on `--raised` is 5.47:1 —
-   which is why the ring round it is still a hairline and not an ink line. */
-.sense {
-  position: relative;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px;
-  background: var(--raised); border: 1px solid var(--hairline);
-  border-radius: var(--circle); color: var(--ink-faint);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
-}
-/* Visually hidden, still read aloud. */
-.sense span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.sense svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.sense:hover { border-color: var(--accent); color: var(--ink-soft); }
-/* A live microphone is a fact about the room, so it is drawn in her colour —
-   but as a wash and a hairline, not a filled button competing with Wake. */
-.sense[aria-pressed='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--ink); }
-
-.send {
-  flex: none; width: 34px; height: 34px;
-  display: grid; place-items: center;
-  border: none; border-radius: var(--circle);
-  background: var(--accent); color: var(--accent-ink);
-  transition: filter 160ms ease, background 160ms ease, color 160ms ease;
-}
-.send:hover { filter: brightness(1.06); }
-.send svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-/*
- * Quiet until there is something to send.
- *
- * Two saturated objects on a resting screen is one too many, and a filled
- * circle beside an empty field is decoration rather than an action. `:has()`
- * reads the field's own emptiness, so ui.ts does not have to remember to
- * toggle a class on every keystroke.
- */
 
 /* -- Panels ---------------------------------------------------------------- */
 
@@ -632,20 +576,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 }
 .settings-head h2 { margin: 0; font-size: 17px; font-weight: 500; }
 .settings-note { margin: 0; padding: 0 22px 14px; color: var(--ink-faint); font-size: 13px; }
-
-.tabs { display: flex; gap: 2px; padding: 0 22px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--hairline); }
-.tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 10px; font-size: 14px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
-.tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
-
-#editor {
-  display: block; width: calc(100% - 44px); margin: 16px 22px; height: 40vh;
-  resize: vertical; background: var(--sunken); color: var(--ink);
-  border: 1px solid var(--ink-faint); border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  font: 13px/1.7 ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  outline: none; tab-size: 2;
-}
-#editor:focus { border-color: var(--accent); }
 
 /* -- Setup ----------------------------------------------------------------- */
 

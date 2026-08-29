@@ -4,6 +4,58 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.2 — 29 August 2026
+
+**The sphere was never in the middle of the window.** `.stage` was still
+`grid-template-columns: minmax(300px, 0.9fr) 1fr` — she stood in the left column
+and the conversation filled the right. v2.0 deleted the conversation and left
+the grid, so for a whole release the one object on the page sat at about 47% of
+the width with nothing beside it. There is one thing to look at, so there is one
+column, and she is centred in it. The caption under her is out of flow, because
+centring the *group* would push her above the axis by half the height of the
+words.
+
+**The ground is night rather than paper.** The old cream was the right answer
+for the interface it was written for, which was a message thread with a figure
+beside it. There is no text to read any more. A sphere on paper is an
+illustration of a sphere; a sphere on black is a light source in a room, and the
+product is that she is present in one. The neutrals invert, the accent goes up
+from 49–53% lightness to 62–68% so it reads as emitted rather than painted, and
+the ink that sits on it is the ground rather than white — 6.1:1 at the dimmest
+end of her mood range. Still twelve declared colours.
+
+**She has a bloom, a terminator and a horizon now, and they move by different
+amounts.** One number drives all four layers — `--level`, already written every
+frame as `max(micLevel * 0.5, herLevel)` — but the glow takes 0.34 of it and the
+ball takes 0.06, because a light that grows exactly as fast as its own glow
+reads as a scaling image rather than as something getting brighter. The horizon
+line brightens instead of moving. No box-shadows: the bloom is a gradient on its
+own layer, which composites, where a shadow large enough to read as light
+repaints the whole button every frame.
+
+**The header is gone.** It was a ruled band carrying a status dot, her name, her
+mood, the connection state as a word and a button — five things above a page
+whose entire content is one sphere, so the eye landed on small grey text first.
+The state is announced to screen readers and drawn by the sphere for everybody
+else; a word reading "listening" under a sphere that is visibly listening is the
+same fact twice. Her name and mood are a caption under the light, and Setup
+floats in the corner.
+
+**About 190 lines of stylesheet went with the chat interface it described.** The
+`.conversation`, `.line`, `.composer`, `.senses` and `.tabs` sections, the
+profile editor's `#editor`, and the file header that opened by describing two
+halves borrowed from Replika. All of it described an interface deleted in v2.0.
+
+**The sphere fitted a phone badly.** `min(64vh, 420px)` is 420px on a 375px
+screen: the ball ran off both edges and the ring around it was clipped to two
+arcs. It is bounded on width as well now.
+
+### Migrating from v2.0.1
+
+Nothing to do. No environment variable, file or command changed, and the page
+follows the system's dark appearance whether or not you have asked for it —
+there was never a light theme to lose, only a light-coloured one.
+
 ## v2.0.1 — 28 August 2026
 
 **v2.0.0 shipped unable to hear, and this is the release that fixes it.**

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="dark" />
     <title>Hers</title>
     <link rel="icon" href="./icon.png" />
     <link rel="apple-touch-icon" href="./icon.png" />
@@ -11,15 +11,7 @@
   <body>
     <div class="app" id="app" data-state="asleep">
       <header class="bar">
-        <div class="identity">
-          <span class="dot" id="dot" aria-hidden="true"></span>
-          <span class="name" id="name"></span>
-          <span class="mood" id="mood"></span>
-        </div>
-        <div class="bar-actions">
-          <span class="state" id="state">asleep</span>
-          <button class="ghost" id="setup-open" type="button" aria-label="Setup">Setup</button>
-        </div>
+        <button class="ghost" id="setup-open" type="button" aria-label="Setup">Setup</button>
       </header>
 
       <p class="notice" id="notice" role="status" hidden></p>
@@ -27,10 +19,23 @@
       <main class="stage">
         <div class="presence">
           <button class="orb" id="orb" type="button" aria-label="Wake her">
-            <div class="orb-core"></div>
-            <div class="orb-ring"></div>
+            <div class="orb-bloom" aria-hidden="true"></div>
+            <div class="orb-core" aria-hidden="true"></div>
+            <div class="orb-horizon" aria-hidden="true"></div>
+            <div class="orb-ring" aria-hidden="true"></div>
           </button>
-          <p class="hint" id="hint">Touch her to wake her.</p>
+
+          <div class="caption">
+            <div class="identity">
+              <span class="name" id="name"></span>
+              <span class="mood" id="mood"></span>
+            </div>
+            <p class="hint" id="hint">Touch her to wake her.</p>
+          </div>
+
+          <!-- Drawn by the sphere, announced here. See `.state` in the sheet. -->
+          <span class="dot" id="dot" aria-hidden="true"></span>
+          <span class="state" id="state" role="status" aria-live="polite">asleep</span>
         </div>
       </main>
     </div>
