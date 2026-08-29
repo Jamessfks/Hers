@@ -70,6 +70,28 @@ pace spread across three arms and writing three `.wav` files to compare by ear.
 Below fifteen per cent the lines are doing nothing and should be deleted rather
 than believed.
 
+**Every camera caption she has ever produced was a truncated fragment.** The
+captioner runs on `gemini-3.5-flash`, which spends part of any output allowance
+reasoning before it writes — a hazard this file's own distiller documents and
+warns about, and which the caption call had never been given the same treatment
+for. Two hundred tokens went on thinking and the sentence stopped where the
+useful word was about to appear: "The image is a solid,". It is not cosmetic.
+`CameraWatcher` diffs one caption against the last to decide whether anything
+changed, and two fragments that both stop before the noun score 0.67 against a
+threshold of 0.80 — so a room that had genuinely changed read as unchanged, and
+noticing quietly did not work. Thinking is now minimal for captions and
+transcription, where reasoning buys nothing and can only eat the budget the
+words need.
+
+**`gemini-2.5-flash-native-audio-preview-12-2025` takes tools with audio
+again.** Recorded here since v1.4 as closing the socket with `1011` the moment
+function declarations met audio input, which is why the default is 3.1 and why
+affective dialogue was unavailable. Re-measured with a probe that now sends real
+speech: it survives, blocking and `NON_BLOCKING`. The fix was upstream. The
+default has *not* moved to it — mood in the voice was measured working on 3.1
+through the system instruction alone, so the one feature 2.5 exists for is
+already had, and moving the default is a latency comparison nobody has run.
+
 **The suite had been dialling Open-Meteo on every wake.** `Brain.offline`
 existed and only the memory layer read it. A flag half the program honours is
 worse than no flag.

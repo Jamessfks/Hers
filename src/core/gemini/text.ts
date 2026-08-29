@@ -5,7 +5,7 @@
  * down a session by throwing — a failed consolidation costs a few facts.
  */
 
-import { FinishReason, GoogleGenAI } from '@google/genai';
+import { FinishReason, GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 import type { Distiller } from '../memory/types.ts';
 
@@ -126,6 +126,29 @@ export async function captionFrame(
       config: {
         temperature: 0,
         maxOutputTokens: 200,
+        /*
+         * Thinking off, or the caption is a fragment.
+         *
+         * Measured on 2026-08-29 against two solid-colour frames: with thinking
+         * left at its default this returned "The image is a solid," and "The
+         * image consists entirely of a solid," — cut off exactly where the
+         * useful word was about to appear, because the reasoning had already
+         * spent the two hundred tokens. `createGeminiDistiller` documents this
+         * hazard above and this call had never been given the same treatment.
+         *
+         * It is not a cosmetic truncation. `CameraWatcher` diffs one caption
+         * against the last to decide whether anything changed, and two
+         * fragments that both stop before the noun score 0.67 against a
+         * threshold of 0.8 — so a room that had genuinely changed read as
+         * unchanged, and criterion 2 quietly did not work. With thinking
+         * minimal the same two frames caption as "a solid, dark, uniform black
+         * surface" and "a solid, uniform light beige background".
+         *
+         * Minimal rather than a larger budget: it is one sentence about one
+         * picture, reasoning buys nothing, and this runs every twenty seconds
+         * for as long as she is awake.
+         */
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         abortSignal: AbortSignal.timeout(CAPTION_TIMEOUT_MS),
       },
     });
@@ -165,6 +188,10 @@ export async function transcribeMedia(
       config: {
         temperature: 0,
         maxOutputTokens: 400,
+        // Same hazard as the caption above, and the same answer: transcribing is
+        // mechanical, so reasoning can only eat the budget the words need. Not
+        // separately measured — the caption is the case that was caught.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         abortSignal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
       },
     });

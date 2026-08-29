@@ -609,9 +609,19 @@ async function main(): Promise<void> {
     'Hands — `run`, `open` and `write` act on the machine and are logged',
     '#3 hands',
     async () => {
+      /*
+       * Two directories, and it matters which is which.
+       *
+       * `Hands` treats its own `dir` as hers — that is where `hers-actions.log`
+       * lives, alongside her memory — and refuses to write anywhere inside it.
+       * This check used to put the note in that same directory and then report
+       * the refusal as a broken `write`, which is the guard working exactly as
+       * designed being counted as a failure.
+       */
       const root = await mkdtemp(path.join(tmpdir(), 'hers-hands-'));
+      const desk = await mkdtemp(path.join(tmpdir(), 'hers-desk-'));
       const hands = new Hands({ dir: root });
-      const target = path.join(root, 'note.txt');
+      const target = path.join(desk, 'note.txt');
 
       const ran = await hands.run('echo hers-audit');
       const wrote = await hands.write(target, 'a line she wrote\n');
@@ -619,7 +629,9 @@ async function main(): Promise<void> {
 
       const log = readFileSync(hands.logPath, 'utf8').trimEnd().split('\n');
       const wroteIt = readFileSync(target, 'utf8');
+      const guarded = await hands.write(path.join(root, 'nice-try.txt'), 'x');
       await rm(root, { recursive: true, force: true });
+      await rm(desk, { recursive: true, force: true });
 
       return {
         ok:
@@ -628,8 +640,12 @@ async function main(): Promise<void> {
           wrote.ok &&
           wroteIt === 'a line she wrote\n' &&
           refused.needsConfirmation === true &&
-          log.length === 3,
-        evidence: `run exit=${String(ran.exitCode)}, wrote ${String(wroteIt.length)} chars, destructive gated=${String(refused.needsConfirmation)}, ${String(log.length)} log lines`,
+          guarded.ok === false &&
+          // Four: the echo, the note, the refused destructive command, and the
+          // refused write into her own folder. A refusal is logged like
+          // everything else, which is the point of an append-only record.
+          log.length === 4,
+        evidence: `run exit=${String(ran.exitCode)}, wrote ${String(wroteIt.length)} chars, destructive gated=${String(refused.needsConfirmation)}, her own folder refused=${String(!guarded.ok)}, ${String(log.length)} log lines`,
       };
     },
   );
@@ -673,9 +689,18 @@ async function main(): Promise<void> {
       const key = process.env.GEMINI_API_KEY ?? '';
       if (!key) return { ok: false, evidence: 'no key' };
 
-      // Two frames that genuinely differ, so the caption has something to say.
-      const one = solid(320, 180, [20, 20, 30]);
-      const two = solid(320, 180, [230, 220, 190]);
+      /*
+       * A flat colour against three colour bands, rather than two flat colours.
+       *
+       * Two solid frames caption as "a solid, uniform X surface" whatever the
+       * hue, so the sentences differ by about one word and the diff sits on the
+       * threshold no matter how well the captioner is working — measured at
+       * 0.79 against a bar of 0.80, which is a coin toss rather than a test.
+       * The change this check exists for is a scene changing, so the fixture is
+       * now two different scenes.
+       */
+      const one = solid(480, 360, [20, 20, 30]);
+      const two = bandsJpeg();
       const first = await captionFrame(key, one);
       const second = await captionFrame(key, two);
       const moved = distance(first, second);

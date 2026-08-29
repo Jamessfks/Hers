@@ -78,8 +78,23 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
     affectiveDialog: true,
     proactiveAudio: true,
     nativeAudio: true,
-    // See the header: tools plus audio input is a 1011 on this model.
-    toolsWithAudio: false,
+    /*
+     * Re-measured on 2026-08-29: this is no longer true, and it was.
+     *
+     * `npm run probe:affective` now sends a real second of speech with tools
+     * attached, both blocking and with `behavior: NON_BLOCKING`, and both
+     * survive. The 1011 recorded on 2026-08-17 was real and has been fixed
+     * upstream; Google's capabilities guide now documents asynchronous function
+     * calling on this model, which is what prompted the re-test.
+     *
+     * So 2.5 is a genuine option again, and the only one that can carry
+     * `enableAffectiveDialog`. The default has *not* moved to it, deliberately:
+     * 3.1 answers in 1211 ms measured, carries `thinkingLevel`, and delivery
+     * direction through the system instruction was measured working on it at a
+     * 58% pace spread — so the feature 2.5 exists for is already had by other
+     * means. Moving the default would need a latency comparison nobody has run.
+     */
+    toolsWithAudio: true,
     thinkingLevel: false,
   },
   'gemini-3.1-flash-live-preview': {
@@ -91,8 +106,18 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
      *
      * So this is not a preference recorded as `false`; the field is refused and
      * the session would have no voice path at all. `npm run probe:affective`
-     * re-asks in one command, and the day it prints CONNECTED this line is the
+     * re-asks in one command, and the day it prints SURVIVED this line is the
      * only thing that has to change.
+     *
+     * Re-measured 2026-08-29, still refused — `close 1007: Request contains an
+     * invalid argument.`, with tools and without. The same run confirmed the
+     * model is otherwise healthy: tools plus a second of real speech survives.
+     *
+     * It matters less than it did. Delivery direction in the system instruction
+     * was measured reaching the voice on this model the same day — three arms
+     * of `npm run probe:delivery` on identical words came back 3.09, 1.31 and
+     * 2.77 words per second, a 58% spread against a 15% bar, with no captions
+     * in the transcript. Mood in the voice is had without the flag.
      */
     affectiveDialog: false,
     proactiveAudio: false,
