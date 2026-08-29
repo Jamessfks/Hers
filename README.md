@@ -5,9 +5,10 @@
 **A voice companion who lives on your computer. Not on someone's server.**
 
 She has one screen: a sphere that moves as she speaks. No chat window, no avatar,
-no history to scroll. She hears you, sees you, reads what is on your screen, can
-run commands on your machine, remembers you between conversations, and will start
-talking if you go quiet for long enough.
+no history to scroll. She hears you, sees you through your camera, watches your
+screen in the desktop app, knows which window you are in, runs commands on your
+machine, remembers you between conversations, and will start talking if you go
+quiet for long enough.
 
 She chose her own name, her own personality and her own voice, on the first day,
 from what she learned about you. You cannot change them.
@@ -128,15 +129,25 @@ diffed against the last one. When something has actually changed — you have mo
 to the sofa, someone else has come in — she may mention it. When you are still at
 the same desk in a slightly different position, she does not.
 
+**She knows what you are working on.** The frontmost application and its window
+title, every fifteen seconds while she is awake. In the desktop app she also
+watches the screen itself: you are asked which screen once, and it is silent
+after that. In a browser tab she is not — `getDisplayMedia` has no remembered
+grant, so it would mean a dialog every time she wakes — and she takes a
+screenshot on request instead. `HERS_SCREEN_FPS=0` turns it off.
+
 **She knows what it is doing outside.** The weather comes from Open-Meteo, keyed
 off your system timezone rather than your IP address, so the only thing that
 leaves is a city name.
 
 **She sleeps.** She picked her hours during setup, from what your machine said
-about when you are awake, and they are in `rhythm.md`, which has no editor. Asleep
-means nothing at all: no initiative, no session, no frames. Waking her is always
-yours — touch the sphere, speak, or message her on Telegram. Wake her inside her
-own night and she is groggy about it rather than unavailable.
+about when you are awake, and they are in `rhythm.md`, which has no editor. When
+her hour arrives she goes quiet on her own: the session closes, the microphone
+and camera go off, and the camera light goes out with them. Asleep means nothing
+at all — no initiative, no session, no frames. Waking her is always yours: touch
+the sphere, speak, or message her on Telegram. Wake her inside her own night and
+she is groggy about it rather than unavailable, and she stays up rather than
+sneaking back to bed.
 
 **She remembers.** Every turn goes into SQLite; every twelfth turn a background
 pass distils what mattered into facts she can look up later. There is no

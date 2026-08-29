@@ -36,6 +36,15 @@ export interface Config {
   screenFps: number;
   /** Whether a client sending no `Origin` may open the WebSocket. Off. */
   allowHeadless: boolean;
+  /**
+   * True when the server was started by the desktop application.
+   *
+   * Set by `electron/main.js`, and the only thing that reads it is the page,
+   * which needs to know whether starting a screen share will prompt. In the
+   * application it does not — the display-media handler grants a remembered
+   * source silently — and in a browser tab it does, on every call, forever.
+   */
+  desktop: boolean;
   telegram: { token: string; allowedChatIds: number[] } | null;
   warnings: string[];
 }
@@ -179,6 +188,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // The Live API accepts at most one frame per second and bills for every one
     // of them, so the ceiling here is the API's, not a preference.
     allowHeadless: setting(env, 'ALLOW_HEADLESS').value?.trim() === '1',
+    desktop: setting(env, 'DESKTOP').value?.trim() === '1',
     cameraFps: rate(cameraFps.value, 1, cameraFps.name, warnings),
     screenFps: rate(screenFps.value, 0.5, screenFps.name, warnings),
     telegram: telegramToken

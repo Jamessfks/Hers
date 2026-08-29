@@ -772,3 +772,24 @@ test('a forecast that has not changed is not mentioned twice', async () => {
   assert.equal(asked, 1);
   await f.companion.sleep();
 });
+
+/**
+ * The screen share announces itself by arriving.
+ *
+ * v2.0 had no caller for `startScreen()` at all, so this path was dead; when it
+ * came back there was no switch to turn the sense on, because a screen share is
+ * granted per surface and the server cannot know. A frame turning up is the
+ * only honest signal, so it is the one used.
+ */
+test('a screen frame turns the screen sense on by arriving', async () => {
+  const f = await fixture({ HERS_SCREEN_FPS: '1' });
+  await f.companion.wake();
+  assert.equal(f.companion.situation.senses.screen, false, 'off until she is shown one');
+
+  f.companion.see(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'screen');
+
+  assert.equal(f.companion.situation.senses.screen, true);
+  const frames = f.socket().realtime.filter((each) => 'video' in each);
+  assert.equal(frames.length, 1, 'and the first frame is not the one that gets thrown away');
+  await f.companion.sleep();
+});

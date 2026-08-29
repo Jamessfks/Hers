@@ -75,6 +75,22 @@ loadDotEnv(path.join(app.getPath('userData'), '.env'));
 
 /** Where everything she has lives. Made now, because the key gets written into it. */
 const paths = applyDesktopPaths(app.getPath('userData'));
+
+/*
+ * Tells the page it is inside the application rather than a browser tab.
+ *
+ * The screen sense needs this: in the app, `setDisplayMediaRequestHandler`
+ * below grants capture with no prompt, so it can come up with her; in a browser
+ * tab `getDisplayMedia` shows the operating system's picker on every single
+ * call and never remembers, so it cannot.
+ *
+ * Through the environment and the server rather than a preload script or a
+ * user-agent check. There is no preload here, adding one for a boolean would be
+ * a new privileged surface for the sake of a flag, and sniffing "Electron" out
+ * of the user agent is a string somebody else controls. The server already
+ * knows things the page is told at connect; this is one more.
+ */
+process.env.HERS_DESKTOP = '1';
 mkdirSync(paths.home, { recursive: true });
 
 /*
@@ -191,8 +207,8 @@ function freePort() {
  * the browser asks. There is no browser here, so this is the thing that asks —
  * and the honest version of "ask" for a window that only ever shows one origin
  * is to allow that origin and refuse every other. The user's real consent is
- * upstream of this in two places that both still apply: the buttons beside the
- * message box, which are off until pressed, and the operating system's own
+ * upstream of this in two places that both still apply: touching the sphere, which
+ * is what brings the senses up at all, and the operating system's own
  * microphone, camera and screen-recording prompts, which this cannot answer.
  */
 /** @param {string} origin */
@@ -264,41 +280,83 @@ function allowMediaFor(origin) {
     });
   });
 
-  session.defaultSession.setDisplayMediaRequestHandler(
-    (request, callback) => {
-      void (async () => {
-        /*
-         * The callback has to be called on every path, including the ones that
-         * throw. Without this, a rejection from `getSources` or the dialog left
-         * `getDisplayMedia()` in the page unsettled forever: the screen switch
-         * stayed mid-press, no error appeared anywhere, and the log this file
-         * exists to write had nothing to say about it either. Refusing is a
-         * worse outcome than sharing and a much better one than hanging.
-         */
-        try {
-          // `window` as well as `screen`: the fallback runs when the system
-          // picker is unavailable, and a person who wants to show her the one
-          // document they are stuck on should not have to share the desktop.
-          const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
-          if (sources.length === 0) return callback({});
-          if (sources.length === 1) return callback({ video: sources[0] });
+  /*
+   * Screen capture, granted once and then silently.
+   *
+   * `useSystemPicker: true` is gone, and that flag is the whole reason v2.0
+   * shipped with no screen sense at all. With it set, Electron shows the
+   * operating system's picker and never calls this handler — and
+   * `getDisplayMedia` has no remembered grant, so every wake meant another
+   * dialog. For somebody who wakes her several times a day that is worse than
+   * not having the sense, so the browser code simply stopped asking and
+   * `startScreen()` sat with no callers.
+   *
+   * Without the flag the handler is authoritative: returning a source from it
+   * grants capture with no prompt at all. So the first share asks which screen,
+   * the answer is remembered, and every wake after that is silent.
+   *
+   * Remembered in memory only. Writing the choice down would put a monitor name
+   * on disk, which means an entry in `writers.ts` and a line in the privacy
+   * document for something that costs one dialog a launch to re-ask.
+   */
+  /** @type {string | null} */
+  let chosenSourceId = null;
 
-          const { response } = await dialog.showMessageBox({
-            type: 'question',
-            message: 'Which screen should she see?',
-            buttons: [...sources.map((each) => each.name), 'Cancel'],
-            cancelId: sources.length,
-            defaultId: 0,
-          });
-          callback(response < sources.length ? { video: sources[response] } : {});
-        } catch (error) {
-          fail(error);
-          callback({});
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    void (async () => {
+      /*
+       * The callback has to be called on every path, including the ones that
+       * throw. Without this, a rejection from `getSources` or the dialog left
+       * `getDisplayMedia()` in the page unsettled forever: the screen switch
+       * stayed mid-press, no error appeared anywhere, and the log this file
+       * exists to write had nothing to say about it either. Refusing is a
+       * worse outcome than sharing and a much better one than hanging.
+       */
+      try {
+        // `window` as well as `screen`: a person who wants to show her the one
+        // document they are stuck on should not have to share the desktop.
+        const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+        if (sources.length === 0) return callback({});
+
+        /*
+         * Source objects are not reusable between calls, so the id is what is
+         * held and the list is re-fetched every time. `display_id` is the
+         * fallback because a monitor that was unplugged and plugged back in
+         * comes back with a different source id and the same display id; when
+         * neither matches, the screen is genuinely gone and asking again is
+         * right.
+         */
+        if (chosenSourceId) {
+          const remembered =
+            sources.find((each) => each.id === chosenSourceId) ??
+            sources.find((each) => each.display_id && each.display_id === chosenSourceId);
+          if (remembered) return callback({ video: remembered });
         }
-      })();
-    },
-    { useSystemPicker: true },
-  );
+
+        const only = sources[0];
+        if (sources.length === 1 && only) {
+          chosenSourceId = only.id;
+          return callback({ video: only });
+        }
+
+        const { response } = await dialog.showMessageBox({
+          type: 'question',
+          message: 'Which screen should she see?',
+          detail: 'She will use this one from now on. Quit and reopen her to change it.',
+          buttons: [...sources.map((each) => each.name), 'Cancel'],
+          cancelId: sources.length,
+          defaultId: 0,
+        });
+        const picked = sources[response];
+        if (!picked) return callback({});
+        chosenSourceId = picked.id;
+        callback({ video: picked });
+      } catch (error) {
+        fail(error);
+        callback({});
+      }
+    })();
+  });
 }
 
 /**

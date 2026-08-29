@@ -477,6 +477,24 @@ export class Companion {
    */
   see(jpeg: Buffer, kind: 'camera' | 'screen'): void {
     const sense: SenseName = kind === 'camera' ? 'sight' : 'screen';
+    /*
+     * A screen frame arriving is the screen share being on.
+     *
+     * Nothing else can tell her. Hearing and sight come up with her because the
+     * browser opens them on the wake gesture, but a screen share is granted per
+     * surface — the desktop application has a remembered source and a browser
+     * tab has none — so the only honest signal the server has is that frames
+     * are turning up. Treating the frame as the evidence means there is no
+     * switch to leave in the wrong position.
+     *
+     * It stays true until it goes stale rather than being switched off: the
+     * question "is she watching the screen right now" is answered by
+     * `seeing.screen`, which needs a frame inside fifteen seconds, and that is
+     * what the prompt and the openers both read.
+     */
+    if (kind === 'screen' && !this.situation.senses.screen) {
+      this.situation.setSense('screen', true);
+    }
     if (!this.situation.senses[sense]) return;
 
     const fps = kind === 'camera' ? this.#brain.config.cameraFps : this.#brain.config.screenFps;

@@ -238,6 +238,7 @@ export class WebBridge {
       telegram: Boolean(brain.config.telegram),
       cameraFps: brain.config.cameraFps,
       screenFps: brain.config.screenFps,
+      desktop: brain.config.desktop,
     });
     sendJson(socket, { t: 'mood', mood: brain.mood.read() });
     sendJson(socket, this.#intimacy());

@@ -21,12 +21,16 @@
  * she is asleep she is not. The camera comes up on the same gesture, because
  * `getUserMedia` asks once and then remembers.
  *
- * The screen does not, and that is a loss worth naming rather than hiding.
- * `getDisplayMedia` shows an operating system picker on **every** call — there
- * is no remembered grant — so making it automatic would mean a dialog every
- * time she wakes. For somebody living alone, who wakes her several times a day,
- * that is worse than not having the sense. She can still be shown a screen; it
- * is `run("osascript …")` and a screenshot now, rather than a live feed.
+ * The screen depends on where the page is running, and the split is honest
+ * rather than tidy. In the desktop application Electron's display-media handler
+ * grants a remembered source with no prompt, so the screen comes up with her
+ * like the other two. In a browser tab `getDisplayMedia` shows the operating
+ * system's picker on **every** call and never remembers, so a dialog every time
+ * she wakes is the alternative — which for somebody who wakes her several times
+ * a day is worse than not having the sense. There she can still be shown a
+ * screen; it is `run("screencapture …")` on demand rather than a live feed.
+ *
+ * The `ready` message carries which case this is.
  */
 
 import './styles.css';
@@ -114,7 +118,19 @@ const connection = new Connection({
   onMessage: (message) => onMessage(message),
 });
 
+/**
+ * Whether she watches the screen: the application, and only when asked.
+ *
+ * Read off the `ready` message rather than sniffed out of the user agent,
+ * because the server is the half that knows and a user agent is a string
+ * somebody else controls.
+ */
+let screenWanted = false;
+
 function onMessage(message: ServerMessage): void {
+  if (message.t === 'ready') {
+    screenWanted = message.desktop && message.screenFps > 0;
+  }
   if (message.t === 'interrupted') {
     player.flush();
   }
@@ -185,6 +201,16 @@ async function toggleWake(): Promise<void> {
   // companion who cannot see, which is a smaller thing than one who cannot
   // hear, and it must not stop her waking.
   void vision.startCamera().catch(() => undefined);
+  /*
+   * The screen, in the application only, and only when it is switched on.
+   *
+   * Off by default because it is not free: a screen frame every two seconds is
+   * the largest recurring cost of running her, and audio-plus-video sessions
+   * carry a two-minute cap that `contextWindowCompression` is what removes. So
+   * it is a decision somebody makes once — `HERS_SCREEN=1` — rather than a bill
+   * that arrives because a default changed under them.
+   */
+  if (screenWanted) void vision.startScreen().catch(() => undefined);
   connection.send({ t: 'wake' });
   awake = true;
 }

@@ -236,12 +236,21 @@ rather than the application, so upgrading Node silently revokes it: System
 Settings → Privacy & Security → Full Disk Access, and add whatever you start her
 from.
 
-### Screen recording
+### She is not watching my screen
 
-She no longer opens a live screen share from the page. `getDisplayMedia` shows a
-picker on every single call — there is no remembered grant — and a dialog every
-time she wakes is worse than not having the sense. Ask her to take a screenshot
-instead; that is `run` and it works.
+**In the downloaded application** she should be. The first time she wakes you
+are asked which screen, once; after that it is silent, and quitting and
+reopening her is how you change the answer. On macOS the first share also needs
+Screen Recording permission — System Settings → Privacy & Security → Screen
+Recording — and macOS will not apply it until the application is restarted.
+
+**In a browser tab she is not, deliberately.** `getDisplayMedia` shows the
+operating system's picker on every single call and there is no remembered
+grant, so bringing the screen up with her would mean a dialog every time she
+wakes. Ask her to take a screenshot instead; that is `run` and it works.
+
+To turn it off in the application, set `HERS_SCREEN_FPS=0`. It is the largest
+recurring cost of running her.
 
 
 ### The camera light is on but she cannot see me

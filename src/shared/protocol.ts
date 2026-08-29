@@ -206,6 +206,15 @@ export type ServerMessage =
        */
       cameraFps: number;
       screenFps: number;
+      /**
+       * True when this page is inside the desktop application.
+       *
+       * The screen sense turns on it: the application grants capture from a
+       * remembered source with no prompt, and a browser tab gets the operating
+       * system's picker on every `getDisplayMedia` call with no way to remember
+       * the answer. So she watches the screen in the app and does not in a tab.
+       */
+      desktop: boolean;
     }
   | { t: 'state'; state: ConnectionState }
   | { t: 'mood'; mood: MoodReadout }
