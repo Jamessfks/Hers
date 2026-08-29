@@ -4,6 +4,43 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.5 — 29 August 2026
+
+**The interface is the colour of the mark now.** The ground was
+`oklch(14% 0.015 264)` — a near-black with barely enough chroma to call it
+anything, chosen when the priority was simply that the sphere read as a light
+source. The image this product ships under is one warm light in a cool violet
+room, and none of that was on screen. The three surfaces are sampled from it:
+`docs/social-preview.jpg` measures `oklch(22.8% 0.085 276)` at the wall, and the
+ground is now `oklch(20% 0.08 278)`, which renders `#100e39` against the mark's
+own `#141543`.
+
+**A thirteenth colour, and the reason it earned a place.** `--glow`,
+`oklch(90% 0.04 50)`, is the light in the alcove — the lit edge of the recess
+measures `#f0cdbd`. The sphere's specular highlight and the bright middle of its
+horizon were `--ink` mixed toward her accent, which meant the light falling on
+her was whatever hue her mood happened to be. Warm light in a cool room is the
+entire image and the one thing the other twelve could not say.
+
+**Her mood no longer leaves the family.** Valence swept the accent from hue 154
+to 278, and the low half of that was a saturated green. On the old near-black it
+read as nothing in particular; on violet it reads as a different product
+entirely. The sweep is 236 to 348 now — a cold blue when she is low, the violet
+of the room when she is level, a rose when she is high — so every mood she can
+be in is still a colour from the image. `--accent-ink` on `--accent` measures
+between 4.84:1 and 5.55:1 across the whole range, against 4.5:1 required.
+
+**Asleep is an unlit sphere rather than a grey one.** Desaturating to 0.28 read
+as "off" on a near-black ground and as mud on a violet one — a colour belonging
+to neither her nor the room. Half her chroma with the light taken away leaves
+something the same family as the wall behind it, which is what an unlit object
+in that room would look like.
+
+### Migrating from v2.0.4
+
+Nothing to do. If you had grown used to her going green when she was flat, she
+goes blue now.
+
 ## v2.0.4 — 29 August 2026
 
 **She used to go completely still in the second where she was thinking.** The

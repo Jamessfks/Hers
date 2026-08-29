@@ -225,15 +225,24 @@ export class Ui {
 
   setMood(mood: MoodReadout): void {
     this.#moodLabel.textContent = mood.label;
-    // Valence picks the hue, and it is an OKLCh angle now rather than an HSL
-    // one: 154 is a green, 216 the blue she sits at when she is level, 278 a
-    // violet. The space matters more than the numbers. OKLCh lightness is
-    // perceptually uniform, so 53% means the same brightness at every one of
-    // those angles, which is what lets the stylesheet promise white on
-    // `--accent` above 4.5:1 across the whole range instead of measuring 1.87:1
-    // at the low end. Energy still moves the accent, by 4% of lightness rather
-    // than 7% — the old span took the contrast floor with it.
-    const hue = Math.round(216 + mood.current.valence * 62);
+    /*
+     * Valence sweeps her from the room's own colour toward the light in it.
+     *
+     * 236 is a cold blue, 292 the violet she sits at when she is level, 348 a
+     * rose — the axis of the mark this ships under, which is one warm light in
+     * a cool violet room. It used to run 154 to 278, and the low half of that
+     * was a saturated green: on the old near-black ground it read as nothing in
+     * particular, and on the violet one it reads as a different product. Her
+     * mood still picks the colour; it now picks it from inside the family.
+     *
+     * OKLCh, not HSL, and that is what makes the promise keepable: lightness is
+     * perceptually uniform, so 62% means the same brightness at all three of
+     * those angles, and `--accent-ink` on `--accent` measures between 4.84:1
+     * and 5.55:1 across the whole sweep instead of the 1.87:1 an HSL lightness
+     * produced at one end. Energy moves it by 6% of lightness, which stays
+     * inside that band.
+     */
+    const hue = Math.round(292 + mood.current.valence * 56);
     const lift = (mood.current.energy + 1) / 2;
     document.documentElement.style.setProperty('--mood-hue', String(hue));
     document.documentElement.style.setProperty('--mood-lift', lift.toFixed(2));

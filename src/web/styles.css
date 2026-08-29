@@ -38,7 +38,7 @@
  *
  * Written in OKLCh because its lightness is perceptually uniform, and that is
  * what makes a contrast floor keepable. An HSL lightness of 47% means something
- * different at hue 154 than at hue 278, which is why the old accent measured
+ * different at hue 236 than at hue 348, which is why the old accent measured
  * 1.87:1 at the low end of her mood while carrying a hand-tuned fudge factor.
  * Every ink here is stated with the surface it has to clear.
  *
@@ -83,10 +83,10 @@
    * that nothing on the page is ever a true grey next to an orb that is always
    * some hue or another.
    */
-  --paper: oklch(14% 0.015 264);
-  --raised: oklch(19% 0.016 264);
-  --sunken: oklch(10% 0.012 264);
-  --hairline: oklch(28% 0.018 264);
+  --paper: oklch(20% 0.08 278);
+  --raised: oklch(25% 0.082 278);
+  --sunken: oklch(16% 0.07 278);
+  --hairline: oklch(34% 0.075 278);
 
   /*
    * Three inks, and the faintest one is still bound by the smallest text.
@@ -95,9 +95,9 @@
    * ink that still clears 4.5:1 on the lightest surface it ever sits on, which
    * here is `--raised` at 19%. 63% measures 4.9:1 there and 6.9:1 on the ground.
    */
-  --ink: oklch(96% 0.006 264);
-  --ink-soft: oklch(76% 0.012 264);
-  --ink-faint: oklch(63% 0.014 264);
+  --ink: oklch(97% 0.014 278);
+  --ink-soft: oklch(80% 0.024 278);
+  --ink-faint: oklch(68% 0.030 278);
 
   /*
    * Her colour. Hue is the mood; lightness is what makes it a light.
@@ -113,7 +113,7 @@
   --mood-hue: 268;
   --mood-lift: 0.55;
   --accent: oklch(calc(62% + var(--mood-lift) * 6%) 0.16 var(--mood-hue));
-  --accent-ink: oklch(12% 0.02 264);
+  --accent-ink: oklch(17% 0.04 278);
   --accent-wash: color-mix(in oklab, var(--accent) 18%, var(--paper));
 
   /*
@@ -122,7 +122,25 @@
    * The same argument as before — a red is the one hue the neutrals cannot
    * stand in for — at the lightness a dark page needs to carry it as text.
    */
-  --alert: oklch(68% 0.17 27);
+  --alert: oklch(70% 0.17 27);
+
+  /*
+   * The light in the alcove, and the thirteenth colour.
+   *
+   * The mark this product ships under is one warm light in a cool violet room,
+   * and every neutral above is the room. Nothing was the light. Sampled from
+   * `docs/social-preview.jpg` at its brightest — the lit edge of the recess is
+   * `#f0cdbd`, `oklch(87.4% 0.045 46)` — and rounded to a hue the sphere can
+   * carry without going orange.
+   *
+   * It is a thirteenth colour and the sheet said twelve, which needs a reason
+   * rather than a shrug: the specular highlight on the sphere and the bright
+   * middle of its horizon were `--ink` mixed toward her accent, so the light on
+   * her was whatever hue her mood happened to be. Warm light in a cool room is
+   * the whole image, and the one thing the palette could not say with the
+   * twelve it had.
+   */
+  --glow: oklch(90% 0.04 50);
 
   /*
    * The backdrop is the sunken surface with the floor taken out.
@@ -467,7 +485,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   background:
     radial-gradient(
       circle at 34% 26%,
-      color-mix(in oklab, var(--ink) 82%, var(--accent)) 0%,
+      color-mix(in oklab, var(--glow) 84%, var(--accent)) 0%,
       var(--accent) 42%,
       color-mix(in oklab, var(--accent) 72%, var(--sunken)) 78%
     ),
@@ -508,7 +526,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   background: linear-gradient(
     90deg,
     transparent 0%,
-    color-mix(in oklab, var(--ink) 88%, var(--accent)) 50%,
+    color-mix(in oklab, var(--glow) 82%, var(--accent)) 50%,
     transparent 100%
   );
 }
@@ -632,7 +650,16 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   to { transform: rotate(360deg); }
 }
 
-.app[data-state='asleep'] .orb-core { filter: saturate(0.28) brightness(0.62); }
+/*
+ * Asleep is an unlit sphere in the room, not a grey one.
+ *
+ * The first version desaturated to 0.28, which on the old near-black ground
+ * read as "off" and on the violet one reads as mud — a colour belonging to
+ * neither her nor the room. Keeping half her chroma and taking the light away
+ * instead leaves something the same family as the wall behind it, which is what
+ * an unlit object in that room would actually look like.
+ */
+.app[data-state='asleep'] .orb-core { filter: saturate(0.55) brightness(0.42); }
 .app[data-state='asleep'] .orb-bloom { opacity: 0.28; }
 .app[data-state='asleep'] .orb-horizon { opacity: 0.12; }
 /* The ring goes with her. A saturated ring around a desaturated ball is the one
@@ -641,7 +668,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 .app[data-state='error'] .orb-ring {
   border-color: color-mix(in oklab, var(--ink-faint) 26%, transparent);
 }
-.app[data-state='error'] .orb-core { filter: saturate(0.2) brightness(0.5); }
+.app[data-state='error'] .orb-core { filter: saturate(0.35) brightness(0.38); }
 
 .hint { flex: none; margin: 0; max-width: 30ch; color: var(--ink-faint); font-size: 13px; text-align: center; }
 
@@ -773,8 +800,8 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * `#efefef` and `#b2b2b2` on the intimacy track, `#767676` on a checkbox edge.
  * The argument this sheet makes against `#0000ee` applies to all four — a
  * colour that arrives because nobody said otherwise is still a colour, and a
- * fixed blue ring is wrong in a window whose accent is her mood: at hue 154 the
- * accent is a green and the ring was still cobalt.
+ * fixed blue ring is wrong in a window whose accent is her mood: at the rose
+ * end of her range the accent is pink and the ring was still cobalt.
  */
 
 /*

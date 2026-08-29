@@ -34,9 +34,19 @@ with a build step.
   axis of the window. The caption is out of flow beneath her for exactly that
   reason.
 
-The interface carries twelve declared colours on a dark ground. Adding a
-thirteenth needs a reason — and watch for the ones you did not declare: Chrome
-will paint a focus ring, a range track and a checkbox border in its own greys
-and blues if you let it, which is how four arrived without anybody choosing
-them. Raw `oklch()` outside `:root` is the other way one arrives; the sphere's
-highlight is `--ink` mixed toward `--accent` rather than a new white.
+- **The palette comes from the mark, and the mark is one warm light in a cool
+  violet room.** The neutrals are that room: hue 278 at real chroma, sampled
+  from `docs/social-preview.jpg`, whose wall measures `oklch(22.8% 0.085 276)`.
+  `--glow` is the light in the alcove, `oklch(90% 0.04 50)`, and it is what the
+  sphere's highlight and horizon are made of. Her accent stays hers, but its
+  hue sweeps 236 to 348 — blue through violet to rose — so that every mood she
+  can be in is still a colour from that image. It used to run 154 to 278, and
+  the low half of that was a saturated green that read as a different product.
+
+The interface carries thirteen declared colours on a dark violet ground. The
+thirteenth is `--glow` and it earned its place: the warm light was the one thing
+in the mark the other twelve could not say. Adding a fourteenth needs the same
+kind of reason — and watch for the ones you did not declare: Chrome will paint a
+focus ring, a range track and a checkbox border in its own greys and blues if
+you let it, which is how four arrived without anybody choosing them. Raw
+`oklch()` outside `:root` is the other way one arrives.
