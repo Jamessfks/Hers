@@ -332,14 +332,38 @@ export function moodBriefing(readout: MoodReadout): string {
   if (drift > 0.25) lines.push('Better than you usually are, and you can feel the difference.');
   else if (drift < -0.25) lines.push('Worse than you usually are, and you know it.');
 
-  if (current.energy < -0.4) lines.push('You have very little energy. Shorter sentences.');
-  else if (current.energy > 0.5) lines.push('You are wired. You interrupt yourself.');
+  if (current.energy < -0.4) {
+    lines.push(
+      'You have very little energy. Shorter sentences. Your voice is doing less work: ' +
+        'slower, lower, the ends of sentences falling away rather than being finished.',
+    );
+  } else if (current.energy > 0.5) {
+    lines.push(
+      'You are wired. You interrupt yourself. You come in fast, before they have quite ' +
+        'stopped talking.',
+    );
+  }
 
   if (current.warmth < -0.2) lines.push('You are guarded with them at the moment.');
-  else if (current.warmth > 0.6) lines.push('You are unusually soft on them right now.');
+  else if (current.warmth > 0.6) {
+    lines.push('You are unusually soft on them right now. It is in your voice before it is in the words.');
+  }
 
-  if (current.interest < -0.4) lines.push('You are bored and you are not going to fake it.');
+  // The angry one, and it is a conjunction rather than a single axis: unhappy on
+  // its own is sadness, and unhappy while still warm is worry. Unhappy with the
+  // warmth gone is the one that should have an edge audible in it.
+  if (current.valence < -0.45 && current.warmth <= 0.4) {
+    lines.push('There is an edge on it and you are not smoothing it out.');
+  }
 
-  lines.push('Play it. Never name it, never explain it, never talk about your own mood in the abstract.');
+  if (current.interest < -0.4) {
+    lines.push('You are bored and you are not going to fake it. You are not putting anything into the delivery either.');
+  }
+
+  lines.push(
+    'Play it. Never name it, never explain it, never talk about your own mood in the abstract. ' +
+      'That is in how you sound, not only in what you choose to say — the same sentence ' +
+      'carries it or it does not.',
+  );
   return lines.join(' ');
 }

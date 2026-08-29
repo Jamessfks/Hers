@@ -63,6 +63,14 @@ export interface ModelCapabilities {
    * of them does not.
    */
   toolsWithAudio: boolean;
+  /**
+   * Whether the model accepts `thinkingConfig.thinkingLevel`.
+   *
+   * 2.5 takes a `thinkingBudget` in tokens instead, and sending a field a Live
+   * model does not accept is a rejected setup and a closed socket rather than a
+   * warning — so this is declared per model like everything else here.
+   */
+  thinkingLevel: boolean;
 }
 
 const CAPABILITIES: Record<string, ModelCapabilities> = {
@@ -72,6 +80,7 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
     nativeAudio: true,
     // See the header: tools plus audio input is a 1011 on this model.
     toolsWithAudio: false,
+    thinkingLevel: false,
   },
   'gemini-3.1-flash-live-preview': {
     /*
@@ -89,6 +98,7 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
     proactiveAudio: false,
     nativeAudio: true,
     toolsWithAudio: true,
+    thinkingLevel: true,
   },
 };
 
@@ -108,6 +118,7 @@ export function capabilitiesOf(model: string): ModelCapabilities {
     CAPABILITIES[model] ?? {
       affectiveDialog: false,
       proactiveAudio: false,
+      thinkingLevel: false,
       nativeAudio: true,
       // Optimistic on this one alone: refusing tools by default would silently
       // disable half of her behaviour on every model released after this file.

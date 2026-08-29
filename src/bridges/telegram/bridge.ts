@@ -28,6 +28,7 @@
  */
 
 import { encodeOggOpus, pcmSeconds } from '../../core/speech/ogg-opus.ts';
+import { moodBriefing } from '../../core/mood/mood.ts';
 import { synthesise } from '../../core/speech/synthesise.ts';
 import { transcribeMedia } from '../../core/gemini/text.ts';
 import type { Conversation, Origin } from '../../core/session/conversation.ts';
@@ -381,7 +382,11 @@ export class TelegramBridge {
   async #speak(text: string): Promise<{ ogg: Buffer; seconds: number } | null> {
     const key = this.#brain.config.geminiApiKey;
     if (!key || !text.trim()) return null;
-    const pcm = await synthesise(key, text, this.#brain.profile.voice.voice);
+    // The same briefing the live session was holding, so the fallback carries
+    // the mood she was actually in rather than a flat reading of her words.
+    const pcm = await synthesise(key, text, this.#brain.profile.voice.voice, {
+      direction: moodBriefing(this.#brain.mood.read()),
+    });
     if (!pcm) return null;
     const ogg = encodeOggOpus(pcm);
     return ogg ? { ogg, seconds: pcmSeconds(pcm) } : null;

@@ -27,7 +27,14 @@
  * the user would hear her answer a question from thirty seconds ago.
  */
 
-import { GoogleGenAI, MediaResolution, Modality, StartSensitivity, EndSensitivity } from '@google/genai';
+import {
+  EndSensitivity,
+  GoogleGenAI,
+  MediaResolution,
+  Modality,
+  StartSensitivity,
+  ThinkingLevel,
+} from '@google/genai';
 import type {
   FunctionDeclaration,
   LiveConnectConfig,
@@ -478,6 +485,20 @@ export class LiveConversation {
         );
       }
     }
+    /*
+     * Stated rather than left to the default.
+     *
+     * 3.1 already defaults to minimal, so this buys no speed today and is not
+     * claimed to — it is insurance against a default that changes under a
+     * preview model, on the one setting where a change would show up as her
+     * taking noticeably longer to answer. 2.5 takes a token budget instead of a
+     * level and rejects the setup outright if handed one, which is why it is a
+     * declared capability rather than a field sent to everything.
+     */
+    if (caps.thinkingLevel) {
+      config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+    }
+
     if (caps.affectiveDialog) config.enableAffectiveDialog = true;
 
     return config;

@@ -168,3 +168,50 @@ test('the briefing never hands the model a number to read out', () => {
   assert.ok(!/-?\d+\.\d+/.test(briefing), `briefing contains a raw number: ${briefing}`);
   assert.match(briefing, /Never name it/);
 });
+
+/**
+ * The delivery half of the briefing, which is all criterion 6 has on 3.1.
+ *
+ * `enableAffectiveDialog` is documented as unsupported on the default model, so
+ * everything about how she *sounds* has to travel through this string. These
+ * assert the axes reach it; whether the model acts on it is not a question a
+ * unit test can answer, and `npm run probe:delivery` is what measures that.
+ */
+test('a flat mood is described as something her voice does, not something she is', () => {
+  const briefing = moodBriefing({
+    label: 'wrung out',
+    current: { valence: -0.2, energy: -0.7, warmth: 0.3, interest: 0 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+  assert.match(briefing, /slower, lower/);
+  assert.match(briefing, /how you sound/);
+});
+
+test('unhappy and guarded is the one that gets an edge on it', () => {
+  const angry = moodBriefing({
+    label: 'sharp',
+    current: { valence: -0.6, energy: 0.2, warmth: 0.1, interest: 0.3 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+  assert.match(angry, /edge on it/);
+
+  // Unhappy while still warm is worry, not anger, and must not get the edge.
+  const worried = moodBriefing({
+    label: 'worried',
+    current: { valence: -0.6, energy: 0.2, warmth: 0.8, interest: 0.3 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+  assert.doesNotMatch(worried, /edge on it/);
+});
+
+test('the briefing never tells her to announce the mood it describes', () => {
+  const briefing = moodBriefing({
+    label: 'bored',
+    current: { valence: -0.1, energy: -0.6, warmth: 0.2, interest: -0.7 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+  assert.match(briefing, /Never name it/);
+  // The risk the delivery lines introduce is that she narrates delivery. The
+  // briefing must not contain a caption she could copy.
+  assert.doesNotMatch(briefing, /\*/);
+});

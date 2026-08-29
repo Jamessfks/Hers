@@ -127,6 +127,9 @@ async function main(): Promise<void> {
           config.geminiApiKey,
           'This one was synthesised, because the turn behind it had no audio.',
           'Aoede',
+          // With a direction, because the flat path is the one that was already
+          // known to work and the styled one is what criterion 6 rests on.
+          { direction: 'You have very little energy. Slower, lower, the ends falling away.' },
         );
         const spokenOgg = spoken ? encodeOggOpus(spoken) : null;
         if (!spokenOgg) {
