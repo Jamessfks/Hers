@@ -4,6 +4,97 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.1 — 28 August 2026
+
+**v2.0.0 shipped unable to hear, and this is the release that fixes it.**
+Removing the sense buttons moved the microphone onto the wake gesture in the
+browser and left the server half where it was: `Conversation` built a
+`Companion` with no senses, `Situation` defaulted all three to false, and both
+`hear()` and `see()` return early on that map. Every microphone frame and every
+camera frame was dropped, on every install, for the whole release. Telegram was
+unaffected, because that path has no sense gate, which is exactly why the one
+surface anybody had tested was the one that still worked. Hearing and sight now
+come up with her and go down when she sleeps, and three tests wake through the
+path production actually uses and assert the bytes arrive — the suite could not
+see any of this, because it constructed a `Companion` directly and handed it the
+answer.
+
+**What she is told she can see is now whether a picture arrived, not whether a
+sense is on.** Those came apart the moment sight stopped being a switch somebody
+pressed: a camera the operating system has refused leaves the flag true with no
+frame behind it, and she would then be told she can see them — the failure
+already on record in that function, where she answered "I see you, bright and
+clear, actually" to somebody whose camera was off.
+
+**Her bedtime arrives now.** `rhythm.md` and `isAsleep()` shipped in v2.0 with
+nothing that ever looked at the clock, so she went on firing three-minute
+openers straight through the hour she chose for herself. A sixty-second
+re-arming check replaces the obvious `setTimeout`, which is wrong across a
+suspend, wrong after a daylight-saving change and wrong when somebody moves the
+clock. It fires on the transition into her window and never on the level, so
+waking her at 3am does not put her back sixty seconds later — once woken she
+stays up. The browser drops the microphone and camera with her, so the camera
+light goes out.
+
+**She knows which window you are in.** The frontmost application and its title,
+every fifteen seconds while she is awake, on macOS through `osascript` and on
+Windows through PowerShell, and nowhere else rather than guessing. It does not
+go through the `run` tool, deliberately: that would put four lines a minute into
+`hers-actions.log` and destroy the one record a person can actually read. A
+window title is very often a web page's `<title>`, so it reaches her inside the
+`⟦saw⟧` envelope and never as narration, and a test asserts it cannot appear
+outside.
+
+**She watches the screen again in the desktop application.** One Electron flag —
+`useSystemPicker: true` — was the whole reason the sense did not exist: with it
+set, the handler is never called and every wake means another dialog. Without
+it, returning a source grants capture silently, so you are asked which screen
+once and it is quiet after that. A browser tab still gets no live screen feed,
+because `getDisplayMedia` prompts on every call with no remembered grant, and
+that split is now stated in the README instead of the old claim that she "reads
+what is on your screen".
+
+**The weather reaches her.** It was being fetched and thrown away: the
+instruction is fixed at connect, the request sits behind a geocode, and nothing
+bridged the gap, so every session shipped with the city and no forecast. It is
+now injected when it lands and refreshed hourly, speaking only when the rendered
+line changed.
+
+**Her mood is in how she sounds, not only in what she picks.** `moodBriefing`
+gained a delivery clause per axis, and one new conjunction: unhappy with the
+warmth gone is the angry case and gets an edge on it, while unhappy and still
+warm is worry and does not. `enableAffectiveDialog` remains documented as
+unsupported on 3.1, so the system instruction is the only route — and
+`npm run probe:delivery` is the command that says whether it works, printing the
+pace spread across three arms and writing three `.wav` files to compare by ear.
+Below fifteen per cent the lines are doing nothing and should be deleted rather
+than believed.
+
+**The suite had been dialling Open-Meteo on every wake.** `Brain.offline`
+existed and only the memory layer read it. A flag half the program honours is
+worse than no flag.
+
+### Migrating from v2.0.0
+
+**Nothing you have typed changes.** No environment variable was renamed or
+removed, and the profile folder is untouched — `rhythm.md` written by v2.0.0 is
+read unchanged.
+
+**Two new optional variables.** `HERS_SCREEN_FPS=0` turns the screen sense off
+in the desktop application; it is the largest recurring cost of running her.
+`HERS_DESKTOP` is set by the application itself and is not something to set by
+hand — in a browser tab it produces an operating-system picker every time she
+wakes, which is the thing it exists to avoid.
+
+**One default changed.** Hearing and sight now start on rather than off. If you
+built anything against `Situation`, it no longer begins silent.
+
+**macOS will ask for two permissions it never asked for before**: Accessibility,
+for reading the frontmost window title, and Screen Recording, for the screen
+sense in the application. Refuse either and she carries on without that one —
+silently, because a companion who nags about a permission she needs for a
+background nicety is worse company than one who says nothing about your work.
+
 ## v2.0.0 — 28 August 2026
 
 **Hers is voice-only now, and almost everything you could look at is gone.** The

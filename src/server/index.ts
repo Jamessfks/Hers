@@ -35,7 +35,7 @@ import type { Config } from './config.ts';
 import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
 
-export const VERSION = '2.0.0';
+export const VERSION = '2.0.1';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');

@@ -27,6 +27,7 @@ import path from 'node:path';
 import { encode as encodeJpeg } from 'jpeg-js';
 
 import { Hands } from '../src/core/hands/hands.ts';
+import { ForegroundSense } from '../src/core/senses/foreground.ts';
 import { captionFrame } from '../src/core/gemini/text.ts';
 import { PlaceSense } from '../src/core/senses/place.ts';
 import { CHANGE_THRESHOLD, distance } from '../src/core/senses/watch.ts';
@@ -681,6 +682,22 @@ async function main(): Promise<void> {
       return {
         ok: first.length > 0 && second.length > 0 && moved >= CHANGE_THRESHOLD,
         evidence: `"${first.slice(0, 60)}" → "${second.slice(0, 60)}", distance ${moved.toFixed(2)} against ${String(CHANGE_THRESHOLD)}`,
+      };
+    },
+  );
+
+  // -- 13. What they are doing ----------------------------------------------
+  await check(
+    'Foreground — she can tell which application is in front',
+    '#8 awareness',
+    async () => {
+      const sense = new ForegroundSense();
+      const seen = await sense.poll();
+      return {
+        ok: Boolean(seen?.app),
+        evidence: seen
+          ? `${seen.app}${seen.title ? ` — ${seen.title}` : ''}`
+          : 'nothing came back — on macOS this is Accessibility permission, and it is silent by design',
       };
     },
   );

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { Companion } from './companion.ts';
 import type { CompanionOptions } from './companion.ts';
 import { PlaceSense } from '../senses/place.ts';
+import { writeRhythm } from '../profile/profile.ts';
 import { Brain } from './brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import type { LiveConnector, LiveSocket } from '../gemini/live.ts';
@@ -43,6 +44,16 @@ async function fixture(
   extra: Partial<CompanionOptions> = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-companion-'));
+  /*
+   * A companion who never sleeps, so these tests do not depend on the clock.
+   *
+   * Without this the default rhythm applies — midnight to seven — and waking
+   * her inside it sends the groggy `⟦director⟧` line before anything else. Any
+   * test that waits for "a director cue" then matches that one instead of the
+   * opener it meant, and passes all day and fails all night. Equal hours mean
+   * `isAsleep` is false at every hour, which is the shape this file wants.
+   */
+  await writeRhythm(path.join(root, 'profile'), { sleepHour: 3, wakeHour: 3, why: 'never' });
   const config = loadConfig({
     GEMINI_API_KEY: 'test-key',
     HERS_PROFILE: path.join(root, 'profile'),

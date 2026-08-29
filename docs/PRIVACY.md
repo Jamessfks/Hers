@@ -1,6 +1,6 @@
 # Privacy
 
-**Covers Hers v2.0.0.** This page describes the code in this repository at that
+**Covers Hers v2.0.1.** This page describes the code in this repository at that
 version and nothing else. A test fails if that version stops matching
 `package.json`, so a stale copy of this document cannot ship quietly alongside a
 newer program.

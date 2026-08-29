@@ -7,13 +7,15 @@ Node ≥22.18, no server build step — `node` runs the `.ts` files directly. On
 ## Commands
 
 ```bash
-npm run check           # typecheck + 485 tests, ~20s, no API key, no network. The gate.
+npm run check           # typecheck + 515 tests, ~20s, no API key, no network. The gate.
 npm run typecheck       # ~2s — two tsc projects: root and src/web
 npm test                # node --test over src/**/*.test.ts
 npm run dev             # rebuild site + restart server on save → http://127.0.0.1:5175
 npm run doctor          # opens a real Gemini session; needs GEMINI_API_KEY, costs money
 npm run audit           # every success criterion against the real APIs; costs money
 npm run audit:bridges   # Telegram; needs a bot token and a human
+npm run probe:delivery  # does the prompt reach her voice? writes three .wav files
+npm run probe:affective # is affective dialogue still refused? asks 3.1 and 2.5
 ```
 
 `npm run check` is the only one that is free and hermetic. Run it before you say
@@ -25,6 +27,7 @@ asks — they spend their API credit.
 | Path            | What                                                          |
 | --------------- | ------------------------------------------------------------- |
 | `src/core/`     | The companion: memory, mood, persona, senses, hands, sleep, setup |
+| `src/core/senses/` | Camera watching, place and weather, the foreground window   |
 | `src/bridges/`  | Telegram                                                      |
 | `src/server/`   | HTTP + WebSocket layer, config, doctor                        |
 | `src/web/`      | The site at 127.0.0.1:5175                                    |
