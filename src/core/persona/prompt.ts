@@ -748,6 +748,19 @@ export function moodUpdate(mood: MoodReadout): string {
   return `Your mood has shifted. ${moodBriefing(mood)}`;
 }
 
+/**
+ * The `⟦context⟧` line sent when the weather has arrived or changed.
+ *
+ * The system instruction is fixed at connect and only rebuilt on a reconnect,
+ * and the forecast almost never arrives before that — the request is behind a
+ * geocode, and waking her is not worth delaying for it. So the first wake of a
+ * run would tell her the city and nothing else, and go on doing so for the
+ * whole session. This is the other channel.
+ */
+export function placeUpdate(place: Place): string {
+  return `You looked outside. ${placeLine(place)}`;
+}
+
 /** The `⟦context⟧` line sent when the user switches a sense on or off. */
 export function senseUpdate(sense: 'hearing' | 'sight' | 'screen', on: boolean): string {
   const what = {

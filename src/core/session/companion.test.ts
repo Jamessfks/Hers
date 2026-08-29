@@ -5,6 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { Companion } from './companion.ts';
+import type { CompanionOptions } from './companion.ts';
+import { PlaceSense } from '../senses/place.ts';
 import { Brain } from './brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import type { LiveConnector, LiveSocket } from '../gemini/live.ts';
@@ -36,7 +38,10 @@ class FakeSocket implements LiveSocket {
   close(): void {}
 }
 
-async function fixture(env: Record<string, string> = {}) {
+async function fixture(
+  env: Record<string, string> = {},
+  extra: Partial<CompanionOptions> = {},
+) {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-companion-'));
   const config = loadConfig({
     GEMINI_API_KEY: 'test-key',
@@ -74,8 +79,8 @@ async function fixture(env: Record<string, string> = {}) {
   const companion = new Companion({
     brain,
     channel: 'desktop',
-    senses: { hearing: true },
     connect,
+    ...extra,
     sink: {
       audio: (pcm) => audio.push(pcm),
       transcript: (who, text, final) => transcript.push({ who, text, final }),
@@ -705,3 +710,65 @@ test('a name she chose during this wake reaches the page that watched her wake u
   assert.deepEqual(f.names, [chosen]);
 });
 
+
+// ---------------------------------------------------------------------------
+// The weather, which used to arrive after nobody was listening
+// ---------------------------------------------------------------------------
+
+/*
+ * v2.0 fetched the forecast and then had nowhere to put it.
+ *
+ * The system instruction is fixed at connect and only rebuilt on a reconnect,
+ * and the fetch is behind a geocode — so the first wake of every run shipped
+ * with the city and no weather, and stayed that way for the whole session.
+ * `PlaceSense` was working perfectly and she never once mentioned the rain.
+ */
+test('the forecast reaches her even though it lands after she has woken', async () => {
+  const f = await fixture(
+    {},
+    {
+      place: new PlaceSense({
+        timeZone: 'Europe/London',
+        fetcher: async (url) =>
+          new URL(url).host.startsWith('geocoding')
+            ? { results: [{ latitude: 51.5, longitude: -0.13, name: 'London' }] }
+            : { current: { temperature_2m: 11.4, weather_code: 63, is_day: 1 } },
+      }),
+    },
+  );
+  await f.companion.wake();
+  await settled();
+
+  const injected = JSON.stringify(f.socket().content);
+  assert.match(injected, /11°C and raining/);
+  assert.match(injected, /London/);
+  await f.companion.sleep();
+});
+
+test('a forecast that has not changed is not mentioned twice', async () => {
+  let asked = 0;
+  const f = await fixture(
+    {},
+    {
+      place: new PlaceSense({
+        timeZone: 'Europe/London',
+        fetcher: async (url) => {
+          if (new URL(url).host.startsWith('geocoding')) {
+            return { results: [{ latitude: 51.5, longitude: -0.13, name: 'London' }] };
+          }
+          asked += 1;
+          return { current: { temperature_2m: 11.4, weather_code: 63, is_day: 1 } };
+        },
+      }),
+    },
+  );
+  await f.companion.wake();
+  await settled();
+
+  const weather = f
+    .socket()
+    .content.filter((turn) => JSON.stringify(turn.turns).includes('looked outside'));
+  assert.equal(weather.length, 1, 'she said it once');
+  assert.equal(asked, 1);
+  await f.companion.sleep();
+});

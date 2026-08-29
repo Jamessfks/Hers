@@ -43,8 +43,9 @@ import { Hands } from '../hands/hands.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import { lexicalTokens } from '../memory/embedder.ts';
 import type { FactKind, RecalledFact } from '../memory/types.ts';
-import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
-import { PlaceSense } from '../senses/place.ts';
+import { buildSystemInstruction, moodUpdate, placeUpdate, senseUpdate } from '../persona/prompt.ts';
+import { PlaceSense, WEATHER_TTL_MS, placeLine } from '../senses/place.ts';
+import type { Place } from '../senses/place.ts';
 import { CameraWatcher } from '../senses/watch.ts';
 import type { Captioner } from '../senses/watch.ts';
 import { Situation } from '../senses/situation.ts';
@@ -188,6 +189,9 @@ export class Companion {
   readonly #hands: Hands;
   readonly #place: PlaceSense;
   readonly #watcher: CameraWatcher;
+  /** The last weather line she was told, so an unchanged forecast says nothing. */
+  #toldPlace = '';
+  #weatherTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: CompanionOptions) {
     this.#brain = options.brain;
@@ -197,7 +201,16 @@ export class Companion {
     this.#connect = options.connect;
     this.situation = new Situation(this.#now);
     this.#hands = options.hands ?? new Hands({ dir: this.#brain.config.dataDir });
-    this.#place = options.place ?? new PlaceSense();
+    this.#place =
+      options.place ??
+      new PlaceSense(
+        // An offline brain means an offline everything. `PlaceSense` builds a
+        // real `fetch` by default, and honouring the flag here is what keeps
+        // the suite and the doctor from going outside for the weather.
+        this.#brain.offline
+          ? { fetcher: () => Promise.reject(new Error('offline')) }
+          : {},
+      );
     this.#watcher = new CameraWatcher({
       caption:
         options.caption ??
@@ -299,10 +312,19 @@ export class Companion {
     const woken = isAsleep(brain.rhythm, this.situation.snapshot().hour);
     if (woken) brain.mood.feel('late-night');
 
-    // Fetched rather than awaited: the forecast is worth having in the prompt
-    // when it is already held, and never worth an extra second before she
-    // says hello.
-    void this.#place.refresh();
+    /*
+     * Fetched rather than awaited, and then told to her when it lands.
+     *
+     * Awaiting it would put a geocode and a forecast in front of hello, which
+     * is not a trade worth making. But not awaiting it meant the weather
+     * essentially never reached her: the instruction is fixed at connect and
+     * only rebuilt on a reconnect, so the first wake of every run shipped with
+     * the city and no forecast and stayed that way. The injection is the half
+     * that was missing.
+     */
+    void this.#place.refresh().then((place) => {
+      if (place.weather) this.#tellPlace(place);
+    });
 
     const live = new LiveConversation({
       apiKey: brain.config.geminiApiKey,
@@ -331,6 +353,7 @@ export class Companion {
     await live.start();
     this.#initiative.start();
     this.#emitMood(true);
+    this.#watchWeather();
     // After `start()`, not before: the session has to exist for the note to
     // reach it, and it is a note about the turn that is about to happen.
     if (woken) live.prompt(wokenLine(brain.rhythm, this.situation.snapshot().hour));
@@ -383,6 +406,9 @@ export class Companion {
     this.#waking = null;
     this.#initiative.stop();
     this.#watcher.reset();
+    if (this.#weatherTimer) clearInterval(this.#weatherTimer);
+    this.#weatherTimer = null;
+    this.#toldPlace = '';
     // Asleep is nothing at all rather than a quieter mode. A sense left on
     // while she is asleep is the camera-light problem in another form: the
     // hardware would say she is watching and the product would say she is not.
@@ -748,6 +774,32 @@ export class Companion {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Re-asks Open-Meteo once an hour, and only speaks when the answer moved.
+   *
+   * The hour is `WEATHER_TTL_MS`, which `PlaceSense` already enforces — this
+   * timer is what makes anything ask. Rendering the line and comparing it,
+   * rather than comparing the numbers, means a degree of drift that does not
+   * change what she would say costs nothing, which is the same discipline
+   * `MOOD_NOTIFY_DELTA` applies to her mood.
+   */
+  #watchWeather(): void {
+    if (this.#weatherTimer) return;
+    this.#weatherTimer = setInterval(() => {
+      void this.#place.refresh().then((place) => {
+        if (place.weather) this.#tellPlace(place);
+      });
+    }, WEATHER_TTL_MS);
+    this.#weatherTimer.unref?.();
+  }
+
+  #tellPlace(place: Place): void {
+    const line = placeLine(place);
+    if (line === this.#toldPlace) return;
+    this.#toldPlace = line;
+    this.#live?.prompt(placeUpdate(place));
   }
 
   #systemInstruction(): string {

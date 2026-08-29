@@ -137,6 +137,18 @@ export class Brain {
   }
 
   /**
+   * True when nothing here may reach the network.
+   *
+   * Only tests and the doctor pass it, and until v2.0.1 only `assemble` read
+   * it — which meant the memory layer respected it and `PlaceSense` did not, so
+   * the suite quietly dialled Open-Meteo on every wake. A flag that half the
+   * program honours is worse than no flag, so it is readable now.
+   */
+  get offline(): boolean {
+    return Boolean(this.#options.offline);
+  }
+
+  /**
    * The hours she keeps.
    *
    * Read out of `rhythm.md`, which she wrote and nothing in the interface can
