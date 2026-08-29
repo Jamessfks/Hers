@@ -4,6 +4,85 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.6 — 29 August 2026
+
+**She was uninteresting because she had been told to be, and the instruction
+that did it was one the program wrote itself.** The first companion this project
+composed in the wild was two thousand words of verdicts on its user: mock his
+taste, tell him his startup name sounds Soviet, refuse to help with his resume,
+never ask how his day was. `voice.md` finished the job by instructing her not to
+fill silences — to let them stretch until he broke first. She was doing exactly
+what she had been told.
+
+The brief caused it in three clauses. It asked for the personality "as
+prohibitions and examples", which produces a person made of negations. It said
+"be a specific person, not a pleasant one" with nothing on the other side of the
+scale. And it handed over a scan of the user's files as the raw material while
+asking for nothing she has of her own, so the only available subject was him and
+the only register left was judgement. Every behaviour it produced — mockery,
+sarcasm at his expense, hostile humour — is on Gottman's contempt list item for
+item, which is the single strongest predictor anybody has measured that a person
+stops wanting to talk to you.
+
+**Three things the evidence says make conversation work, none of which were in
+the data model.**
+
+The first is self-disclosure, which is the mechanism that produces closeness and
+which works reciprocally with artificial agents. The distiller's instructions
+ended "and never anything the companion said about herself", so every fact in
+the store was third-person and about the user. Disclosure without memory is
+worse than none — she grew up in Chengdu one week and Bridgeport the next, and
+inconsistent autobiography reads as a machine faster than silence does. There is
+a `hers` fact kind now, first person, handed back as "already said, therefore
+true from now on".
+
+The second is the follow-up question. `thread` has been a fact kind meaning "an
+open thread she should follow up on" since v1 and nothing ever treated it as
+one — it was recalled by the same semantic ranking as everything else, which
+means it surfaced when the conversation was already about it, which is the one
+moment a follow-up is not a follow-up. `openThreads()` returns them oldest
+first, because the ones that land are about the thing somebody mentioned last
+week and assumed you had forgotten.
+
+The third is that how much of herself she opens should move with how long you
+have known each other. Social penetration describes disclosure as breadth and
+depth, fast at first and slowing as the inner layers are reached, which is
+algebraically the curve `intimacy.ts` has computed since v1.4 and nothing was
+reading. Four rungs now, off that same number, and she never announces which one
+she is on.
+
+**The measured turn rule was banning the one kind of question that helps.**
+Twelve of seventeen turns ending on a question, and the five that did not being
+the only ones worth returning for: that stands. But the examples the rule bans
+are the question already asked in different words, "what are you thinking?", and
+a change of subject — all new questions, and a new question is what hands the
+turn back with work attached. Asking for the next detail of what somebody is
+already telling you is the cheapest turn in the conversation to answer. The
+question-asking research separates follow-ups from switch, mirror and rhetorical
+questions and finds follow-ups alone produce the effect, so the rule is scoped to
+new questions and the follow-up moment is named as outranking the closed list of
+assertions. Measured before: nought questions in three turns. After the
+exemption alone: one, and rhetorical. After naming the moment: two, and the
+middle one a real follow-up.
+
+**Backchannels are not possible on this API and the instruction asking for them
+is gone.** Turns strictly alternate and detected speech cancels her generation
+rather than overlapping it, so "mm" and "right" while the other person is still
+talking cannot happen. They moved to the front of her turn, where they can.
+
+**The distiller was the last call in `text.ts` still budgeting for thinking it
+does not need.** Observed truncating a real consolidation — two facts written,
+the third dropped. The header warning about that hazard is attached to that very
+function, and the earlier corrections went to the caption and the transcriber
+instead.
+
+### Migrating from v2.0.5
+
+Nothing to do, and nothing you have already is rewritten. A companion composed
+before this release keeps the personality she was given — the brief only runs
+once, at first setup, and there is deliberately no way to re-run it except
+starting over from the Setup panel, which deletes everything else with it.
+
 ## v2.0.5 — 29 August 2026
 
 **The interface is the colour of the mark now.** The ground was

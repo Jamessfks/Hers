@@ -4,11 +4,11 @@
 
 **Voice only. Nobody else's server. She picks who she is, and you cannot change it.**
 
-[![Version](https://img.shields.io/badge/version-2.0.4-4b3f9e?style=flat-square&labelColor=22204d)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.6-4b3f9e?style=flat-square&labelColor=22204d)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-4b3f9e?style=flat-square&labelColor=22204d)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.18-4b3f9e?style=flat-square&labelColor=22204d)](https://nodejs.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows-4b3f9e?style=flat-square&labelColor=22204d)](https://github.com/Jamessfks/Hers/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-526%20passing-4b3f9e?style=flat-square&labelColor=22204d)](#working-on-it)
+[![Tests](https://img.shields.io/badge/tests-535%20passing-4b3f9e?style=flat-square&labelColor=22204d)](#working-on-it)
 
 She has one screen: a sphere that moves as she speaks. No chat window, no avatar,
 no history to scroll. She hears you, sees you through your camera, watches your
@@ -206,7 +206,7 @@ worth the twenty minutes if you are going to leave her running.
 ## Working on it
 
 ```bash
-npm run check      # typecheck + 526 tests, ~20s. No API key, no network. The gate.
+npm run check      # typecheck + 535 tests, ~20s. No API key, no network. The gate.
 npm run dev        # rebuild and restart on save
 npm run package    # a .dmg or an installer for this machine
 ```
