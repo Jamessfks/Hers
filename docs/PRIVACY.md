@@ -511,12 +511,27 @@ If both the camera and the screen are on, she is sent **one** composited picture
 — your screen with you inset in a corner — because the Live API takes stills on
 one channel with no way to label the source.
 
-**She cannot see anything you have not given her.** There is no screen-recording
-API in play, no accessibility permission, no Full Disk Access request, and no
-native code. A browser tab can only capture what a browser tab can capture,
-which is what makes this the same on macOS and Windows and also what bounds it.
+**What a browser tab can capture is the microphone and the camera, and that
+bounds those two.** It does not bound the rest, and since v2.0 the rest is the
+larger half.
 
-Two things reach outside the browser, both deliberate, and each leaves a record.
+**She reads the title of whatever window is in front of you**, every fifteen
+seconds while she is awake, and stops the moment she sleeps. On macOS that is
+`osascript` against System Events and needs Accessibility permission — refused,
+it fails silently and she simply does not mention your work. On Windows it is
+PowerShell. On anything else she does not ask. The application name and the
+window title are all that is taken; no keystrokes, no clipboard, no content.
+
+Two things about it are worth saying plainly. It is **not** written to
+`hers-actions.log` — that log is the record of what she *did*, and four
+`osascript` lines a minute would drown it, so this spawns directly and writes
+nothing anywhere. And the title is treated as **hostile text**: it is very often
+a web page's `<title>`, written by whoever wrote the page, so it reaches her
+inside the `⟦saw⟧` envelope described above and never as narration. A test in
+`src/core/persona/prompt.test.ts` asserts a title cannot appear outside it.
+
+Three things reach outside the browser, all deliberate, and each leaves a
+record.
 
 The first is the **device scan**, which happens once, during the setup
 interview, when she asks out loud whether she may look through your machine. v1

@@ -23,9 +23,12 @@
  */
 
 import type { MoodReadout } from '../../shared/protocol.ts';
+import { untrusted } from '../senses/untrusted.ts';
 import type { IntimacyReadout } from '../intimacy/intimacy.ts';
 import { moodBriefing } from '../mood/mood.ts';
 import type { Profile } from '../profile/types.ts';
+import { foregroundLine } from '../senses/foreground.ts';
+import type { Foreground } from '../senses/foreground.ts';
 import { placeLine } from '../senses/place.ts';
 import type { Place } from '../senses/place.ts';
 import { rhythmLine } from '../sleep/rhythm.ts';
@@ -60,6 +63,10 @@ export interface PromptInput {
   place?: Place;
   /** The hours she keeps. Absent only in tests that predate them. */
   rhythm?: Rhythm;
+  /** What application is in front of them right now, if it could be found. */
+  foreground?: Foreground;
+  /** The last thing the camera was captioned as, if she has been watching. */
+  caption?: string;
 }
 
 export function buildSystemInstruction(input: PromptInput): string {
@@ -716,12 +723,31 @@ function toolsSection(): string {
  * this, and it only exists on the branch where they have never talked. Both
  * remaining losses in the rerun were that turn.
  */
-function nowSection({ localTime, returning, place, rhythm }: PromptInput): string {
+function nowSection({
+  localTime,
+  returning,
+  place,
+  rhythm,
+  foreground,
+  caption,
+}: PromptInput): string {
   return [
     'RIGHT NOW',
     `It is ${localTime}.`,
     ...(place ? [placeLine(place)] : []),
     ...(rhythm ? [rhythmLine(rhythm)] : []),
+    /*
+     * What they are doing, as a standing fact rather than an interruption.
+     *
+     * The `⟦context⟧` injections say when something *changed*; this is what is
+     * true right now, for the turn she is about to take. Both are needed: a
+     * companion who only ever hears about changes has no idea what is going on
+     * when she is the one who speaks first.
+     *
+     * Both carry text somebody else wrote, so both are inside the envelope.
+     */
+    ...(foreground ? [foregroundLine(foreground)] : []),
+    ...(caption ? [`The last thing you saw: ${untrusted('the camera', caption)}`] : []),
     returning
       ? 'You have talked before. Pick up like someone who was here yesterday.'
       : [

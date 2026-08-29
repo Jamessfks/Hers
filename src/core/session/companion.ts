@@ -44,6 +44,7 @@ import { Initiative } from '../initiative/initiative.ts';
 import { lexicalTokens } from '../memory/embedder.ts';
 import type { FactKind, RecalledFact } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, placeUpdate, senseUpdate } from '../persona/prompt.ts';
+import { ForegroundSense, foregroundUpdate } from '../senses/foreground.ts';
 import { PlaceSense, WEATHER_TTL_MS, placeLine } from '../senses/place.ts';
 import type { Place } from '../senses/place.ts';
 import { CameraWatcher } from '../senses/watch.ts';
@@ -87,6 +88,8 @@ export interface CompanionOptions {
   place?: PlaceSense;
   /** Injected by tests so no frame is sent off for captioning. */
   caption?: Captioner;
+  /** Injected by tests so nothing asks the operating system what is in front. */
+  foreground?: ForegroundSense;
 }
 
 /** How far her mood has to move before it is worth telling her about. */
@@ -100,6 +103,14 @@ const MOOD_NOTIFY_DELTA = 0.25;
  * which case it should not be used at all.
  */
 const FRAME_STILL_TRUE_MS = 20_000;
+/**
+ * How often she looks at which window is in front.
+ *
+ * Fifteen seconds. Faster produces a running commentary on somebody flicking
+ * between two windows; slower and "you have been in that a while" stops being
+ * true by the time she says it.
+ */
+const FOREGROUND_INTERVAL_MS = 15_000;
 /** Facts pulled into the system instruction at wake. */
 const RECALL_LIMIT = 8;
 /**
@@ -192,6 +203,8 @@ export class Companion {
   /** The last weather line she was told, so an unchanged forecast says nothing. */
   #toldPlace = '';
   #weatherTimer: ReturnType<typeof setInterval> | null = null;
+  readonly #foreground: ForegroundSense;
+  #foregroundTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: CompanionOptions) {
     this.#brain = options.brain;
@@ -210,6 +223,13 @@ export class Companion {
         this.#brain.offline
           ? { fetcher: () => Promise.reject(new Error('offline')) }
           : {},
+      );
+    this.#foreground =
+      options.foreground ??
+      new ForegroundSense(
+        // The same rule as the weather: an offline brain reaches nothing, and
+        // spawning `osascript` in a test suite is a side effect nobody asked for.
+        this.#brain.offline ? { ask: () => Promise.resolve(null) } : {},
       );
     this.#watcher = new CameraWatcher({
       caption:
@@ -354,6 +374,7 @@ export class Companion {
     this.#initiative.start();
     this.#emitMood(true);
     this.#watchWeather();
+    this.#watchForeground();
     // After `start()`, not before: the session has to exist for the note to
     // reach it, and it is a note about the turn that is about to happen.
     if (woken) live.prompt(wokenLine(brain.rhythm, this.situation.snapshot().hour));
@@ -409,6 +430,9 @@ export class Companion {
     if (this.#weatherTimer) clearInterval(this.#weatherTimer);
     this.#weatherTimer = null;
     this.#toldPlace = '';
+    if (this.#foregroundTimer) clearInterval(this.#foregroundTimer);
+    this.#foregroundTimer = null;
+    this.#foreground.reset();
     // Asleep is nothing at all rather than a quieter mode. A sense left on
     // while she is asleep is the camera-light problem in another form: the
     // hardware would say she is watching and the product would say she is not.
@@ -795,6 +819,26 @@ export class Companion {
     this.#weatherTimer.unref?.();
   }
 
+  /**
+   * Asks what is in front of them, and speaks only when it changed.
+   *
+   * Fifteen seconds is slow enough that a person flicking between two windows
+   * does not produce a running commentary, and fast enough that "you have been
+   * in that document a while" is true when she says it. Nothing is injected
+   * while she is talking or being talked to: the point is that she noticed, not
+   * that she interrupted.
+   */
+  #watchForeground(): void {
+    if (this.#foregroundTimer) return;
+    this.#foregroundTimer = setInterval(() => {
+      if (this.#speaking || this.#userTalking || !this.#live?.isLive) return;
+      void this.#foreground.poll().then((moved) => {
+        if (moved) this.#live?.prompt(foregroundUpdate(moved));
+      });
+    }, FOREGROUND_INTERVAL_MS);
+    this.#foregroundTimer.unref?.();
+  }
+
   #tellPlace(place: Place): void {
     const line = placeLine(place);
     if (line === this.#toldPlace) return;
@@ -819,6 +863,8 @@ export class Companion {
       intimacy: this.#brain.intimacy.read(),
       place: this.#place.snapshot(),
       rhythm: this.#brain.rhythm,
+      ...(this.#foreground.current ? { foreground: this.#foreground.current } : {}),
+      ...(this.#watcher.caption ? { caption: this.#watcher.caption } : {}),
     });
   }
 
