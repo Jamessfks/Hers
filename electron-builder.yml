@@ -42,9 +42,10 @@ files:
   - '!**/*.test.ts'
 
 # Nothing here is compiled against Node's ABI. The one native file in the tree
-# is LiveKit's prebuilt N-API binding, which is ABI-stable by construction and
-# is the reason `node:sqlite` was chosen over `better-sqlite3` in the first
-# place. Rebuilding would cost minutes and change nothing.
+# was LiveKit's prebuilt N-API binding, and v2.0 removed it with the phone
+# bridge — the tree now has no native code at all, which is also why
+# `node:sqlite` was chosen over `better-sqlite3` in the first place. Rebuilding
+# would cost minutes and change nothing.
 # The fuses are NOT set here. electron-builder runs its fuse step after
 # `afterPack`, so setting them here rewrote the binary after `build/adhoc-sign.cjs`
 # had sealed it, and `codesign --verify` then reported "code or signature have
@@ -66,23 +67,26 @@ mac:
   # Silicon requires before it will run a binary at all — it is not a
   # Developer ID and macOS will still ask on first launch.
   identity: null
-  # Apple Silicon only, and that is a limit of this machine rather than a
-  # decision. LiveKit's binding is a per-architecture package that npm installs
-  # only for the machine it is installing on, so a build made here would carry
-  # an arm64 `.node` into an Intel application and crash on the first import.
-  # An Intel build is one `npm install` on an Intel Mac away; it is not one
-  # flag away, and shipping it from here would be a lie.
+  # Both architectures, from one machine. It could not be done before v2.0:
+  # LiveKit's media binding was a per-architecture prebuilt that `npm install`
+  # fetched only for the machine doing the installing, so an arm64 `.node` went
+  # into any Intel build and crashed on the first import. Cutting the phone
+  # bridge removed the only native dependency in the tree, and with it the
+  # reason. Two separate `.dmg` files rather than a universal binary: a
+  # universal one is both slices in one download, which doubles what an Apple
+  # Silicon user — nearly all of them — has to fetch.
   target:
     - target: dmg
       arch:
         - arm64
+        - x64
   # macOS refuses the microphone, the camera and the screen without a sentence
   # saying what they are for, and shows this sentence in the prompt. Three
   # senses, three sentences, each true.
   extendInfo:
-    NSMicrophoneUsageDescription: Hers listens when you turn hearing on, so she can hear you speak.
-    NSCameraUsageDescription: Hers watches when you turn sight on, so she can see you.
-    NSScreenCaptureUsageDescription: Hers reads your screen when you turn the screen sense on, so she can see what you are working on.
+    NSMicrophoneUsageDescription: Hers listens while she is awake, so she can hear you speak.
+    NSCameraUsageDescription: Hers watches while she is awake, so she can see you.
+    NSScreenCaptureUsageDescription: Hers reads your screen when you show it to her, so she can see what you are working on.
     # She waits out silences and then speaks first, and the timer that does it
     # runs in this process. App Nap throttles the timers of an application
     # nobody is looking at, which is exactly when that promise matters.
@@ -96,7 +100,7 @@ dmg:
 # run on a Windows box and correct, and an absent one is a rewrite.
 win:
   icon: build/icon.png
-  # x64 only, for the same reason macOS is arm64 only: the LiveKit binding is
+  # x64 only. Unlike macOS this is a decision rather than a limit: arm64 Windows
   # picked by npm for the machine doing the installing. Windows on ARM runs x64
   # applications under emulation, so this is one installer rather than a gap.
   target:

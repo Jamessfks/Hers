@@ -1,7 +1,7 @@
 /**
  * Everything about her that outlives a conversation.
  *
- * Her memory, her mood, her profile and her gallery are one set of things, not
+ * Her memory, her mood and her profile are one set of things, not
  * one set per transport. Somebody who tells her about their week on the phone
  * and then opens the browser should not meet a second her who has never heard
  * of it, and a mood knocked flat over Telegram should still be flat at the
@@ -14,15 +14,20 @@ import { mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { AvatarStudio } from '../avatar/studio.ts';
-import { Gallery } from '../gallery/gallery.ts';
 import { Intimacy } from '../intimacy/intimacy.ts';
-import { createGeminiDistiller, generatePortrait } from '../gemini/text.ts';
+import { createGeminiDistiller } from '../gemini/text.ts';
 import { createGoogleEmbedder, createLexicalEmbedder } from '../memory/embedder.ts';
 import { Memory } from '../memory/memory.ts';
 import { MemoryStore } from '../memory/store.ts';
 import { Mood } from '../mood/mood.ts';
-import { ensureProfile, loadProfile, loadVolatility, writeChosenName } from '../profile/profile.ts';
+import {
+  ensureProfile,
+  loadProfile,
+  loadRhythm,
+  loadVolatility,
+  writeChosenName,
+} from '../profile/profile.ts';
+import type { Rhythm } from '../sleep/rhythm.ts';
 import { PLACEHOLDER_NAME, chooseName, isPlaceholderName } from '../profile/naming.ts';
 import type { Profile } from '../profile/types.ts';
 import type { Config } from '../../server/config.ts';
@@ -33,10 +38,10 @@ export interface BrainOptions {
   /**
    * Asks her what she would like to be called.
    *
-   * A seam for the same reason `AvatarStudio` takes its painter and `Companion`
-   * takes its connector: the interesting behaviour around this call is the
-   * read-write path and the guard against two callers racing it, and none of that
-   * is testable if the only way to reach it is a live model.
+   * A seam for the same reason `Companion` takes its connector: the interesting
+   * behaviour around this call is the read-write path and the guard against two
+   * callers racing it, and none of that is testable if the only way to reach it
+   * is a live model.
    */
   chooseName?: typeof chooseName;
 }
@@ -46,8 +51,7 @@ interface Parts {
   memory: Memory;
   mood: Mood;
   intimacy: Intimacy;
-  gallery: Gallery;
-  avatar: AvatarStudio;
+  rhythm: Rhythm;
 }
 
 export class Brain {
@@ -65,9 +69,7 @@ export class Brain {
    * feature promises.
    *
    * Two callers can overlap, and it is worth being exact about which, because the
-   * obvious pair is the wrong answer. Minting a call invite is one caller, but on
-   * the run that produced Casey-and-Mei `LIVEKIT_URL` and its key and secret were unset, so
-   * `CallBridge` was never constructed and that line was unreachable. The pair was
+   * obvious pair is the wrong answer. The pair was
    * two wakes: `Companion#waking` guards one instance, and `Conversation.sleep`
    * drops the instance without waiting for a wake still parked in here, so the next
    * wake builds a second `Companion` and enters this a second time. On a fresh
@@ -130,16 +132,20 @@ export class Brain {
     return this.#parts.intimacy;
   }
 
-  get gallery(): Gallery {
-    return this.#parts.gallery;
-  }
-
-  get avatar(): AvatarStudio {
-    return this.#parts.avatar;
-  }
-
   get profile(): Profile {
     return this.#parts.profile;
+  }
+
+  /**
+   * The hours she keeps.
+   *
+   * Read out of `rhythm.md`, which she wrote and nothing in the interface can
+   * edit. It sits here rather than on `Profile` for that reason: `Profile` is
+   * the thing the user used to be able to change, and putting her bedtime in it
+   * would invite the next person to add a field for it.
+   */
+  get rhythm(): Rhythm {
+    return this.#parts.rhythm;
   }
 
   /**
@@ -167,10 +173,9 @@ export class Brain {
    * Forgets everything and starts again as a stranger.
    *
    * Deletes both directories outright rather than emptying them file by file:
-   * memory, its write-ahead log, the mood on disk, the profile, the gallery and
-   * the photograph are all under one of the two, and a list of things to delete
-   * is a list that grows a hole every time something new is written. `assemble`
-   * puts the defaults back.
+   * memory, its write-ahead log, the mood on disk and the profile are all under
+   * one of the two, and a list of things to delete is a list that grows a hole
+   * every time something new is written. `assemble` puts the defaults back.
    *
    * What survives is `.env` — the keys are the user's, not hers.
    */
@@ -337,33 +342,12 @@ async function assemble(config: Config, options: { offline?: boolean }): Promise
   const intimacy = new Intimacy({ dir: config.profileDir });
   await intimacy.restore();
 
-  /*
-   * The painter is the seam. Without a key the studio still holds her
-   * photograph — it simply cannot make a new face, which `makeFace` says in as
-   * many words rather than failing obscurely.
-   */
-  const avatar = new AvatarStudio({
-    dir: path.join(config.profileDir, 'avatar'),
-    ...(remote
-      ? {
-          paint: (prompt, reference) =>
-            generatePortrait({ apiKey: config.geminiApiKey, prompt, reference }),
-        }
-      : {}),
-  });
-  await avatar.load();
-
   return {
     profile,
     memory,
     mood,
     intimacy,
-    // The gallery is told where her face is rather than each caller remembering
-    // to pass it. "A generated picture is of the woman in the photograph" is a
-    // property of the gallery, and a property that depends on every call site
-    // getting an argument right is not a property.
-    gallery: new Gallery(path.join(config.profileDir, 'gallery'), { face: () => avatar.face() }),
-    avatar,
+    rhythm: await loadRhythm(config.profileDir),
   };
 }
 

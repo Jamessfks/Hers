@@ -4,88 +4,51 @@
  * Reading order, roughly the order things happen:
  *
  *   1. Connect to the local server and paint whatever it says.
- *   2. When a sense is switched on, open the device and start pushing media.
- *   3. When she talks, play it; when she is cut off, stop instantly.
- *   4. Tell the server periodically whether anyone is still sitting here, which
+ *   2. When she talks, play it; when she is cut off, stop instantly.
+ *   3. Tell the server periodically whether anyone is still sitting here, which
  *      is the only thing a browser can honestly report about presence and is
  *      what the three-minute rule reasons about.
  *
  * Waking her is a click and not automatic, and it has to stay that way:
  * browsers will not start audio without a gesture, and a companion who opens
  * the microphone the moment a tab loads is a companion nobody should install.
+ *
+ * Since v2.0 the senses are not switches. v1 had three toggles in the header,
+ * which put the user in the position of granting her a sense at a time and made
+ * "can she hear me" a question with a wrong answer. Now hearing comes up with
+ * her, on the same gesture, and it goes down when she sleeps — so the honest
+ * statement is the simple one: while she is awake she is listening, and while
+ * she is asleep she is not. The camera comes up on the same gesture, because
+ * `getUserMedia` asks once and then remembers.
+ *
+ * The screen does not, and that is a loss worth naming rather than hiding.
+ * `getDisplayMedia` shows an operating system picker on **every** call — there
+ * is no remembered grant — so making it automatic would mean a dialog every
+ * time she wakes. For somebody living alone, who wakes her several times a day,
+ * that is worse than not having the sense. She can still be shown a screen; it
+ * is `run("osascript …")` and a screenshot now, rather than a live feed.
  */
 
 import './styles.css';
 
+import type { ServerMessage } from '../shared/protocol.ts';
 import { MediaKind } from '../shared/protocol.ts';
-import type { SenseName, ServerMessage } from '../shared/protocol.ts';
 import { Connection } from './connection.ts';
 import { Microphone } from './audio/mic.ts';
 import { Player } from './audio/player.ts';
 import { Vision } from './vision.ts';
 import { Ui } from './ui.ts';
-import type { KnowledgeView, ScanOutcomeView } from './ui.ts';
 
 /** How often presence is reported. Cheap, and the server only needs the shape. */
 const PRESENCE_INTERVAL_MS = 15_000;
 
-const senses: Record<SenseName, boolean> = { hearing: false, sight: false, screen: false };
 let lastInteractionAt = Date.now();
 let awake = false;
 
 const ui = new Ui({
-  onToggleSense: (sense, on) => void toggleSense(sense, on),
-  /*
-   * Asked of the devices, every time the indicator is drawn. `senses` — the
-   * local record of what was requested — is deliberately not consulted: it is
-   * another thing that can be wrong, and the point is to have exactly one
-   * account of whether a camera is open, given by the camera.
-   */
-  senseIsLive: (sense) => {
-    if (sense === 'hearing') return microphone.isLive();
-    if (sense === 'sight') return vision.isLive('camera');
-    return vision.isLive('screen');
-  },
   onWake: () => void toggleWake(),
-  onSay: (text) => {
-    connection.send({ t: 'say', text });
-    ui.line('user', text, true);
-    if (!awake) void toggleWake();
-  },
-  onLoadProfile: () => connection.send({ t: 'profile.load' }),
-  onSaveProfile: (files, quiet) => connection.send({ t: 'profile.save', files, quiet: quiet === true }),
-  onUploadFace: (file) => void uploadFace(file),
   onClaim: () => connection.connect(),
-  onLoadMemory: () => connection.send({ t: 'memory.load' }),
-  onEditMemory: (id, text) => connection.send({ t: 'memory.edit', id, text }),
-  onForgetMemory: (id) => connection.send({ t: 'memory.forget', id }),
-  onAddMemory: (text) => connection.send({ t: 'memory.add', text }),
-  onPinIntimacy: (score) => connection.send({ t: 'intimacy.pin', score }),
-  onAutoIntimacy: () => connection.send({ t: 'intimacy.auto' }),
-  onLoadKnowledge: async () => {
-    try {
-      const response = await fetch('/api/knowledge');
-      return response.ok ? ((await response.json()) as KnowledgeView) : {};
-    } catch {
-      return {};
-    }
-  },
-  onScan: async (folders) => {
-    try {
-      const response = await fetch('/api/knowledge', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ folders }),
-      });
-      return (await response.json()) as ScanOutcomeView;
-    } catch (error) {
-      return {
-        error: `Could not reach the server: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  },
   onSaveKey: (key) => post('/api/key', { key }),
-  onMakeFace: (expression) => connection.send({ t: 'avatar.make', expression }),
   onSaveBotToken: async (token) => {
     // Unlike the other setup posts, the interesting part of the answer is the
     // body: the page needs the bot's username to build the link the user opens.
@@ -136,67 +99,7 @@ async function post(url: string, body: unknown): Promise<string | null> {
   }
 }
 
-/**
- * Sends the picture as the raw request body.
- *
- * Not multipart: a `File` is a `Blob`, `fetch` will send it verbatim with its
- * own type as the content-type, and the server needs no parser for it. The
- * size is checked here as well as on the server — not for safety, which is the
- * server's job, but so that choosing a 40MB photograph fails instantly instead
- * of after uploading 40MB to be told no.
- */
-async function uploadFace(file: File): Promise<void> {
-  const MAX_BYTES = 12 * 1024 * 1024;
-  if (file.size > MAX_BYTES) {
-    ui.toast(`That picture is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 12 MB.`);
-    return;
-  }
-
-  ui.toast('Uploading…', 2500);
-  try {
-    const response = await fetch('/api/avatar', {
-      method: 'POST',
-      headers: { 'content-type': file.type || 'application/octet-stream' },
-      body: file,
-    });
-    const body = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      ui.toast(body.error ?? 'That picture could not be used.');
-      return;
-    }
-    // The server announces the new state over the socket, so there is one path
-    // that updates the interface rather than two that can disagree.
-    ui.toast('That is her now.', 6000);
-  } catch (error) {
-    ui.toast(`The upload failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 const player = new Player({ onLevel: (level) => ui.setHerLevel(level) });
-
-const microphone = new Microphone({
-  onChunk: (pcm) => connection.sendMedia(MediaKind.MIC_PCM16, pcm),
-  onLevel: (level) => ui.setMicLevel(level),
-});
-
-const vision = new Vision({
-  onFrame: (kind, jpeg) => {
-    connection.sendMedia(
-      kind === 'camera' ? MediaKind.CAMERA_JPEG : MediaKind.SCREEN_JPEG,
-      jpeg,
-    );
-  },
-  onScreenActivity: (activity, stillSeconds) => {
-    connection.send({ t: 'screen', activity, stillSeconds });
-  },
-  onEnded: (source) => {
-    const sense: SenseName = source === 'camera' ? 'sight' : 'screen';
-    senses[sense] = false;
-    ui.setSense(sense, false);
-    ui.attachPreview(source, source === 'camera' ? vision.cameraElement : vision.screenElement, false);
-    connection.send({ t: 'sense', sense, on: false });
-  },
-});
 
 const connection = new Connection({
   // Only worth saying after a drop. Announcing a successful first connection is
@@ -212,30 +115,6 @@ const connection = new Connection({
 });
 
 function onMessage(message: ServerMessage): void {
-  if (message.t === 'ready') {
-    vision.setRates(message.cameraFps, message.screenFps);
-    /*
-     * Asked for immediately, not when the settings dialog opens.
-     *
-     * The reply is what says whether this folder has ever been used, and the
-     * page cannot decide whether to offer the first-run wizard without it. It
-     * also means the profile editor is populated before anybody clicks it,
-     * which it was not before.
-     */
-    connection.send({ t: 'profile.load' });
-    /*
-     * Tell the server about any device that is actually open.
-     *
-     * `ready` carries the server's view of the senses, and after a reconnect or
-     * a reset that view is a fresh one — while this page still has the camera
-     * light on. The device is the fact; the server's record of it is not. Left
-     * alone, the buttons would go dark on a page that is still sharing, which
-     * is the worst possible way for that to be wrong.
-     */
-    for (const [sense, on] of Object.entries(senses) as [SenseName, boolean][]) {
-      if (on && !message.senses[sense]) connection.send({ t: 'sense', sense, on: true });
-    }
-  }
   if (message.t === 'interrupted') {
     player.flush();
   }
@@ -245,77 +124,50 @@ function onMessage(message: ServerMessage): void {
   ui.apply(message);
 }
 
-// ---------------------------------------------------------------------------
-// Senses
-// ---------------------------------------------------------------------------
+const mic = new Microphone({
+  onChunk: (pcm) => connection.sendMedia(MediaKind.MIC_PCM16, pcm),
+  onLevel: (level) => ui.setMicLevel(level),
+});
 
-async function toggleSense(sense: SenseName, on: boolean): Promise<void> {
-  try {
-    if (sense === 'hearing') {
-      if (on) {
-        // Unlocking playback here is the point of the gesture: the first time
-        // anyone turns a sense on is reliably a click, and an AudioContext
-        // created outside one stays suspended and silent forever.
-        await player.unlock();
-        await microphone.start();
-      } else {
-        await microphone.stop();
-      }
-    } else if (sense === 'sight') {
-      if (on) await vision.startCamera();
-      else vision.stopCamera();
-      ui.attachPreview('camera', vision.cameraElement, on);
-    } else {
-      if (on) await vision.startScreen();
-      else vision.stopScreen();
-      ui.attachPreview('screen', vision.screenElement, on);
-    }
-  } catch (error) {
-    // A denied permission arrives here as an exception, and it is the single
-    // most common thing that will go wrong on a first run. Saying so plainly
-    // beats a sense button that silently refuses to light up.
-    ui.toast(explainMediaError(error, sense));
-    ui.setSense(sense, false);
-    senses[sense] = false;
-    connection.send({ t: 'sense', sense, on: false });
-    return;
-  }
-
-  senses[sense] = on;
-  ui.setSense(sense, on);
-  connection.send({ t: 'sense', sense, on });
-
-  // Turning a sense on is the moment someone means to start talking.
-  if (on && !awake) await toggleWake();
-}
+const vision = new Vision({
+  onFrame: (kind, jpeg) =>
+    connection.sendMedia(
+      kind === 'camera' ? MediaKind.CAMERA_JPEG : MediaKind.SCREEN_JPEG,
+      jpeg,
+    ),
+  onScreenActivity: (activity, stillSeconds) =>
+    connection.send({ t: 'screen', activity, stillSeconds }),
+  onEnded: () => undefined,
+});
 
 async function toggleWake(): Promise<void> {
   if (awake) {
     connection.send({ t: 'sleep' });
     player.flush();
+    mic.stop();
+    vision.stop();
     awake = false;
     return;
   }
+
+  // Both inside the gesture. `player.unlock()` and `getUserMedia` each require
+  // one, and awaiting anything else first spends it.
   await player.unlock();
+  try {
+    await mic.start();
+  } catch (error) {
+    ui.toast(
+      error instanceof Error && error.name === 'NotAllowedError'
+        ? 'She cannot hear you until the microphone is allowed.'
+        : 'The microphone would not open.',
+    );
+  }
+  // Deliberately not awaited into the same failure path. A refused camera is a
+  // companion who cannot see, which is a smaller thing than one who cannot
+  // hear, and it must not stop her waking.
+  void vision.startCamera().catch(() => undefined);
   connection.send({ t: 'wake' });
   awake = true;
-}
-
-function explainMediaError(error: unknown, sense: SenseName): string {
-  const name = error instanceof Error ? error.name : '';
-  const thing = sense === 'hearing' ? 'the microphone' : sense === 'sight' ? 'the camera' : 'screen sharing';
-  switch (name) {
-    case 'NotAllowedError':
-      return `Permission for ${thing} was refused. Allow it in the address bar and try again.`;
-    case 'NotFoundError':
-      return `No device found for ${thing}.`;
-    case 'NotReadableError':
-      return `Something else is using ${thing} right now.`;
-    case 'AbortError':
-      return `${thing[0]?.toUpperCase()}${thing.slice(1)} was cancelled.`;
-    default:
-      return `Could not start ${thing}: ${error instanceof Error ? error.message : String(error)}`;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -342,13 +194,5 @@ setInterval(reportPresence, PRESENCE_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 
-window.addEventListener('beforeunload', () => {
-  // The conversation deliberately survives a reload — the server keeps the
-  // companion — so this only releases the devices this page is holding.
-  vision.stop();
-  void microphone.stop();
-});
-
 connection.connect();
 ui.setState('asleep');
-ui.focusInput();

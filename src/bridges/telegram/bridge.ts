@@ -14,11 +14,9 @@
  *                 Opus in Ogg and the Live API takes raw PCM only, and no
  *                 amount of wanting changes that.
  *
- * Her replies come back as text rather than as voice notes, which is a codec
- * decision and not a taste one: `sendVoice` requires Ogg/Opus and encoding it
- * would mean shipping an encoder to solve a problem that `/call` already solves
- * better. Voice belongs on the call; Telegram is where she writes to you and
- * sends you pictures.
+ * Her replies are voice notes. Every one of them, since v2.0 — in her own
+ * recorded voice where the turn produced audio, and synthesised in the same
+ * voice where it did not. See `#say`.
  *
  * ## Who is allowed to talk to her
  *
@@ -29,16 +27,11 @@
  * which is a sane default rather than an open door.
  */
 
-import path from 'node:path';
-import { readFile } from 'node:fs/promises';
-
 import { encodeOggOpus, pcmSeconds } from '../../core/speech/ogg-opus.ts';
+import { synthesise } from '../../core/speech/synthesise.ts';
 import { transcribeMedia } from '../../core/gemini/text.ts';
-import { mimeFor } from '../../core/gallery/gallery.ts';
 import type { Conversation, Origin } from '../../core/session/conversation.ts';
 import type { Brain } from '../../core/session/brain.ts';
-import type { CallBridge } from '../livekit/bridge.ts';
-import { AvatarError } from '../../core/avatar/studio.ts';
 import { TelegramApi, largestPhoto } from './api.ts';
 import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from './api.ts';
 
@@ -50,10 +43,6 @@ import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate } from
  * descriptions attached.
  */
 const COMMANDS: BotCommand[] = [
-  { command: 'me', description: 'Her actual photo — the one you gave her' },
-  { command: 'face', description: 'Send a photo to become her face' },
-  { command: 'call', description: 'Ring her, with your camera and voice' },
-  { command: 'photo', description: 'Ask her for a picture' },
   { command: 'mood', description: 'How she is' },
   { command: 'bye', description: 'End the conversation' },
   { command: 'whoami', description: 'Your chat id' },
@@ -84,8 +73,6 @@ export interface TelegramBridgeOptions {
   conversation: Conversation;
   token: string;
   allowedChatIds: number[];
-  /** Present when LiveKit is configured. Without it, `/call` says so. */
-  calls?: CallBridge | null;
   /** Injected by tests so the allowlist can be exercised without a network. */
   api?: TelegramClient;
   /**
@@ -104,7 +91,6 @@ export class TelegramBridge {
   readonly #brain: Brain;
   readonly #api: TelegramClient;
   readonly #allowed: Set<number>;
-  readonly #calls: CallBridge | null;
   readonly #onChatPinned: ((chatId: number) => void) | undefined;
   #pinnedChatId: number | null = null;
   #offset = 0;
@@ -114,19 +100,9 @@ export class TelegramBridge {
   #attached = false;
   #chatId: number | null = null;
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
-  /**
-   * Chats that asked for `/face` and owe us a photo.
-   *
-   * Without this the bot has to guess what a bare photo means, and the two
-   * meanings are far apart: "look at this" and "this is now your face". A
-   * photo is only taken as a face when it was asked for, or when its caption
-   * says so.
-   */
-  readonly #awaitingFace = new Set<number>();
   /** Her voice for the turn in progress, kept only until the turn lands. */
   #speech: Buffer[] = [];
   /** True when the last thing they sent was spoken rather than typed. */
-  #theySpoke = false;
 
   constructor(options: TelegramBridgeOptions) {
     this.#brain = options.brain;
@@ -134,7 +110,6 @@ export class TelegramBridge {
     this.#api = options.api ?? new TelegramApi(options.token);
     this.#allowed = new Set(options.allowedChatIds);
     this.#onChatPinned = options.onChatPinned;
-    this.#calls = options.calls ?? null;
   }
 
   start(): void {
@@ -186,27 +161,11 @@ export class TelegramBridge {
     const chatId = message.chat.id;
     if (!this.#permitted(chatId)) return;
 
-    /*
-     * A command can arrive as a photo's caption, and that is the natural way to
-     * send `/face` with the picture attached. The Bot API delivers it in
-     * `caption_entities` as a `bot_command`; most bot frameworks only look at
-     * `text` and miss it entirely, which is why this reads both.
-     */
     const text = (message.text ?? '').trim();
-    const caption = (message.caption ?? '').trim();
-    const command = text.startsWith('/') ? text : caption.startsWith('/') ? caption : '';
+    const command = text.startsWith('/') ? text : '';
 
     if (command && !message.photo && !message.document) {
       await this.#command(chatId, command);
-      return;
-    }
-
-    // A photo is her face when it was asked for, or when it says so.
-    const wantsFace =
-      command.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() === '/face' ||
-      this.#awaitingFace.has(chatId);
-    if (wantsFace && (message.photo || isImageDocument(message))) {
-      await this.#setFace(chatId, message);
       return;
     }
 
@@ -232,44 +191,6 @@ export class TelegramBridge {
       return true;
     }
     return this.#pinnedChatId === chatId;
-  }
-
-  /**
-   * Adopts a photo as her face.
-   *
-   * Everything after the download is the studio's job — it validates the bytes
-   * rather than the claim, and it is the same path the web upload takes, so
-   * there is one set of rules about what a face may be rather than two.
-   */
-  async #setFace(chatId: number, message: TelegramMessage): Promise<void> {
-    this.#awaitingFace.delete(chatId);
-    await this.#api.sendChatAction(chatId, 'typing');
-
-    const document = isImageDocument(message) ? message.document : null;
-    const photo = message.photo ? largestPhoto(message.photo) : null;
-    const fileId = document?.file_id ?? photo?.file_id;
-    if (!fileId) {
-      await this.#api.sendMessage(chatId, "I couldn't find a picture in that.");
-      return;
-    }
-
-    const bytes = await this.#api.download(fileId);
-    if (!bytes) {
-      await this.#api.sendMessage(chatId, 'That file was too big for me to fetch.');
-      return;
-    }
-
-    try {
-      await this.#brain.avatar.setSource(bytes, document?.mime_type ?? 'image/jpeg');
-    } catch (error) {
-      await this.#api.sendMessage(
-        chatId,
-        error instanceof AvatarError ? error.message : 'That picture could not be used.',
-      );
-      return;
-    }
-
-    await this.#api.sendMessage(chatId, "That's me now. /me sends it back, /photo makes a new one.");
   }
 
   async #deliver(chatId: number, message: TelegramMessage, text: string): Promise<void> {
@@ -301,14 +222,11 @@ export class TelegramBridge {
         await this.#api.sendMessage(chatId, "I couldn't make that out.");
         return;
       }
-      // They spoke, so she answers in kind.
-      this.#theySpoke = Boolean(message.voice ?? message.video_note);
       companion.say(heard, 'telegram');
       return;
     }
 
     if (text) {
-      this.#theySpoke = false;
       companion.say(text, 'telegram');
     }
   }
@@ -318,10 +236,8 @@ export class TelegramBridge {
   // -------------------------------------------------------------------------
 
   async #command(chatId: number, raw: string): Promise<void> {
-    // `/call@YourBot arg` in a group.
-    const [head, ...rest] = raw.split(/\s+/);
+    const [head] = raw.split(/\s+/);
     const command = (head ?? '').split('@')[0]?.toLowerCase() ?? '';
-    const argument = rest.join(' ').trim();
 
     switch (command) {
       case '/start':
@@ -333,10 +249,6 @@ export class TelegramBridge {
             '',
             'Just talk to me — text, photos, voice notes, video notes. All of it reaches me.',
             '',
-            '/me       my actual photo, the one you gave me',
-            '/face     send a photo to become my face',
-            '/call     ring me, with your camera and your voice',
-            '/photo    ask me for a picture',
             '/mood     how I am',
             '/bye      end the conversation',
             '/whoami   your chat id',
@@ -347,23 +259,6 @@ export class TelegramBridge {
       case '/whoami':
         await this.#api.sendMessage(chatId, `This chat is ${chatId}.`);
         return;
-
-      case '/face': {
-        this.#awaitingFace.add(chatId);
-        const current = this.#brain.avatar.state();
-        await this.#api.sendMessage(
-          chatId,
-          [
-            current.hasSource
-              ? 'Send me a photo and it replaces my face.'
-              : 'Send me a photo and it becomes my face.',
-            '',
-            'JPEG, PNG or WebP. At least 256 pixels on the short side, at most 12 MB.',
-            'Send it as a file rather than a photo if you want the full resolution.',
-          ].join('\n'),
-        );
-        return;
-      }
 
       case '/mood': {
         const mood = this.#brain.mood.read();
@@ -376,73 +271,8 @@ export class TelegramBridge {
         await this.#api.sendMessage(chatId, 'Alright. Talk later.');
         return;
 
-      /*
-       * The photograph itself, never a generation.
-       *
-       * `/photo` may generate — that is what it is for. This one is the
-       * opposite promise: it is exactly the picture you uploaded, every time,
-       * with nothing in between. Asking "can I see you?" and getting a redraw
-       * of someone similar is the complaint this command exists to answer.
-       */
-      case '/me':
-      case '/selfie': {
-        const face = this.#brain.gallery.face();
-        if (!face) {
-          await this.#api.sendMessage(chatId, "You haven't given me a face yet — /face.");
-          return;
-        }
-        await this.#api.sendChatAction(chatId, 'upload_photo');
-        await this.#sendItem(chatId, face.absolutePath, face.name, face.kind, '');
-        return;
-      }
-
-      case '/photo': {
-        await this.#api.sendChatAction(chatId, 'upload_photo');
-        const item = await this.#brain.gallery.pick(argument || 'a picture of you right now', {
-          fresh: true,
-          apiKey: this.#brain.config.geminiApiKey,
-        });
-        if (!item) {
-          await this.#api.sendMessage(chatId, "Nothing came out. Try asking for something else.");
-          return;
-        }
-        await this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label);
-        return;
-      }
-
-      case '/call':
-        await this.#startCall(chatId);
-        return;
-
       default:
         await this.#api.sendMessage(chatId, `I don't know ${command}. /help lists what I do.`);
-    }
-  }
-
-  async #startCall(chatId: number): Promise<void> {
-    if (!this.#calls) {
-      await this.#api.sendMessage(
-        chatId,
-        'Calls are off — LiveKit is not configured on the machine I am running on.',
-      );
-      return;
-    }
-
-    try {
-      const invite = await this.#calls.invite('you');
-      await this.#api.sendMessage(
-        chatId,
-        [
-          "I'm on the line. Tap below and let me see you.",
-          '',
-          `The link is good for ${invite.expiresInMinutes} minutes.`,
-          'If your camera does not come on, open it in Safari or Chrome rather than',
-          "Telegram's own browser.",
-        ].join('\n'),
-        { inline_keyboard: [[{ text: `📞 Call ${this.#brain.profile.identity.name}`, url: invite.url }]] },
-      );
-    } catch (error) {
-      await this.#api.sendMessage(chatId, `I couldn't set that up: ${String(error)}`);
     }
   }
 
@@ -486,10 +316,6 @@ export class TelegramBridge {
           // Kept for the length of a turn so it can be sent as a voice note.
           if (this.#speech.length < 400) this.#speech.push(pcm);
         },
-        show: (item, origin) => {
-          if (!this.#mine(origin)) return;
-          void this.#sendItem(chatId, item.absolutePath, item.name, item.kind, item.label);
-        },
         trouble: (message) => console.warn(`telegram: ${message}`),
       });
     }
@@ -498,43 +324,67 @@ export class TelegramBridge {
   }
 
   /**
-   * Sends a finished line, in her voice or in text.
+   * Sends a finished line, as a voice note. Always.
    *
-   * She answers in kind: a voice note back to a voice note is what a person
-   * does, and it is the rule that needs no threshold. Beyond that she speaks
-   * occasionally rather than always — a companion who only ever sends audio is
-   * one you cannot read on a train.
+   * v1 gated this: a voice note only if the answer was under 320 characters
+   * *and* either they had spoken first or a coin came up one in four. Every
+   * other reply was text, and the transcript was appended to the voice notes
+   * as well. That produced a companion who was mostly a chat bot with an
+   * occasional audio novelty, which is the exact product v2.0 exists to stop
+   * being.
    *
-   * The text goes either way. A voice note nobody can play is a dead end, and
-   * the transcript costs nothing.
+   * So the gate is gone and so is the trailing transcript. Three ways a turn
+   * can end, in order of preference:
+   *
+   *   **Her own voice**, re-encoded from the PCM the Live session produced.
+   *   Better than any re-render, because it *is* the take — the pauses and the
+   *   breath are the ones she actually made.
+   *
+   *   **Synthesised**, when a turn produced no audio at all, which happens when
+   *   she answers a Telegram message while nothing is playing at the desk.
+   *   `gemini-3.1-flash-tts-preview` in her own `voiceName`, so it is at least
+   *   the same voice.
+   *
+   *   **Text**, only when both of those failed. Not a fallback anybody chose —
+   *   a message that never arrives is worse than one in the wrong medium — and
+   *   it is the one path here that breaks the promise the rest of this file
+   *   makes.
    */
   async #say(chatId: number, text: string): Promise<void> {
     const pcm = Buffer.concat(this.#speech);
     this.#speech = [];
 
-    const worthSpeaking =
-      pcm.length > 0 &&
-      // Long answers are tedious to listen to and easy to read.
-      text.length <= 320 &&
-      (this.#theySpoke || Math.random() < 0.25);
-
-    if (!worthSpeaking) {
-      await this.#api.sendMessage(chatId, text);
+    const ogg = pcm.length > 0 ? encodeOggOpus(pcm) : null;
+    if (ogg) {
+      await this.#api.sendVoice(
+        chatId,
+        { data: ogg, name: 'voice.ogg', mimeType: 'audio/ogg' },
+        pcmSeconds(pcm),
+      );
       return;
     }
 
-    const ogg = encodeOggOpus(pcm);
-    if (!ogg) {
-      await this.#api.sendMessage(chatId, text);
+    const spoken = await this.#speak(text);
+    if (spoken) {
+      await this.#api.sendVoice(
+        chatId,
+        { data: spoken.ogg, name: 'voice.ogg', mimeType: 'audio/ogg' },
+        spoken.seconds,
+      );
       return;
     }
 
-    await this.#api.sendVoice(
-      chatId,
-      { data: ogg, name: 'voice.ogg', mimeType: 'audio/ogg' },
-      pcmSeconds(pcm),
-    );
     await this.#api.sendMessage(chatId, text);
+  }
+
+  /** The synthesised fallback. Null on anything that did not work. */
+  async #speak(text: string): Promise<{ ogg: Buffer; seconds: number } | null> {
+    const key = this.#brain.config.geminiApiKey;
+    if (!key || !text.trim()) return null;
+    const pcm = await synthesise(key, text, this.#brain.profile.voice.voice);
+    if (!pcm) return null;
+    const ogg = encodeOggOpus(pcm);
+    return ogg ? { ogg, seconds: pcmSeconds(pcm) } : null;
   }
 
   /**
@@ -574,26 +424,6 @@ export class TelegramBridge {
     if (this.#idleTimer) clearTimeout(this.#idleTimer);
     this.#idleTimer = null;
   }
-
-  async #sendItem(
-    chatId: number,
-    absolutePath: string,
-    name: string,
-    kind: 'image' | 'clip',
-    caption: string,
-  ): Promise<void> {
-    try {
-      const data = await readFile(absolutePath);
-      const file = { data, name, mimeType: mimeFor(path.extname(name)) };
-      // An empty caption is no caption: a picture she generated has nothing a
-      // person wrote to put under it, and the file name is not a substitute.
-      const label = caption.trim() || undefined;
-      if (kind === 'clip') await this.#api.sendVideo(chatId, file, label);
-      else await this.#api.sendPhoto(chatId, file, label);
-    } catch (error) {
-      console.warn(`telegram: could not send ${name}: ${String(error)}`);
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -608,11 +438,6 @@ function mimeTypeOf(message: TelegramMessage): string {
   if (message.video) return message.video.mime_type ?? 'video/mp4';
   if (message.audio) return message.audio.mime_type ?? 'audio/mpeg';
   return 'application/octet-stream';
-}
-
-/** True for a picture sent as a file rather than compressed into a photo. */
-function isImageDocument(message: TelegramMessage): boolean {
-  return Boolean(message.document?.mime_type?.startsWith('image/'));
 }
 
 function delay(ms: number): Promise<void> {

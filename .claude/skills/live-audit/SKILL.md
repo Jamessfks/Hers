@@ -1,7 +1,7 @@
 ---
-description: Run the audits that talk to the real Gemini, LiveKit, and Telegram APIs. Costs the user money — never run without being asked.
+description: Run the audits that talk to the real Gemini and Telegram APIs. Costs the user money — never run without being asked.
 disable-model-invocation: true
-argument-hint: "[quick|paid|bridges|--only=name]"
+argument-hint: "[quick|bridges|--only=name]"
 ---
 
 # The live audits
@@ -9,7 +9,7 @@ argument-hint: "[quick|paid|bridges|--only=name]"
 `npm test` fakes every network seam on purpose, which leaves a specific gap: the
 tests prove the code does what it was written to do, not that Gemini does what it
 was read to do. These close it, and they cost real money — a few cents for a full
-run, more with `--paid`.
+run.
 
 **Do not run any of this unless the user asked in this session.** If they asked
 for "the tests", they meant `npm run check`.
@@ -24,23 +24,22 @@ for "the tests", they meant `npm run check`.
 ## The runs
 
 ```bash
-npm run audit                # everything except paid image generation
+npm run audit                # every success criterion
 npm run audit -- --quick     # skips the two multi-minute endurance checks
-npm run audit -- --paid      # adds image generation
 npm run audit -- --only=mood # one check, by substring
+npm run audit:bridges        # Telegram, and it needs a human — see below
 ```
 
-```bash
-brew install livekit && livekit-server --dev   # placeholder keys, printed on start
-LIVEKIT_URL=ws://127.0.0.1:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret \
-  npm run audit:bridges
-```
+Four checks are new in v2.0: that `run`, `open` and `write` actually change the
+machine and land in `hers-actions.log`; that she has the right city and a real
+forecast; that she is silent inside her own sleep window; and that a genuinely
+different camera frame captions differently enough to fire.
 
-The LiveKit check invites her into a room, joins as a fake caller publishing real
-synthesised speech and real video frames, and asserts she *heard the words* and
-answered out loud. Telegram cannot be faked: a bot may not open a conversation,
-so until a human has messaged it the audit reports what is missing rather than
-passing. That is correct behaviour — do not treat it as a failure to work around.
+`npm run audit:bridges` sends two voice notes — one recorded, one synthesised by
+the TTS fallback — so it proves the half of the Telegram promise that ordinary
+turns never exercise. Telegram cannot be faked: a bot may not open a
+conversation, so until a human has messaged it the audit reports what is missing
+rather than passing. That is correct behaviour — do not treat it as a failure to work around.
 
 ## Reporting
 

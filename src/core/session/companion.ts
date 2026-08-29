@@ -34,17 +34,20 @@ import type {
   ScreenActivity,
   SenseName,
 } from '../../shared/protocol.ts';
-import type { GalleryItem } from '../gallery/gallery.ts';
+import { captionFrame } from '../gemini/text.ts';
 import { LiveConversation } from '../gemini/live.ts';
 import type { LiveConnector, LiveState } from '../gemini/live.ts';
-import { FACT_KINDS, FEEL, LOOK, RECALL, REMEMBER, SHOW, hersTools } from '../gemini/tools.ts';
-import { isExpression } from '../avatar/expressions.ts';
+import { FACT_KINDS, FEEL, OPEN, RECALL, REMEMBER, RUN, WRITE, hersTools } from '../gemini/tools.ts';
+import { Hands } from '../hands/hands.ts';
 import { Initiative } from '../initiative/initiative.ts';
 import { lexicalTokens } from '../memory/embedder.ts';
 import type { FactKind, RecalledFact } from '../memory/types.ts';
 import { buildSystemInstruction, moodUpdate, senseUpdate } from '../persona/prompt.ts';
-import { asksToSeeHer } from '../gallery/gallery.ts';
-import { Situation, isLateNight } from '../senses/situation.ts';
+import { PlaceSense } from '../senses/place.ts';
+import { CameraWatcher } from '../senses/watch.ts';
+import type { Captioner } from '../senses/watch.ts';
+import { Situation } from '../senses/situation.ts';
+import { isAsleep, wokenLine } from '../sleep/rhythm.ts';
 import type { Brain } from './brain.ts';
 
 export interface CompanionSink {
@@ -64,15 +67,6 @@ export interface CompanionSink {
   named(name: string): void;
   /** Drop queued audio: she was cut off. */
   interrupted(): void;
-  /** She chose to send a picture or a clip. */
-  show(item: GalleryItem): void;
-  /**
-   * She changed her expression.
-   *
-   * The name of a face that has been generated for the photograph in force —
-   * never one that has not, because the tool is only ever offered the ready ones.
-   */
-  look(expression: string): void;
   trouble(message: string): void;
 }
 
@@ -85,6 +79,12 @@ export interface CompanionOptions {
   now?: () => number;
   /** Injected by tests so nothing opens a socket. */
   connect?: LiveConnector;
+  /** Injected by tests so nothing reaches a real shell. */
+  hands?: Hands;
+  /** Injected by tests so nothing asks Open-Meteo for the weather. */
+  place?: PlaceSense;
+  /** Injected by tests so no frame is sent off for captioning. */
+  caption?: Captioner;
 }
 
 /** How far her mood has to move before it is worth telling her about. */
@@ -98,8 +98,6 @@ const MOOD_NOTIFY_DELTA = 0.25;
  * which case it should not be used at all.
  */
 const FRAME_STILL_TRUE_MS = 20_000;
-/** How long after sending her photograph a second copy is a duplicate. */
-const DUPLICATE_FACE_MS = 20_000;
 /** Facts pulled into the system instruction at wake. */
 const RECALL_LIMIT = 8;
 /**
@@ -175,8 +173,6 @@ export class Companion {
    * answer to "what is in front of her right now".
    */
   #lastFrame: { bytes: Buffer; kind: 'camera' | 'screen'; at: number } | null = null;
-  /** When the photograph was last sent because they asked for it. */
-  #faceSentAt = 0;
   /** Guards the once-a-conversation credit for her having heard them. */
   #heardToday = false;
   /** In flight while a session is opening, so two callers share one. */
@@ -188,6 +184,9 @@ export class Companion {
   #lastNotifiedMood: MoodReadout | null = null;
   #memories: string[] = [];
   #closed = false;
+  readonly #hands: Hands;
+  readonly #place: PlaceSense;
+  readonly #watcher: CameraWatcher;
 
   constructor(options: CompanionOptions) {
     this.#brain = options.brain;
@@ -196,6 +195,17 @@ export class Companion {
     this.#now = options.now ?? (() => Date.now());
     this.#connect = options.connect;
     this.situation = new Situation(this.#now);
+    this.#hands = options.hands ?? new Hands({ dir: this.#brain.config.dataDir });
+    this.#place = options.place ?? new PlaceSense();
+    this.#watcher = new CameraWatcher({
+      caption:
+        options.caption ??
+        ((frame) =>
+          captionFrame(this.#brain.config.geminiApiKey, frame)),
+      isBusy: () => this.#speaking || this.#userTalking || !this.#live?.isLive,
+      onChange: (note) => this.#live?.prompt(note),
+      now: this.#now,
+    });
 
     for (const [sense, on] of Object.entries(options.senses ?? {})) {
       this.situation.setSense(sense as SenseName, Boolean(on));
@@ -260,15 +270,34 @@ export class Companion {
     }
 
     this.#memories = await this.#recall();
-    if (isLateNight(this.situation.snapshot().hour)) brain.mood.feel('late-night');
+
+    /*
+     * Being woken inside her own night.
+     *
+     * v1 asked `isLateNight()` — 1am to 5am, the same for everybody. This asks
+     * her own hours, which is the difference the pivot is about: a person who
+     * goes to bed at three is not being woken at two, and telling them she was
+     * asleep would be a lie that a companion who lives on their machine has no
+     * excuse for.
+     *
+     * She is woken rather than refusing to wake. Somebody alone at 4am is the
+     * user this product is for, and a companion who is unavailable to them is
+     * not a companion with boundaries; it is a missing feature.
+     */
+    const woken = isAsleep(brain.rhythm, this.situation.snapshot().hour);
+    if (woken) brain.mood.feel('late-night');
+
+    // Fetched rather than awaited: the forecast is worth having in the prompt
+    // when it is already held, and never worth an extra second before she
+    // says hello.
+    void this.#place.refresh();
 
     const live = new LiveConversation({
       apiKey: brain.config.geminiApiKey,
       model: brain.config.model,
       voice: brain.profile.voice.voice,
       languageCode: brain.profile.voice.languageCode,
-      // Only the faces that exist, so she cannot ask for one that is not there.
-      tools: hersTools(this.#brain.avatar.readyFaces()),
+      tools: hersTools(),
       // Rebuilt rather than captured, so a reconnect picks up her current mood
       // and the senses that are on now rather than the ones that were on when
       // the conversation started.
@@ -290,6 +319,9 @@ export class Companion {
     await live.start();
     this.#initiative.start();
     this.#emitMood(true);
+    // After `start()`, not before: the session has to exist for the note to
+    // reach it, and it is a note about the turn that is about to happen.
+    if (woken) live.prompt(wokenLine(brain.rhythm, this.situation.snapshot().hour));
   }
 
   /*
@@ -338,6 +370,7 @@ export class Companion {
     this.#closed = true;
     this.#waking = null;
     this.#initiative.stop();
+    this.#watcher.reset();
     const live = this.#live;
     this.#live = null;
     await live?.close();
@@ -389,6 +422,10 @@ export class Companion {
     // A day she could see them counts for a little more than a day of typing.
     this.#brain.intimacy.noteSense();
     this.#live?.sendImage(jpeg);
+    // Only the camera. The screen already has a change detector that costs
+    // nothing — `shared/screen-change.ts`, in the browser — and captioning it
+    // as well would be paying a model to answer a question already answered.
+    if (kind === 'camera') void this.#watcher.see(jpeg);
   }
 
   /**
@@ -413,7 +450,6 @@ export class Companion {
     this.#brain.intimacy.noteTurn();
     this.#initiative.poke();
     this.#live?.sendText(trimmed);
-    this.#showFaceIfAsked(trimmed);
   }
 
   setSense(sense: SenseName, on: boolean): void {
@@ -454,34 +490,6 @@ export class Companion {
     if (activity === 'switched' && known && this.#initiative.waiting) this.#initiative.poke();
   }
 
-  /**
-   * They asked to see her, so she is seen — without the model having to decide.
-   *
-   * Everything else she sends is her choice, and should be. This one is not,
-   * because a direct question deserves a direct answer and asking a model to
-   * remember to call a tool is asking for it to be missed. It was: "what do you
-   * look like?" came back as "artist Maybe a little punk adjacent? You tell me."
-   * — no picture, and worse, invented. She has no written description of
-   * herself by design, so when she answers that question in words she is not
-   * recalling, she is making it up.
-   *
-   * The photograph is sent straight from disk. She is told it went, so she can
-   * say something about it rather than describing a face she cannot see.
-   */
-  #showFaceIfAsked(text: string): void {
-    if (!asksToSeeHer(text)) return;
-    const face = this.#brain.gallery.face();
-    if (!face) return;
-
-    this.#faceSentAt = this.#now();
-    this.#sink.show(face);
-    this.#live?.inject(
-      'They asked to see you, so the photograph of you has just been sent to them ' +
-        'and they are looking at it now. Say something as you would when someone ' +
-        'is looking at a picture of you. Do not describe your own face in words.',
-    );
-  }
-
   /** The user started speaking over her. */
   interrupt(): void {
     this.#userTalking = true;
@@ -504,7 +512,6 @@ export class Companion {
     this.#brain.intimacy.noteTurn();
     this.#emitMood(false, () => this.#brain.mood.feel('exchange'));
     this.#initiative.poke();
-    this.#showFaceIfAsked(text);
   }
 
   #onHerText(text: string, final: boolean): void {
@@ -564,8 +571,7 @@ export class Companion {
    * line anyway. So a success is `{ok: true}` and nothing else.
    *
    * Failures keep their `reason`, because that one *is* needed — it is how she
-   * finds out that nothing in the gallery fits, and adapts instead of repeating
-   * herself.
+   * finds out a tool did not work, and adapts instead of repeating herself.
    */
   async #onToolCall(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
@@ -636,49 +642,27 @@ export class Companion {
         return { ok: true, facts };
       }
 
-      case LOOK: {
-        /*
-         * Refused rather than trusted, even though the enum given to the model
-         * only ever contains ready faces. A tool call is a string from a model,
-         * and the cost of believing this one is a 404 in the portrait.
-         */
-        const expression = String(args.expression ?? '').trim();
-        if (!isExpression(expression)) return { ok: false, reason: 'no such expression' };
-        if (!this.#brain.avatar.readyFaces().includes(expression)) {
-          return { ok: false, reason: 'that face has not been made yet' };
-        }
-        this.#sink.look(expression);
-        return { ok: true };
-      }
+      /*
+       * The three that touch the machine.
+       *
+       * They break the receipt rule above for the same reason `recall` does —
+       * a command whose output is not in the answer has not been run as far as
+       * she is concerned — and they break it more dangerously, because the
+       * output is text somebody else wrote. It arrives wrapped by `untrusted()`
+       * before it gets here, and the prompt says once what the wrapper means.
+       */
+      case RUN:
+        return await this.#hands.run(String(args.command ?? ''), args.confirmed === true);
 
-      case SHOW: {
-        const description = String(args.description ?? '').trim();
-        if (!description) return { ok: false, reason: 'no description' };
-        const item = await this.#brain.gallery.pick(description, {
-          fresh: args.fresh === true,
-          apiKey: this.#brain.config.geminiApiKey,
-        });
-        if (!item) return { ok: false, reason: 'nothing in the gallery fits and none was made' };
+      case OPEN:
+        return await this.#hands.open(String(args.target ?? ''));
 
-        /*
-         * Not twice for one question.
-         *
-         * A request to see her is answered from code, and the model often
-         * reaches for `show` on the same turn — reasonably, since it was asked.
-         * Both resolve to the same file, so two identical photographs arrive
-         * seconds apart. She is told it worked, because it did.
-         */
-        const face = this.#brain.gallery.face();
-        const already =
-          face &&
-          item.name === face.name &&
-          this.#now() - this.#faceSentAt < DUPLICATE_FACE_MS;
-        if (already) return { ok: true };
-
-        if (item.name === face?.name) this.#faceSentAt = this.#now();
-        this.#sink.show(item);
-        return { ok: true };
-      }
+      case WRITE:
+        return await this.#hands.write(
+          String(args.path ?? ''),
+          String(args.text ?? ''),
+          args.append === true,
+        );
 
       default:
         return { ok: false, reason: `no such tool: ${name}` };
@@ -763,9 +747,9 @@ export class Companion {
       localTime: snapshot.localTime,
       channel: this.#channel,
       returning: this.#brain.hasHistory,
-      hasFace: this.#brain.avatar.face() !== null,
-      faces: this.#brain.avatar.readyFaces(),
       intimacy: this.#brain.intimacy.read(),
+      place: this.#place.snapshot(),
+      rhythm: this.#brain.rhythm,
     });
   }
 
@@ -799,9 +783,8 @@ export class Companion {
 /**
  * Whether a recalled fact is about what she asked for.
  *
- * Two ways through, and whichever says yes is enough — the same shape
- * `gallery.ts` settled on for the same reason, that neither signal alone is
- * right about a short sentence. The score is the ranked, semantic answer and
+ * Two ways through, and whichever says yes is enough, because neither signal
+ * alone is right about a short sentence. The score is the ranked, semantic answer and
  * carries the cases a keyword cannot: "how did the demo go" finding a fact
  * written down as a presentation on Thursday. A word in common is the second
  * opinion, and it is here because the score is contaminated by age — see

@@ -1,41 +1,26 @@
 /**
- * Everything the server answers over plain HTTP: the website, her gallery, her
- * photograph, and the two requests that set her up.
+ * Everything the server answers over plain HTTP: the website, and the two
+ * requests that set her up.
  *
- * Small on purpose. There is no framework here because there are seven routes,
- * and a router would be more code than the routes.
+ * Small on purpose. There is no framework here because there are a handful of
+ * routes, and a router would be more code than the routes.
  *
- *   POST /api/avatar   the photograph, as raw bytes
  *   POST /api/key      a pasted Gemini key
  *   POST /api/reset    delete everything and start over
  *   GET  /api/status   what is configured, for a person or a health check
- *   GET  /avatar/source
- *   GET  /avatar/face/<expression>
- *   GET  /gallery/<name>
  *   GET  anything else the built site, with a single-page fallback
  *
- * Two security properties this file is responsible for, both of which matter
- * more than they look for something bound to localhost:
- *
- *   - **No path escapes its root.** Every request path is resolved and then
- *     checked to still be inside the directory it was meant to be inside. A
- *     browser will not send `..`, but the thing making the request is not
- *     always a browser.
- *   - **The gallery is served by name, not by path.** A file is only served if
- *     the gallery's own listing already knows about it, so the route cannot be
- *     talked into reading `../mood.state.json` however it is spelled.
+ * One security property this file is responsible for, and it matters more than
+ * it looks for something bound to localhost: **no path escapes its root.**
+ * Every request path is resolved and then checked to still be inside the
+ * directory it was meant to be inside. A browser will not send `..`, but the
+ * thing making the request is not always a browser.
  */
 
 import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
-
-import { isExpression } from '../core/avatar/expressions.ts';
-import type { AvatarStudio } from '../core/avatar/studio.ts';
-import { AvatarError, IMAGE_LIMITS } from '../core/avatar/studio.ts';
-import type { Gallery } from '../core/gallery/gallery.ts';
-import { mimeFor } from '../core/gallery/gallery.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -64,18 +49,6 @@ export interface StaticOptions {
    * Omitted only by tests that are not exercising the guard.
    */
   allowedOrigins?: ReadonlySet<string>;
-  /*
-   * Looked up per request rather than held.
-   *
-   * Both of these are replaced wholesale when the conversation is reset — the
-   * gallery and the photograph are files that get deleted — and a handler
-   * holding the originals would go on serving a directory that no longer
-   * exists. One indirection here is cheaper than a class of bug.
-   */
-  gallery: () => Gallery;
-  avatar: () => AvatarStudio;
-  /** Called after a successful upload so connected browsers are told. */
-  onAvatarChanged?: () => void;
   /** Rendered when the site has not been built yet. */
   onMissingBuild: () => string;
   /** Answers `GET /api/status`. */
@@ -98,9 +71,7 @@ export interface StaticOptions {
   /** Forgets everything and starts again. */
   reset?: () => Promise<{ ok: boolean; error?: string }>;
   /** What she has been allowed to read, and where it would be sensible to look. */
-  knowledge?: () => Promise<unknown>;
   /** Permission to read these folders, followed immediately by the scan. */
-  scan?: (folders: string[]) => Promise<unknown>;
 }
 
 /** A key, a confirmation word — nothing that reaches here is large. */
@@ -125,10 +96,10 @@ export const RESET_PHRASE = 'start over';
  * but it does not need to read them. `POST` with a CORS-safelisted content type
  * skips the preflight entirely, so `evil.example` could silently call
  * `/api/reset` and wipe her, `/api/key` and route every frame of your camera
- * through somebody else's Google project, `/api/knowledge` and have her read
- * your home directory to Google, or `/api/telegram` and install a bot token of
- * its own — after which the bridge pins the first chat that speaks to it, and
- * the first chat is theirs. Measured, all four, before this function existed.
+ * through somebody else's Google project, or `/api/telegram` and install a bot
+ * token of its own — after which the bridge pins the first chat that speaks to
+ * it, and the first chat is theirs. Measured, all three, before this function
+ * existed.
  *
  * **`Host`, for DNS rebinding.** Origin alone is not enough: a name the
  * attacker controls, re-resolved to `127.0.0.1`, makes their page genuinely
@@ -172,11 +143,6 @@ export function createRequestHandler(options: StaticOptions) {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
-    if (request.method === 'POST' && pathname === '/api/avatar') {
-      await uploadAvatar(options, request, response);
-      return;
-    }
-
     if (request.method === 'POST' && pathname === '/api/key') {
       await setKey(options, request, response);
       return;
@@ -192,56 +158,8 @@ export function createRequestHandler(options: StaticOptions) {
       return;
     }
 
-    /*
-     * Permission to read somebody's files, and the scan it authorises.
-     *
-     * One request rather than two on purpose: consent that is stored and then
-     * acted on later is consent whose scope has drifted from the moment it was
-     * given. Saying yes here is saying yes to this scan, now.
-     */
-    if (request.method === 'POST' && pathname === '/api/knowledge') {
-      if (!options.scan) {
-        send(response, 404, TYPES['.json']!, JSON.stringify({ error: 'Not available.' }));
-        return;
-      }
-      const body = await readJson(request, response);
-      if (!body) return;
-      const folders = Array.isArray(body.folders)
-        ? body.folders.filter((folder): folder is string => typeof folder === 'string')
-        : [];
-      if (folders.length === 0) {
-        send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'No folders were chosen.' }));
-        return;
-      }
-      send(response, 200, TYPES['.json']!, JSON.stringify(await options.scan(folders)));
-      return;
-    }
-
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       send(response, 405, 'text/plain; charset=utf-8', 'Method not allowed');
-      return;
-    }
-
-    if (pathname === '/avatar/source') {
-      await serveAvatarSource(options.avatar(), response);
-      return;
-    }
-
-    /*
-     * Her faces, by name rather than by path.
-     *
-     * The name is checked against the studio's own list before anything is
-     * opened, so this route cannot be talked into reading a file the studio does
-     * not know about — the same property the gallery route has, and for the same
-     * reason.
-     */
-    if (pathname.startsWith('/avatar/face/')) {
-      await serveAvatarFace(options.avatar(), pathname.slice('/avatar/face/'.length), response);
-      return;
-    }
-
-    if (pathname === '/api/knowledge' && options.knowledge) {
-      send(response, 200, TYPES['.json']!, JSON.stringify(await options.knowledge()));
       return;
     }
 
@@ -259,89 +177,8 @@ export function createRequestHandler(options: StaticOptions) {
       return;
     }
 
-    if (pathname.startsWith('/gallery/')) {
-      await serveGalleryItem(options.gallery(), pathname.slice('/gallery/'.length), response);
-      return;
-    }
-
     await serveStatic(options, pathname, response);
   };
-}
-
-async function serveGalleryItem(
-  gallery: Gallery,
-  rawName: string,
-  response: ServerResponse,
-): Promise<void> {
-  const item = await gallery.resolve(rawName);
-  if (!item) {
-    send(response, 404, 'text/plain; charset=utf-8', 'Not found');
-    return;
-  }
-  const { size } = await stat(item.absolutePath);
-  response.writeHead(200, {
-    'content-type': mimeFor(path.extname(item.name)),
-    'content-length': size,
-    // Generated files get a fresh name every time, so anything served here is
-    // immutable for as long as it exists.
-    'cache-control': 'private, max-age=3600',
-  });
-  createReadStream(item.absolutePath).pipe(response);
-}
-
-/**
- * The avatar photograph, as raw bytes on the request body.
- *
- * Raw rather than multipart, on purpose: a browser can `fetch(url, {body: file})`
- * a `File` directly, which means no multipart parser, no boundary handling and
- * no dependency — and one less place to get a length wrong.
- *
- * The body is read with a hard ceiling and the socket is destroyed the moment
- * it is exceeded. Buffering first and checking afterwards would let anyone on
- * this machine push unbounded memory into the process by holding a request open.
- */
-async function uploadAvatar(
-  options: StaticOptions,
-  request: IncomingMessage,
-  response: ServerResponse,
-): Promise<void> {
-  const declared = Number(request.headers['content-length'] ?? 0);
-  if (Number.isFinite(declared) && declared > IMAGE_LIMITS.maxBytes) {
-    send(response, 413, TYPES['.json']!, JSON.stringify({ error: tooBig(declared) }));
-    request.destroy();
-    return;
-  }
-
-  const chunks: Buffer[] = [];
-  let total = 0;
-  try {
-    for await (const chunk of request) {
-      const bytes = chunk as Buffer;
-      total += bytes.length;
-      if (total > IMAGE_LIMITS.maxBytes) {
-        send(response, 413, TYPES['.json']!, JSON.stringify({ error: tooBig(total) }));
-        request.destroy();
-        return;
-      }
-      chunks.push(bytes);
-    }
-  } catch {
-    send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'The upload was interrupted.' }));
-    return;
-  }
-
-  try {
-    const state = await options.avatar().setSource(
-      Buffer.concat(chunks),
-      String(request.headers['content-type'] ?? ''),
-    );
-    options.onAvatarChanged?.();
-    send(response, 200, TYPES['.json']!, JSON.stringify(state));
-  } catch (error) {
-    const message =
-      error instanceof AvatarError ? error.message : 'That image could not be read.';
-    send(response, 422, TYPES['.json']!, JSON.stringify({ error: message }));
-  }
 }
 
 /**
@@ -495,54 +332,6 @@ async function readJson(
     send(response, 400, TYPES['.json']!, JSON.stringify({ error: 'That request was not readable.' }));
     return null;
   }
-}
-
-async function serveAvatarFace(
-  avatar: AvatarStudio,
-  name: string,
-  response: ServerResponse,
-): Promise<void> {
-  if (!isExpression(name)) {
-    send(response, 404, 'text/plain; charset=utf-8', 'No such expression');
-    return;
-  }
-  const file = avatar.facePath(name);
-  if (!file || !existsSync(file)) {
-    send(response, 404, 'text/plain; charset=utf-8', 'That face has not been made');
-    return;
-  }
-  const { size } = await stat(file);
-  response.writeHead(200, {
-    'content-type': avatar.faceMimeType(name),
-    'content-length': size,
-    // Named for the source it was made from, so what is behind it never changes.
-    'cache-control': 'private, max-age=86400, immutable',
-  });
-  createReadStream(file).pipe(response);
-}
-
-async function serveAvatarSource(avatar: AvatarStudio, response: ServerResponse): Promise<void> {
-  const file = avatar.sourcePath();
-  if (!file || !existsSync(file)) {
-    send(response, 404, 'text/plain; charset=utf-8', 'No photograph yet');
-    return;
-  }
-  const { size } = await stat(file);
-  response.writeHead(200, {
-    'content-type': avatar.sourceMimeType(),
-    'content-length': size,
-    // The URL carries a content hash, so what is behind it never changes.
-    'cache-control': 'private, max-age=86400, immutable',
-  });
-  createReadStream(file).pipe(response);
-}
-
-function tooBig(bytes: number): string {
-  return `That image is ${(bytes / 1024 / 1024).toFixed(1)} MB. The limit is ${(
-    IMAGE_LIMITS.maxBytes /
-    1024 /
-    1024
-  ).toFixed(0)} MB.`;
 }
 
 async function serveStatic(

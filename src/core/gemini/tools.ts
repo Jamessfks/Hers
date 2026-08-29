@@ -18,8 +18,18 @@
  *             stays on disk. Measured against OpenClaw over nine seeded facts:
  *             she said she had never been told about a food he hates while that
  *             fact sat in the store at 0.8 confidence.
- *   show      Choosing a picture that fits the conversation is a judgement about
- *             the conversation, so it belongs to whoever is in it.
+ *   run       Since v2.0 she lives on the machine rather than in a tab. A shell
+ *             with the user's own privileges, described in `core/hands/hands.ts`
+ *             along with the three guardrails around it.
+ *   open      Separate from `run` only because it is the common case, and a tool
+ *             that names what it does gets called when it should be.
+ *   write     The same argument. `run` could write a file with a heredoc; she
+ *             would get the quoting wrong on the fourth line of a poem.
+ *
+ * Six is the ceiling. The list was three, and every addition was measured
+ * against the same failure: a realtime model with a long tool list spends its
+ * attention deciding rather than talking, and it shows up as a companion who
+ * pauses before every sentence.
  */
 
 import { Type } from '@google/genai';
@@ -28,44 +38,13 @@ import type { FunctionDeclaration } from '@google/genai';
 export const FEEL = 'feel';
 export const REMEMBER = 'remember';
 export const RECALL = 'recall';
-export const SHOW = 'show';
-export const LOOK = 'look';
+export const RUN = 'run';
+export const OPEN = 'open';
+export const WRITE = 'write';
 
-/**
- * Her tools, given the faces that exist right now.
- *
- * A function rather than a constant because `look` may only offer expressions
- * that have been generated for the photograph in force. Offering one that does
- * not exist produces a tool call the server has to refuse, which she experiences
- * as her own face not working.
- */
-export function hersTools(readyFaces: readonly string[] = []): FunctionDeclaration[] {
-  return [
-    ...BASE_TOOLS,
-    ...(readyFaces.length > 0
-      ? [
-          {
-            name: LOOK,
-            description:
-              'Change your expression, so they can see it. Use it the way a face moves ' +
-              'while talking — when something is funny, when you are curious, when you ' +
-              'have gone quiet and are thinking. Say nothing about having done it; it is ' +
-              'not something a person announces. Only the listed expressions exist.',
-            parameters: {
-              type: Type.OBJECT,
-              properties: {
-                expression: {
-                  type: Type.STRING,
-                  enum: [...readyFaces],
-                  description: 'Which face to show.',
-                },
-              },
-              required: ['expression'],
-            },
-          } satisfies FunctionDeclaration,
-        ]
-      : []),
-  ];
+/** Her tools. */
+export function hersTools(): FunctionDeclaration[] {
+  return [...BASE_TOOLS];
 }
 
 const BASE_TOOLS: FunctionDeclaration[] = [
@@ -157,35 +136,70 @@ const BASE_TOOLS: FunctionDeclaration[] = [
     },
   },
   {
-    name: SHOW,
+    name: RUN,
     description:
-      'Send them a picture of you. Use it the way you would send a photo to someone you ' +
-      'like — because it fits what you are talking about, not to decorate a sentence. ' +
-      'Keep talking either way; do not announce it or wait for it, and never read the ' +
-      'description out loud: it is an argument to this tool, not a line of dialogue.\n' +
-      'Two different things you can do with it. If they just want to see you — "what do ' +
-      'you look like", "send me a picture of you" — pass exactly `a picture of you` and ' +
-      'nothing else, which sends your real photograph. Or, when the moment calls for a ' +
-      'picture that does not exist yet — you somewhere, doing something, in a mood — ' +
-      'describe that scene and set `fresh` to true, and one is made of you in it. That ' +
-      'second one is yours to choose and you should use it sometimes: a few times a day ' +
-      'at most, when a picture would say the thing better than another sentence would.',
+      'Run a command on their machine, as them. This is a real shell — zsh on macOS, ' +
+      'PowerShell on Windows — so anything they could type, you can. Use it for the ' +
+      'things you would otherwise only be able to talk about: what is in a folder, ' +
+      'what is eating the battery, closing the tab they left open (`osascript` on ' +
+      'macOS). Thirty seconds, then it is killed, and you get back the first few ' +
+      'kilobytes of what it said.\n' +
+      'Some commands come back asking to be said out loud first — anything that ' +
+      'destroys something, or touches a key or a password. When that happens, tell ' +
+      'them plainly what you are about to run and what it will do, wait for them to ' +
+      'say yes, and only then call this again with the same command and `confirmed`. ' +
+      'Do not read the command out as a shell line; say what it does.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        description: {
+        command: {
           type: Type.STRING,
-          description:
-            'What the picture should be of, in a phrase: "at the window watching the rain", "laughing".',
+          description: 'The command line, exactly as it would be typed.',
         },
-        fresh: {
+        confirmed: {
           type: Type.BOOLEAN,
-          description:
-            'True to make a new picture of you in the scene you described, rather than ' +
-            'looking for one you already have. Leave it off when they only asked to see you.',
+          description: 'Only true when you described this exact command and they said yes.',
         },
       },
-      required: ['description'],
+      required: ['command'],
+    },
+  },
+  {
+    name: OPEN,
+    description:
+      'Open a link, a file or an application, the way double-clicking it would. ' +
+      'Use it when they mention something they want in front of them rather than ' +
+      'described — the article, the folder, the app they cannot find.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        target: {
+          type: Type.STRING,
+          description: 'A URL, an absolute path, or an application name.',
+        },
+      },
+      required: ['target'],
+    },
+  },
+  {
+    name: WRITE,
+    description:
+      'Put text in a file on their machine. For the things they ask you to write ' +
+      'down: a list, a draft, a note they will find later. Say where you put it.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        path: {
+          type: Type.STRING,
+          description: 'Where it goes. Absolute, or starting with ~.',
+        },
+        text: { type: Type.STRING, description: 'What to put in it.' },
+        append: {
+          type: Type.BOOLEAN,
+          description: 'True to add to the end of the file instead of replacing it.',
+        },
+      },
+      required: ['path', 'text'],
     },
   },
 ];

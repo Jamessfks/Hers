@@ -9,12 +9,11 @@ import { DESTINATIONS, MENTIONED_ONLY, destinationHosts } from './destinations.t
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /**
- * The code that runs: the server, the browser bundle, the phone's call page,
- * and the scripts. Tests are excluded because they are full of hostnames that
- * exist to be refused — `https://evil.example` is the point of the origin test,
- * not an outbound call.
+ * The code that runs: the server, the browser bundle, and the scripts. Tests
+ * are excluded because they are full of hostnames that exist to be refused —
+ * `https://evil.example` is the point of the origin test, not an outbound call.
  */
-const SCANNED = ['src', 'scripts', 'call'];
+const SCANNED = ['src', 'scripts'];
 
 /** Anything that looks like a URL, whatever it is embedded in. */
 const URL_LITERAL = /(?:https?|wss?):\/\/([A-Za-z0-9._~%-]+)/g;
@@ -123,21 +122,3 @@ test('every reason a host is only mentioned is actually given', () => {
   }
 });
 
-test('the one destination reached from a phone is marked as such', () => {
-  /*
-   * It is not visible to a network monitor on this machine, so a document that
-   * lumps it in with the rest is telling the reader to look in the wrong place.
-   *
-   * There were two. The other was `cdn.jsdelivr.net`, which the call page
-   * imported LiveKit's client from at run time — the hardest outbound request in
-   * this project to notice, because the phone made it and no monitor here would
-   * ever have shown it. The library is a devDependency now, copied in beside the
-   * page at build time, so the only thing the phone still fetches is the page
-   * you told it to open.
-   */
-  const phone = DESTINATIONS.filter((destination) => destination.fromPhone);
-  assert.deepEqual(
-    phone.map((destination) => destination.host),
-    ['<HERS_CALL_PAGE_URL>'],
-  );
-});

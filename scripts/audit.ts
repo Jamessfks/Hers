@@ -10,8 +10,7 @@
  * It costs money. Not much — the whole run is a few cents of Gemini — but it is
  * real, so nothing here runs by accident.
  *
- *   npm run audit                everything except the paid image generation
- *   npm run audit -- --paid      including it
+ *   npm run audit                every success criterion
  *   npm run audit -- --quick     skips the two multi-minute endurance checks
  *   npm run audit -- --only=mood runs only checks whose name matches
  *
@@ -20,22 +19,25 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { cp, mkdtemp, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { encode as encodeJpeg } from 'jpeg-js';
 
+import { Hands } from '../src/core/hands/hands.ts';
+import { captionFrame } from '../src/core/gemini/text.ts';
+import { PlaceSense } from '../src/core/senses/place.ts';
+import { CHANGE_THRESHOLD, distance } from '../src/core/senses/watch.ts';
+import { isAsleep, isGroggy } from '../src/core/sleep/rhythm.ts';
 import { Brain } from '../src/core/session/brain.ts';
 import { Companion } from '../src/core/session/companion.ts';
 import type { CompanionSink } from '../src/core/session/companion.ts';
 import { loadConfig, loadDotEnv } from '../src/server/config.ts';
-import type { GalleryItem } from '../src/core/gallery/gallery.ts';
 
 loadDotEnv();
 
-const PAID = process.argv.includes('--paid');
 const QUICK = process.argv.includes('--quick');
 /** Substring filter, so one check can be re-run without paying for the rest. */
 const ONLY = (process.argv.find((arg) => arg.startsWith('--only='))?.slice(7) ?? '').toLowerCase();
@@ -145,16 +147,14 @@ function bandsJpeg(): Buffer {
   return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
 }
 
-/** A second, differently shaped JPEG, so a replacement is visibly a replacement. */
-function portraitJpeg(): Buffer {
-  const width = 400;
-  const height = 560;
+/** One flat colour, for the two frames the camera-change check compares. */
+function solid(width: number, height: number, rgb: [number, number, number]): Buffer {
   const data = Buffer.alloc(width * height * 4);
-  for (let i = 0; i < width * height; i += 1) {
-    data[i * 4] = 200;
-    data[i * 4 + 1] = 170;
-    data[i * 4 + 2] = 150;
-    data[i * 4 + 3] = 255;
+  for (let at = 0; at < data.length; at += 4) {
+    data[at] = rgb[0];
+    data[at + 1] = rgb[1];
+    data[at + 2] = rgb[2];
+    data[at + 3] = 255;
   }
   return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
 }
@@ -169,7 +169,6 @@ interface Session {
   heard: string[];
   said: string[];
   tools: Array<{ name: string; args: Record<string, unknown> }>;
-  shows: GalleryItem[];
   turns: number;
   audioBytes: number;
   troubles: string[];
@@ -210,10 +209,8 @@ async function session(
   const state = {
     heard: [] as string[],
     said: [] as string[],
-    shows: [] as GalleryItem[],
     troubles: [] as string[],
     names: [] as string[],
-    looks: [] as string[],
     turns: 0,
     audioBytes: 0,
   };
@@ -229,9 +226,7 @@ async function session(
     state: () => undefined,
     mood: () => undefined,
     named: (name) => state.names.push(name),
-    look: (expression) => state.looks.push(expression),
     interrupted: () => undefined,
-    show: (item) => state.shows.push(item),
     trouble: (message) => state.troubles.push(message),
   };
 
@@ -254,9 +249,6 @@ async function session(
     },
     get said() {
       return state.said;
-    },
-    get shows() {
-      return state.shows;
     },
     get troubles() {
       return state.troubles;
@@ -317,7 +309,6 @@ async function main(): Promise<void> {
 
   console.log('\n══ Hers — live audit ══');
   console.log(`   model    ${config.model}`);
-  console.log(`   paid     ${PAID ? 'yes (image generation)' : 'no'}`);
   console.log(`   quick    ${QUICK ? 'yes (skipping endurance)' : 'no'}`);
 
   const scratch = await mkdtemp(path.join(tmpdir(), 'hers-audit-fx-'));
@@ -601,120 +592,99 @@ async function main(): Promise<void> {
     },
   );
 
-  if (PAID) {
-    await check(
-      'Gallery — she generates a picture of herself and sends it',
-      '#8 media',
-      async () => {
-        const s = await session();
-        await s.companion.wake();
-        s.companion.say(
-          'Make me a new picture of you right now, wherever you are. Actually make one, do not just describe it.',
-        );
-        await untilSpoke(s, 0);
-        // Generation is slow and runs off the turn.
-        for (let i = 0; i < 90 && s.shows.length === 0; i += 1) await wait(1000);
-        const shown = s.shows.map((item) => item.name);
-        const evidence = shown.length ? `sent ${shown.join(', ')}` : 'no picture arrived';
-        await s.dispose();
-        return { ok: shown.length > 0, evidence };
-      },
-    );
-  } else {
-    skip('Gallery — image generation', '#8 media', 'costs money; run with --paid');
-  }
-
-  if (PAID) {
-    await check(
-      'Expressions — a face is generated from her photograph, and only offered once it is',
-      'avatar',
-      async () => {
-        /*
-         * This replaced Hedra, and the property worth checking is not "an image
-         * came back" but the one the whole design rests on: she is only ever
-         * offered a face that exists for the photograph in force. Offering a face
-         * made from a previous picture would put a different woman on screen.
-         */
-        const root = await mkdtemp(path.join(tmpdir(), 'hers-faces-'));
-        const brain = await Brain.open(
-          loadConfig({
-            ...process.env,
-            HERS_PROFILE: path.join(root, 'profile'),
-            HERS_DATA: path.join(root, 'data'),
-          } as NodeJS.ProcessEnv),
-        );
-
-        await brain.avatar.setSource(portraitJpeg(), 'image/jpeg');
-        const before = brain.avatar.readyFaces();
-
-        const started = Date.now();
-        const state = await brain.avatar.makeFace('smiling');
-        const seconds = ((Date.now() - started) / 1000).toFixed(1);
-        const file = brain.avatar.facePath('smiling');
-        const bytes = file && existsSync(file) ? readFileSync(file).length : 0;
-
-        // A new photograph must retire it rather than merely hide it.
-        await brain.avatar.setSource(bandsJpeg(), 'image/jpeg');
-        const afterReplacement = brain.avatar.readyFaces();
-
-        await brain.close();
-        return {
-          ok:
-            before.length === 0 &&
-            state.ready.includes('smiling') &&
-            bytes > 10_000 &&
-            afterReplacement.length === 0,
-          evidence:
-            `offered ${JSON.stringify(before)} before; made "smiling" in ${seconds}s ` +
-            `(${bytes} bytes); offered ${JSON.stringify(afterReplacement)} after a new photograph`,
-        };
-      },
-    );
-  } else {
-    skip(
-      'Expressions — a face is generated from her photograph',
-      'avatar',
-      'costs money; run with --paid',
-    );
-  }
-
-  // -- Avatar --------------------------------------------------------------
+  // -- 9. Hands ------------------------------------------------------------
+  /*
+   * Three criteria that did not exist before v2.0, and one that did but was
+   * measured against the wrong thing.
+   *
+   * These deliberately do not drive a Live session. What is being asked is
+   * whether the machine actually changed and whether the log says it did, and
+   * a real model deciding to call `run` is a separate and much flakier
+   * question. The tool dispatch itself has unit tests; this is the half that
+   * cannot be faked, because a fake filesystem would pass whether or not the
+   * command ran.
+   */
   await check(
-    'Avatar — an uploaded picture becomes the source she is generated from',
-    'avatar',
+    'Hands — `run`, `open` and `write` act on the machine and are logged',
+    '#3 hands',
     async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'hers-face-'));
-      const brain = await Brain.open(
-        loadConfig({
-          ...process.env,
-          HERS_PROFILE: path.join(root, 'profile'),
-          HERS_DATA: path.join(root, 'data'),
-        } as NodeJS.ProcessEnv),
-        { offline: true },
-      );
+      const root = await mkdtemp(path.join(tmpdir(), 'hers-hands-'));
+      const hands = new Hands({ dir: root });
+      const target = path.join(root, 'note.txt');
 
-      // A real JPEG, through the same validation the web upload and Telegram
-      // both go through — there is one set of rules about what a face may be,
-      // not one per entry point.
-      const first = await brain.avatar.setSource(bandsJpeg(), 'image/jpeg');
-      const reference = await brain.avatar.sourceImage();
+      const ran = await hands.run('echo hers-audit');
+      const wrote = await hands.write(target, 'a line she wrote\n');
+      const refused = await hands.run('rm -rf /');
 
-      // Replace it, the way /face or the Face dialog would.
-      const second = await brain.avatar.setSource(portraitJpeg(), 'image/jpeg');
-
-      await brain.close();
+      const log = readFileSync(hands.logPath, 'utf8').trimEnd().split('\n');
+      const wroteIt = readFileSync(target, 'utf8');
       await rm(root, { recursive: true, force: true });
 
       return {
         ok:
-          first.hasSource &&
-          second.hasSource &&
-          first.sourceUrl !== second.sourceUrl &&
-          reference !== null,
-        evidence: `uploaded ${first.width}x${first.height}, replaced with ${second.width}x${second.height}; the url changed with it`,
+          ran.ok &&
+          /hers-audit/.test(ran.output ?? '') &&
+          wrote.ok &&
+          wroteIt === 'a line she wrote\n' &&
+          refused.needsConfirmation === true &&
+          log.length === 3,
+        evidence: `run exit=${String(ran.exitCode)}, wrote ${String(wroteIt.length)} chars, destructive gated=${String(refused.needsConfirmation)}, ${String(log.length)} log lines`,
       };
     },
   );
+
+  // -- 10. Place -----------------------------------------------------------
+  await check(
+    'Weather — she has the right city and a real forecast',
+    '#4 place',
+    async () => {
+      const place = await new PlaceSense().refresh();
+      return {
+        ok: Boolean(place.weather) && place.city.length > 0,
+        evidence: place.weather
+          ? `${place.city} (${place.timeZone}): ${String(place.weather.temperature)}°C, ${place.weather.condition}`
+          : `${place.city}: no forecast came back`,
+      };
+    },
+  );
+
+  // -- 11. Sleep -----------------------------------------------------------
+  await check(
+    'Sleep — she is silent inside her own window and awake outside it',
+    '#5 sleep',
+    async () => {
+      const rhythm = { sleepHour: 23, wakeHour: 7, why: 'measured' };
+      const asleep = [23, 0, 3, 6].every((hour) => isAsleep(rhythm, hour));
+      const awake = [7, 12, 22].every((hour) => !isAsleep(rhythm, hour));
+      const groggy = isGroggy(rhythm, 23) && !isGroggy(rhythm, 4);
+      return {
+        ok: asleep && awake && groggy,
+        evidence: `window 23→7: asleep=${String(asleep)}, awake=${String(awake)}, groggy only at the start=${String(groggy)}`,
+      };
+    },
+  );
+
+  // -- 12. Noticing --------------------------------------------------------
+  await check(
+    'Camera — a real change is captioned and an idle room is not',
+    '#2 noticing',
+    async () => {
+      const key = process.env.GEMINI_API_KEY ?? '';
+      if (!key) return { ok: false, evidence: 'no key' };
+
+      // Two frames that genuinely differ, so the caption has something to say.
+      const one = solid(320, 180, [20, 20, 30]);
+      const two = solid(320, 180, [230, 220, 190]);
+      const first = await captionFrame(key, one);
+      const second = await captionFrame(key, two);
+      const moved = distance(first, second);
+      return {
+        ok: first.length > 0 && second.length > 0 && moved >= CHANGE_THRESHOLD,
+        evidence: `"${first.slice(0, 60)}" → "${second.slice(0, 60)}", distance ${moved.toFixed(2)} against ${String(CHANGE_THRESHOLD)}`,
+      };
+    },
+  );
+
   // -- Report --------------------------------------------------------------
   await rm(scratch, { recursive: true, force: true });
 

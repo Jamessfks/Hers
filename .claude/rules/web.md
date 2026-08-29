@@ -15,12 +15,10 @@ with a build step.
 - **The host stays `127.0.0.1`.** The microphone, camera, and screen share all
   need a secure context, which `localhost` is without a certificate and anything
   else is not. The page has no password.
-- **Sense indicators are drawn from `MediaStreamTrack.readyState`**, never from a
-  WebSocket message. The hardware's own account is the only one allowed to say
-  whether the camera is open. A claim from the socket that contradicts it is
-  refused in both directions.
-- `call/index.html` is a single static file with no build step, published to
-  GitHub Pages because a phone cannot reach the user's machine.
+- **The senses are not switches.** They come up when she wakes and go down when
+  she sleeps, on the same user gesture that unlocks audio. v1 had three toggles
+  and two affordances racing for the gesture, and whichever was pressed first
+  decided whether she could be heard at all.
 
 The interface carries twelve declared colours. Adding a thirteenth needs a
 reason — and watch for the ones you did not declare: Chrome will paint a focus

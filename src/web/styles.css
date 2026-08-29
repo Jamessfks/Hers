@@ -3,7 +3,7 @@
  *
  * A companion window, not a dashboard. Two halves: she is on the left at the
  * size a person is, and the conversation is on the right in bubbles. That shape
- * is borrowed deliberately from Replika, where the avatar is the larger half of
+ * is borrowed deliberately from Replika, where the figure is the larger half of
  * the screen and the chat sits beside it — the point of a companion app is that
  * you are looking at someone, not reading a log.
  *
@@ -209,7 +209,7 @@ textarea::placeholder { color: var(--ink-faint); opacity: 1; }
 /*
  * Links, because the user agent's is #0000ee.
  *
- * Three of them live in the setup and wizard dialogs, and a browser-blue link
+ * Three of them live in the setup dialog, and a browser-blue link
  * is a thirteenth colour arriving through the back door — measurably the most
  * saturated thing in the frame when the dialog is open. Ink and an underline at
  * rest, her colour on hover, which is the order Tolan uses: neither of its two
@@ -390,41 +390,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 }
 
 /*
- * Her panel. Deliberately the biggest thing on the page.
- *
- * Height-led rather than width-led: a companion is a portrait, and a window is
- * usually wider than it is tall, so the constraint that actually binds is
- * vertical. Width follows from her photograph's own shape — `--portrait-ratio`
- * is written from the image rather than assumed, so a tall phone photo and a
- * square crop both sit here without letterboxing or pushing the page around.
- */
-.portrait {
-  --portrait-ratio: 1;
-  position: relative;
-  /*
-   * Height-led: it takes the space the column has, up to a ceiling, and the
-   * width follows from the photograph's own shape.
-   *
-   * `height: min(100%, …)` was wrong twice over — a percentage height against
-   * a flex parent whose height is content-derived collapses, and then
-   * flex-shrink took what was left. It rendered 46x82.
-   */
-  flex: 1 1 auto;
-  min-height: 120px;
-  max-height: 66vh;
-  aspect-ratio: var(--portrait-ratio);
-  width: auto;
-  max-width: 100%;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--sunken);
-  outline: 1px solid transparent;
-  outline-offset: 0;
-  transition: outline-color 300ms ease, outline-offset 90ms ease-out;
-}
-.portrait[hidden] { display: none; }
-
-/*
  * Her voice, drawn as a ring that stands off further the louder she is.
  *
  * This was a 58px blurred glow, which is a shadow, and shadows are gone. An
@@ -432,22 +397,15 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * a drop shadow anywhere in the sheet, and unlike a blur it costs nothing to
  * repaint sixty times a second.
  */
-.app[data-state='speaking'] .portrait,
-.app[data-state='listening'] .portrait {
-  outline-color: var(--accent);
-  outline-offset: calc(3px + var(--level, 0) * 9px);
-}
-
-.portrait img {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  object-fit: cover; display: block;
-}
-.app[data-state='asleep'] .portrait img { filter: saturate(0.55) contrast(0.96); transition: filter 700ms ease; }
 
 /* Stands in until there is a photograph, and it is allowed to be the one
    saturated thing on the page — on Tolan every bit of chroma in the frame
    belongs to the character, not the furniture. */
+/* The only affordance on the page, and since v2.0 a real button rather than a
+   div — tapping her is what wakes her, and `player.unlock()` will not run
+   outside a user gesture. Every one of Chrome's own button paints is turned off
+   explicitly: left alone it draws a border, a background and a system font, and
+   the interface's twelve declared colours would quietly become fifteen. */
 .orb {
   --level: 0;
   position: relative;
@@ -457,7 +415,15 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   aspect-ratio: 1;
   display: grid;
   place-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
+.orb:active .orb-core { transform: scale(calc(1 + var(--level) * 0.12 - 0.03)); }
 .orb[hidden] { display: none; }
 .orb-core {
   position: absolute; inset: 16%; border-radius: var(--circle);
@@ -472,30 +438,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   transition: transform 160ms ease-out;
 }
 .app[data-state='asleep'] .orb-core { filter: saturate(0.4); }
-
-.presence-actions { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
-
-/* The one saturated control on a resting screen. Once she is awake it stops
-   being the primary action and stops looking like one. */
-.wake {
-  background: var(--accent); color: var(--accent-ink);
-  border: 1px solid transparent; border-radius: var(--pill);
-  padding: 11px 26px; font-weight: 500; font-size: 14px;
-  transition: filter 160ms ease, transform 160ms ease;
-}
-.wake:hover { filter: brightness(1.06); }
-.wake:active { transform: translateY(1px); }
-.wake[data-awake='true'] { background: var(--raised); border-color: var(--hairline); color: var(--ink-soft); }
-
-.give-face {
-  background: var(--raised);
-  border: 1px dashed var(--hairline);
-  border-radius: var(--pill); padding: 10px 20px;
-  font-size: 14px; font-weight: 500; color: var(--ink-soft);
-  transition: border-color 160ms ease, color 160ms ease;
-}
-.give-face:hover { border-color: var(--accent); color: var(--ink); }
-.give-face[hidden] { display: none; }
 
 .hint { flex: none; margin: 0; max-width: 30ch; color: var(--ink-faint); font-size: 13px; text-align: center; }
 
@@ -524,13 +466,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 
 @media (max-width: 900px) {
   .conversation { border-left: 0; border-top: 1px solid var(--hairline); }
-}
-
-.transcript {
-  overflow-y: auto; overscroll-behavior: contain;
-  display: flex; flex-direction: column; gap: 4px;
-  padding: var(--gutter);
-  scrollbar-width: thin; scrollbar-color: var(--hairline) transparent;
 }
 
 /*
@@ -629,30 +564,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   border: 1px solid var(--hairline);
   display: block;
 }
-.said-caption { margin: 6px 0 0; color: var(--ink-faint); font-size: 13px; line-height: 1.6; }
 .empty { margin: auto; color: var(--ink-faint); font-size: 13px; }
-
-/*
- * An empty pane, composed rather than centred.
- *
- * It was the words "Nothing yet." in 68x11 pixels in the middle of 459,036,
- * which is not restraint, it is a layout that has not been done. It is now set
- * at the top of the reading column, at the measure, where the first thing she
- * says will appear — so the pane reads as a page waiting for its first line
- * rather than as a hole with a label in it.
- *
- * In the sans, deliberately. The serif is the reading tier and the reading tier
- * is hers; the second it is used for a sentence she did not say, the interface
- * has faked her, and that is the one thing this product cannot do. So the empty
- * state speaks as the application, in the application's face, and says why it
- * is empty. Rejected: a greeting, a sample exchange, a "say hello to her"
- * prompt in a bubble — all three are her voice with somebody else's hand in it.
- */
-.pane-empty { display: grid; gap: 8px; max-width: var(--measure); }
-.pane-empty[hidden] { display: none; }
-.pane-empty p { margin: 0; }
-.pane-empty-lead { font-size: 15px; font-weight: 500; color: var(--ink); }
-.pane-empty-note { font-size: 13px; line-height: 1.6; color: var(--ink-faint); }
 
 /* -- Composer -------------------------------------------------------------- */
 
@@ -682,20 +594,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
    but as a wash and a hairline, not a filled button competing with Wake. */
 .sense[aria-pressed='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--ink); }
 
-/* The send arrow sits inside it at 4.80:1, so the pill is identified by its
-   contents and keeps the hairline; a field with nothing in it does not get
-   that, which is why every other input in the sheet is edged in ink. */
-.composer {
-  display: flex; align-items: center; gap: 8px;
-  flex: 1 1 220px;
-  background: var(--sunken);
-  border: 1px solid var(--hairline); border-radius: var(--pill);
-  padding: 4px 4px 4px 16px;
-  transition: border-color 160ms ease, background 160ms ease;
-}
-.composer:focus-within { background: var(--raised); border-color: var(--accent); }
-.composer input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--ink); font: inherit; padding: 8px 0; }
-
 .send {
   flex: none; width: 34px; height: 34px;
   display: grid; place-items: center;
@@ -714,22 +612,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * reads the field's own emptiness, so ui.ts does not have to remember to
  * toggle a class on every keystroke.
  */
-.composer:has(input:placeholder-shown) .send { background: none; color: var(--ink-faint); }
-.composer:has(input:placeholder-shown) .send:hover { color: var(--ink); }
-
-/* -- Previews -------------------------------------------------------------- */
-
-.previews { display: flex; gap: 8px; padding: 0 12px 10px; }
-.previews[hidden] { display: none; }
-.preview { margin: 0; position: relative; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--hairline); background: var(--sunken); line-height: 0; }
-.preview video { display: block; width: 108px; height: auto; }
-/* A solid ink strip rather than a gradient scrim: the caption is two words over
-   live video, and one ink surface is one fewer colour than a black ramp. */
-.preview figcaption {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  padding: 3px 7px; font-size: 11px; line-height: 1.4; letter-spacing: 0.04em;
-  color: var(--paper); background: var(--ink);
-}
 
 /* -- Panels ---------------------------------------------------------------- */
 
@@ -755,19 +637,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 .tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 10px; font-size: 14px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
 .tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
 
-.voice-pick { padding: 16px 22px 0; display: grid; gap: 8px; }
-/* `display: grid` above outranks the user agent's rule for [hidden], so the
-   attribute alone does not hide it. */
-.voice-pick[hidden] { display: none; }
-.voice-pick label { font-size: 13px; font-weight: 500; }
-.voice-pick select {
-  width: 100%;
-  border: 1px solid var(--ink-faint); border-radius: var(--pill); padding: 9px 16px;
-  font: inherit; background: var(--sunken); color: var(--ink); outline: none;
-}
-.voice-pick select:focus { background: var(--raised); border-color: var(--accent); }
-.voice-pick .settings-note { padding: 0; }
-
 #editor {
   display: block; width: calc(100% - 44px); margin: 16px 22px; height: 40vh;
   resize: vertical; background: var(--sunken); color: var(--ink);
@@ -777,8 +646,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   outline: none; tab-size: 2;
 }
 #editor:focus { border-color: var(--accent); }
-
-.settings-foot { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 22px 20px; color: var(--ink-faint); font-size: 13px; }
 
 /* -- Setup ----------------------------------------------------------------- */
 
@@ -795,21 +662,10 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 .setup-row input:focus { background: var(--raised); border-color: var(--accent); }
 .setup-row .danger { border-radius: var(--pill); padding: 9px 18px; font-size: 14px; font-weight: 500; }
 .setup-row button:disabled { opacity: 0.45; }
-
-.scan-folders { display: grid; gap: 6px; margin: 0 0 12px; }
-.scan-folders label { display: flex; gap: 9px; align-items: center; font-size: 13px; color: var(--ink-soft); }
-.scan-folders input { accent-color: var(--accent); }
-.scan-folders code { font-size: 13px; color: var(--ink-faint); }
-
-.intimacy-readout { margin: 0 0 10px; font-size: 13px; color: var(--ink); }
 /*
  * Not `.stage` — that class is already the main two-column page grid, and a
  * span that inherits `display: grid` from it lays the sentence out in columns.
  */
-.intimacy-readout .who-you-are { font-weight: 500; text-transform: capitalize; }
-/* Weight rather than red: this says who set the number, and nothing here is
-   wrong. */
-.intimacy-readout .set-by-you { font-weight: 500; }
 .setup-row input[type='range'] {
   flex: 1; min-width: 0; padding: 0; background: none; border: none;
   accent-color: var(--accent);
@@ -859,214 +715,8 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * reads as a settings screen.
  * ------------------------------------------------------------------------- */
 
-#wizard { width: min(600px, 94vw); }
-
-.wizard-body { padding: 0 22px 18px; }
-.wizard-panel { display: grid; gap: 16px; }
-
-/* A row of things to tick, each showing the sentence it writes. */
-.wizard-choices { display: grid; gap: 4px; }
-
-.wizard-choice {
-  display: flex; gap: 11px; align-items: flex-start;
-  padding: 10px 12px;
-  border: 1px solid transparent; border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-.wizard-choice:hover { background: var(--sunken); }
-.wizard-choice input { margin: 3px 0 0; accent-color: var(--accent); flex: none; }
-.wizard-choice span { display: grid; gap: 2px; min-width: 0; }
-.wizard-choice strong { font-size: 14px; font-weight: 500; }
-.wizard-choice small { color: var(--ink-faint); font-size: 13px; line-height: 1.6; }
-.wizard-choice:has(input:checked) { background: var(--accent-wash); border-color: var(--accent); }
-/* `--ink-faint` is 4.40:1 on the wash and 5.43 on the paper, so a ticked row
-   steps its small print up rather than leaving it just under the floor. */
-.wizard-choice:has(input:checked) small { color: var(--ink-soft); }
-.wizard-choice:has(input:focus-visible) { border-color: var(--accent); }
-
-/* One labelled control, with the reason for it underneath. */
-.wizard-field { display: grid; gap: 6px; min-width: 0; }
-.wizard-field > label,
-.wizard-group { margin: 0; font-size: 13px; font-weight: 500; }
-.wizard-field > small { color: var(--ink-faint); font-size: 13px; line-height: 1.6; }
-
-.wizard-input, .wizard-select {
-  width: 100%; min-width: 0;
-  border: 1px solid var(--ink-faint); border-radius: var(--pill); padding: 9px 16px;
-  font: inherit; background: var(--sunken); color: var(--ink); outline: none;
-}
-.wizard-input:focus, .wizard-select:focus { background: var(--raised); border-color: var(--accent); }
-
-.wizard-area {
-  width: 100%; resize: vertical;
-  border: 1px solid var(--ink-faint); border-radius: var(--radius-sm); padding: 12px 14px;
-  background: var(--sunken); color: var(--ink); outline: none;
-  font: 13px/1.7 ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  tab-size: 2;
-}
-.wizard-area:focus { background: var(--raised); border-color: var(--accent); }
-
-/* Three short fields side by side, and stacked when there is no room. */
-.wizard-row { display: grid; grid-template-columns: 5rem 1fr 1fr; gap: 10px; }
-@media (max-width: 560px) { .wizard-row { grid-template-columns: 1fr; } }
-
-.wizard-aside {
-  margin: 0; padding: 12px 14px;
-  border-radius: var(--radius-sm); background: var(--sunken);
-  color: var(--ink-soft); font-size: 13px; line-height: 1.6;
-}
-
-/* Same 3:4 shape as the Face panel, and the same reason for capping it. */
-.wizard-face { display: grid; grid-template-columns: minmax(180px, 220px); }
-
-.wizard-done p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.65; }
-.wizard-key {
-  display: grid; gap: 10px;
-  padding: 16px 18px; margin-top: 4px;
-  border: 1px solid var(--hairline); border-radius: var(--radius-sm); background: var(--sunken);
-}
-.wizard-key[hidden] { display: none; }
-.wizard-key h3 { margin: 0; font-size: 14px; font-weight: 500; }
-.wizard-key .settings-note { padding: 0; }
-.wizard-key .setup-status { margin: 0; }
-
-/*
- * Sticky, and the reason is the phone.
- *
- * The identity card is a textarea nine rows tall, so on a narrow screen the
- * panel scrolls — and Next living at the bottom of the scroll would mean the
- * only way forward is off screen on the one step most likely to be long.
- */
-.wizard-foot {
-  position: sticky; bottom: 0; z-index: 1;
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 14px 22px 18px;
-  border-top: 1px solid var(--hairline); background: var(--raised);
-}
-.wizard-count { color: var(--ink-faint); font-size: 11px; font-weight: 500; font-variant: small-caps; letter-spacing: 0.08em; }
-.wizard-nav { display: flex; gap: 8px; margin-left: auto; }
-.wizard-nav button[hidden] { display: none; }
-
-.wizard-pips { display: flex; gap: 5px; }
-.wizard-pip {
-  width: 5px; height: 5px; border-radius: var(--circle);
-  background: var(--hairline);
-  transition: background 200ms ease;
-}
-.wizard-pip[data-done='true'] { background: var(--accent); }
 
 /* The heading takes focus on every step, and a ring around a title is noise. */
-#wizard-title:focus { outline: none; }
-#wizard-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-xs); }
-
-/* -- Her face -------------------------------------------------------------- */
-
-/* One column, and a narrow one: the dropzone is 3:4, so letting it take the
-   820px dialog would make it 1093px tall and taller than the viewport. */
-.face-body { display: grid; grid-template-columns: minmax(180px, 240px); padding: 16px 22px 20px; }
-
-/*
- * Transparent, not hidden, and it covers the whole zone.
- *
- * `hidden` on a file input is `display: none`, which assistive technology reads
- * as "not interactive" — so the input left the tab order and the only way to
- * give her a face was a mouse. MDN's note on styling this control says to use
- * opacity for exactly that reason. Stretched over the label it also keeps the
- * click target the whole zone rather than a button inside it.
- */
-.file-input {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  opacity: 0; cursor: pointer;
-}
-.dropzone:has(.file-input:focus-visible) {
-  outline: 2px solid var(--accent); outline-offset: 3px;
-  border-color: var(--accent); color: var(--ink-soft);
-}
-
-/*
- * A dashed rectangle is a drop target and says nothing about clicking, which is
- * how somebody arrives at an empty square and waits for something to happen.
- * The zone keeps the drop affordance and gains the one it was missing: a thing
- * that looks pressable, under a line that says what else you can do.
- */
-.dropzone-body { display: grid; justify-items: center; gap: 10px; }
-.dropzone-body[hidden] { display: none; }
-.dropzone-hint { color: var(--ink-faint); }
-.dropzone-button {
-  padding: 8px 16px;
-  border-radius: var(--pill);
-  background: var(--accent); color: var(--accent-ink);
-  font-size: 14px; font-weight: 500;
-}
-.dropzone:hover .dropzone-button { filter: brightness(0.94); }
-
-.dropzone {
-  position: relative; display: grid; place-items: center;
-  aspect-ratio: 3 / 4;
-  border: 1px dashed var(--hairline); border-radius: var(--radius-sm);
-  background: var(--sunken); color: var(--ink-faint);
-  font-size: 13px; text-align: center; padding: 18px;
-  cursor: pointer; overflow: hidden;
-  transition: border-color 160ms ease, color 160ms ease;
-}
-.dropzone:hover, .dropzone[data-over='true'] { border-color: var(--accent); color: var(--ink-soft); }
-.dropzone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.dropzone img[hidden] { display: none; }
-
-/* -- Memory ---------------------------------------------------------------- */
-/* Every memory surface is inspectable and editable — the principle OpenClaw
-   states first and states plainly ("No hidden state"), and the one thing a
-   SQLite-backed memory does not get for free. If she is going to remember
-   things about someone, that person has to be able to read the list and cross
-   something out. */
-
-.memory-body { padding: 4px 22px 20px; }
-
-.memory-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; max-height: 44vh; overflow-y: auto; }
-
-/*
- * A ruled line per fact, and the rule is the point.
- *
- * Each row used to be a box in `--hairline` around a textarea with no border,
- * no background and no outline — including on focus, where the computed style
- * was byte-identical to the resting one. So the one control every remembered
- * fact is edited through had no boundary of its own at 3:1 (1.4.11), and no
- * focus indicator at all (2.4.7), inside a box that measured 1.35:1. Boxing the
- * rows in ink would have been ten dark rectangles to fix one field.
- *
- * The box is gone and the field is ruled instead — `--ink-faint` under the
- * text, 5.47:1 on `--raised`, one edge rather than four. It reads as a line you
- * can write on, which is what it is, and the list got lighter rather than
- * heavier. Focus puts her colour under it at 2px and rings the row, so the
- * change is visible whether you are looking at the field or the list.
- */
-.fact { display: flex; align-items: flex-start; gap: 10px; padding: 4px 2px; }
-.fact-kind { flex: none; margin-top: 4px; padding: 2px 8px; border-radius: var(--pill); background: var(--accent-wash); color: var(--ink-soft); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
-.fact-text {
-  flex: 1; background: none; font: inherit; color: var(--ink);
-  resize: none; line-height: 1.6; padding: 2px 2px 5px; overflow: hidden;
-  border: none; border-bottom: 1px solid var(--ink-faint);
-  outline: none;
-  transition: border-color 140ms ease;
-}
-.fact-text:focus-visible {
-  border-bottom-color: var(--accent);
-  border-bottom-width: 2px;
-  padding-bottom: 4px;
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--radius-xs);
-}
-
-.memory-add { display: flex; gap: 8px; margin-top: 12px; }
-/* `color` and not only `background`: a form control does not inherit the body's
-   ink, so this one field was rendering the user agent's black. */
-.memory-add input { flex: 1; border: 1px solid var(--ink-faint); border-radius: var(--pill); padding: 9px 16px; font: inherit; background: var(--sunken); color: var(--ink); outline: none; }
-.memory-add input:focus { background: var(--raised); border-color: var(--accent); }
-
-.memory-summary { margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--sunken); color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
 
 /* -- Superseded ------------------------------------------------------------ */
 
@@ -1119,99 +769,13 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * the whole mood sweep, against the 3:1 that 1.4.11 asks of a focus indicator.
  */
 .ghost:focus-visible,
-.wake:focus-visible,
-.give-face:focus-visible,
+.orb:focus-visible,
 .primary:focus-visible,
-.danger:focus-visible,
-.sense:focus-visible,
-.send:focus-visible,
-.tabs button:focus-visible,
-.face-chip:focus-visible {
+.danger:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-
-/*
- * The intimacy slider, drawn rather than inherited.
- *
- * `accent-color` tints the thumb and the filled part and leaves the groove to
- * the UA, which painted `#efefef` inside a `#b2b2b2` edge — 1.09:1 and 2.01:1
- * on `--raised`, so the edge missed the 3:1 that identifies a control, in two
- * greys with no chroma in a sheet of warm neutrals.
- *
- * There is no standard way to style a range track: MDN marks every one of these
- * pseudo-elements non-standard and says so plainly, and there is no replacement
- * to wait for. Both vendor spellings are written out because neither inherits
- * the other, and an unknown pseudo-element invalidates the whole selector, so
- * they cannot be combined into one rule.
- */
-.intimacy-range {
-  appearance: none; -webkit-appearance: none;
-  /* `.setup-row input` dresses text fields as pills; a slider is not one. */
-  border: 0; padding: 0; border-radius: 0;
-  width: 100%; background: transparent; cursor: pointer;
-  align-self: center;
-}
-.intimacy-range::-webkit-slider-runnable-track {
-  height: 6px; border-radius: var(--pill);
-  background: var(--sunken); border: 1px solid var(--ink-faint);
-}
-.intimacy-range::-moz-range-track {
-  height: 6px; border-radius: var(--pill);
-  background: var(--sunken); border: 1px solid var(--ink-faint);
-}
-.intimacy-range::-webkit-slider-thumb {
-  appearance: none; -webkit-appearance: none;
-  width: 18px; height: 18px; margin-top: -7px;
-  border-radius: var(--circle); border: none;
-  background: var(--accent);
-}
-.intimacy-range::-moz-range-thumb {
-  width: 18px; height: 18px;
-  border-radius: var(--circle); border: none;
-  background: var(--accent);
-}
-.intimacy-range:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-
-/*
- * Tick boxes in the palette, for the same reason.
- *
- * `accent-color` only reaches the checked state; unchecked, the box kept the
- * UA's `#767676`. It cleared 3:1, so this is discipline rather than a failure —
- * but it was the thirteenth colour, and the box is now the same ink and the
- * same hairline logic as every other control.
- */
-.scan-folders input,
-.wizard-choice input {
-  appearance: none; -webkit-appearance: none;
-  width: 16px; height: 16px; flex: none; margin: 3px 0 0;
-  border: 1px solid var(--ink-faint);
-  background: var(--raised);
-  display: grid; place-content: center;
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-.scan-folders input[type='checkbox'],
-.wizard-choice input[type='checkbox'] { border-radius: var(--radius-xs); }
-.scan-folders input[type='radio'],
-.wizard-choice input[type='radio'] { border-radius: var(--circle); }
-.scan-folders input::before,
-.wizard-choice input::before {
-  content: ''; width: 8px; height: 8px;
-  transform: scale(0); transition: transform 120ms ease;
-  background: var(--accent-ink);
-  clip-path: polygon(14% 46%, 0 60%, 39% 100%, 100% 22%, 86% 8%, 39% 72%);
-}
-.scan-folders input[type='radio']::before,
-.wizard-choice input[type='radio']::before {
-  clip-path: none; border-radius: var(--circle); width: 6px; height: 6px;
-}
-.scan-folders input:checked,
-.wizard-choice input:checked { background: var(--accent); border-color: var(--accent); }
-.scan-folders input:checked::before,
-.wizard-choice input:checked::before { transform: scale(1); }
-.scan-folders input:focus-visible,
-.wizard-choice input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /*
  * A dialog has to reflow at 320px like everything else.
@@ -1238,13 +802,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  * is disappearing.
  */
 .setup-row button:disabled,
-.face-chip:disabled {
-  opacity: 1;
-  background: var(--sunken);
-  border-color: var(--hairline);
-  color: var(--ink-faint);
-  cursor: default;
-}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1253,63 +810,11 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
     transition-duration: 0.01ms !important;
   }
 }
-
-/* ---------------------------------------------------------------------------
- * Her expressions
- *
- * A chip per face, dim until it exists. Deliberately plain: the interesting
- * thing in this dialog is the photograph, and six buttons competing with it
- * would be six buttons too many.
- * ------------------------------------------------------------------------- */
-
-/*
- * The heading used to start at the dialog edge while everything above it was
- * inset by the gutter, so the one section with no padding of its own read as a
- * different document.
- */
-.faces { margin-top: 22px; padding: 0 22px 20px; }
 /* The gutter is the section's now, so the note inside it must not add its own. */
-.faces .settings-note { padding: 0 0 14px; }
-.faces h3 { margin: 0 0 6px; font-size: 14px; font-weight: 500; }
 
 /*
  * Before a photograph exists there is nothing to generate from, and `ui.ts`
  * returns early — which left a heading and two sentences promising buttons,
  * followed by nothing at all. Saying so is better than an empty rectangle.
  */
-.faces-empty {
-  margin: 0; padding: 14px 16px;
-  border: 1px dashed var(--hairline); border-radius: var(--radius-sm);
-  color: var(--ink-faint); font-size: 13px; line-height: 1.6;
-}
-.faces-empty[hidden] { display: none; }
 
-.face-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0 8px;
-}
-
-.face-chip {
-  border: 1px solid var(--hairline);
-  background: var(--raised);
-  color: var(--ink-soft);
-  border-radius: var(--pill);
-  padding: 6px 14px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
-}
-
-.face-chip:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
-.face-chip:disabled { opacity: 0.55; cursor: default; }
-
-/* It exists, so she can use it. */
-.face-chip[data-ready='true'] {
-  border-color: var(--accent);
-  background: var(--accent-wash);
-  color: var(--ink);
-}

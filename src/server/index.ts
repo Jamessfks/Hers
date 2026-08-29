@@ -9,8 +9,6 @@
  * website does — microphone, camera, screen share — needs a secure context,
  * and `localhost` is one; any other host is not, without a certificate. Binding
  * wider does not gain a working phone client, it only gains an open door.
- * Reaching her from a phone is what the LiveKit bridge is for, and that dials
- * out rather than listening.
  */
 
 import { existsSync } from 'node:fs';
@@ -32,14 +30,12 @@ import {
   maskKey,
   rememberChatId,
 } from './setup.ts';
-import { knowledgeState, runScan, suggestedFolders } from './knowledge.ts';
 import { WebBridge } from './ws.ts';
 import type { Config } from './config.ts';
 import type { TelegramView } from '../shared/protocol.ts';
 import { TelegramBridge } from '../bridges/telegram/bridge.ts';
-import type { CallBridge } from '../bridges/livekit/bridge.ts';
 
-export const VERSION = '1.4.1';
+export const VERSION = '2.0.0';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -83,7 +79,6 @@ export async function main(): Promise<Running> {
   const conversation = new Conversation({ brain });
   let web: WebBridge;
   let telegram: TelegramBridge | null = null;
-  let calls: CallBridge | null = null;
 
   // One list, used by both doors. The WebSocket has always checked it; the HTTP
   // API did not, which is the hole this closes.
@@ -93,9 +88,6 @@ export async function main(): Promise<Running> {
     createRequestHandler({
       allowedOrigins: origins,
       webRoot: path.join(repoRoot, 'dist', 'web'),
-      gallery: () => brain.gallery,
-      avatar: () => brain.avatar,
-      onAvatarChanged: () => web.announceAvatar(),
       onMissingBuild: missingBuildPage,
       status: () => ({
         version: VERSION,
@@ -103,7 +95,6 @@ export async function main(): Promise<Running> {
         configured: Boolean(config.geminiApiKey),
         keyHint: maskKey(config.geminiApiKey),
         telegram: Boolean(config.telegram),
-        livekit: Boolean(config.livekit),
         profileDir: config.profileDir,
         warnings: config.warnings,
       }),
@@ -161,31 +152,6 @@ export async function main(): Promise<Running> {
         }
       },
 
-      /** What she has been allowed to read, and where it makes sense to offer. */
-      knowledge: async () => ({
-        ...(await knowledgeState(brain)),
-        suggested: suggestedFolders(os.homedir()),
-        platform: process.platform,
-      }),
-
-      /**
-       * Permission, then the scan it authorises.
-       *
-       * The conversation is told afterwards rather than restarted: a session's
-       * memories are fixed when it wakes, so what she has just learned reaches
-       * her the next time she does. Saying so in the reply is more honest than
-       * silently doing nothing until a reconnect.
-       */
-      scan: async (folders) => {
-        const outcome = await runScan(brain, folders);
-        web.refresh();
-        console.log(
-          `  knowledge scan — ${outcome.seen} files seen, ${outcome.read} read, ` +
-            `${outcome.refused} refused, ${outcome.learned} facts kept`,
-        );
-        return outcome;
-      },
-
       /**
        * Everything she has, deleted.
        *
@@ -197,9 +163,6 @@ export async function main(): Promise<Running> {
       reset: async () => {
         try {
           await telegram?.forgetSessions();
-          // `hangUp`, not `close`: closing releases the LiveKit runtime for
-          // good, and phone calls should still work after a reset.
-          await calls?.hangUp();
           await web.endSession();
           await brain.wipe();
           web.refresh();
@@ -221,24 +184,6 @@ export async function main(): Promise<Running> {
     allowHeadless: config.allowHeadless,
     telegram: () => telegramView(),
   });
-
-  /*
-   * Loaded only if calls are configured, which for almost everybody is never.
-   *
-   * The import is dynamic and that is not about startup time, though it saves
-   * some. `@livekit/rtc-node` is a sixteen-megabyte prebuilt binary containing
-   * its own copy of WebRTC, and inside the desktop application Chromium has
-   * already loaded another. Both register Objective-C classes under the same
-   * names — `RTCVideoFrame`, `RTCVideoCapturer`, nine of them — and macOS
-   * prints a warning saying this may cause "mysterious crashes", which is a
-   * fair description of what duplicate class registration does. Nobody who has
-   * not set up LiveKit should be exposed to that, and before this line they
-   * were: the import ran whether or not the bridge was ever built.
-   */
-  if (config.livekit) {
-    const { CallBridge } = await import('../bridges/livekit/bridge.ts');
-    calls = new CallBridge({ brain, livekit: config.livekit });
-  }
 
   /**
    * Brings the bot up, or back up on a new token, without a restart.
@@ -267,7 +212,6 @@ export async function main(): Promise<Running> {
       conversation,
       token: config.telegram.token,
       allowedChatIds: config.telegram.allowedChatIds,
-      calls,
       onChatPinned: (chatId) => {
         void (async () => {
           try {
@@ -342,7 +286,6 @@ export async function main(): Promise<Running> {
     if (shuttingDown) return;
     shuttingDown = true;
     telegram?.stop();
-    await calls?.close();
     await web.close();
     await brain.close();
     server.close();
@@ -398,8 +341,7 @@ export function startupBanner(config: Config, envFile = envFilePath()): string[]
     `  memory    ${path.join(config.dataDir, 'memory.db')}`,
     `  keys      ${envFile}${existsSync(envFile) ? '' : ' (not written yet)'}`,
     `  model     ${config.model}`,
-    `  telegram  ${config.telegram ? 'on' : 'off'}`,
-    `  calls     ${config.livekit ? 'on' : 'off'}\n`,
+    `  telegram  ${config.telegram ? 'on' : 'off'}\n`,
   ];
 }
 

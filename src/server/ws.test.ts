@@ -14,9 +14,7 @@ import { loadConfig } from './config.ts';
 import { WebBridge } from './ws.ts';
 import { Conversation } from '../core/session/conversation.ts';
 import { CLOSE_SUPERSEDED, MediaKind, decodeMediaFrame } from '../shared/protocol.ts';
-import type { ClientMessage, ServerMessage } from '../shared/protocol.ts';
-import { PROFILE_FILES } from '../shared/profile-files.ts';
-import { applyWizard } from '../shared/wizard.ts';
+import type { ServerMessage } from '../shared/protocol.ts';
 
 /**
  * The origin check is the most important twenty lines in the server, and it is
@@ -108,10 +106,8 @@ test('a client with no Origin at all is refused', async () => {
    * This used to be allowed, and the reasoning was half right: a page always
    * sends the header, so absence does mean the caller is not a page. It does not
    * mean the caller is trustworthy. Any other process on this machine, holding
-   * no secret, could find the port and get the last forty turns, every stored
-   * fact, her mood and the key hint — and could send back `say`, `memory.forget`,
-   * `intimacy.pin` and `profile.save`, which rewrites the instruction she is
-   * built from.
+   * no secret, could find the port and get her mood and the key hint, and could
+   * open her microphone.
    */
   const app = await bridge();
   try {
@@ -150,7 +146,7 @@ test('the first thing she says is what the UI needs to draw itself', async () =>
     assert.ok(ready, 'no ready message');
     assert.equal(ready.t === 'ready' && ready.configured, false, 'no key is configured here');
     // She has not chosen yet, so the page is told there is no name to draw —
-    // otherwise the wizard card saying she has not got one runs under "Anna".
+    // otherwise the header reads "Anna" for a companion who has not chosen it.
     assert.equal(ready.t === 'ready' && ready.named, false);
     assert.ok(ready.t === 'ready' && ready.cameraFps > 0);
     assert.deepEqual(
@@ -171,7 +167,7 @@ test('a malformed control frame is ignored rather than fatal', async () => {
 
     socket.send('not json at all');
     socket.send('{"t":"nonexistent"}');
-    socket.send(JSON.stringify({ t: 'sense', sense: '../../etc/passwd', on: true }));
+    socket.send(JSON.stringify({ t: 'screen', activity: '../../etc/passwd', stillSeconds: 1 }));
     socket.send(JSON.stringify({ t: 'presence', idleSeconds: 'lots', tabVisible: 'yes' }));
     // A binary frame with a kind nobody defined.
     socket.send(Buffer.from([0x7f, 1, 2, 3]), { binary: true });
@@ -226,65 +222,6 @@ test('the media frame kinds the browser sends are the ones the server reads', ()
   assert.equal(round(MediaKind.CAMERA_JPEG), MediaKind.CAMERA_JPEG);
   assert.equal(round(MediaKind.SCREEN_JPEG), MediaKind.SCREEN_JPEG);
 });
-
-/**
- * The wizard's whole precondition, over the wire it actually arrives on.
- *
- * `isFirstRun` is unit-tested next to the profile code; what this asks is
- * whether the page ever finds out — the browser decides between the wizard and
- * the Setup panel on the strength of this one field, and it comes back on the
- * same message as the files the wizard is about to edit.
- */
-test('the profile message says whether anybody has ever used this folder', async () => {
-  const app = await bridge();
-  const origin = `http://127.0.0.1:${app.port}`;
-  try {
-    const socket = new WebSocket(app.url, { origin });
-    await new Promise((resolve) => socket.on('open', resolve));
-
-    const fresh = await ask(socket, { t: 'profile.load' });
-    assert.equal(fresh.t === 'profile' && fresh.firstRun, true);
-    assert.deepEqual(
-      fresh.t === 'profile' ? Object.keys(fresh.files).sort() : [],
-      [...PROFILE_FILES].sort(),
-    );
-
-    // Somebody clicks straight through it without answering anything.
-    const skipped = applyWizard(
-      fresh.t === 'profile' ? fresh.files : {},
-      {},
-      '2026-08-27',
-    );
-    const saved = await ask(socket, { t: 'profile.save', files: skipped });
-    assert.equal(saved.t === 'profile' && saved.firstRun, false, 'it would ask again');
-
-    // And it stays answered across a reconnect, because it is on disk.
-    socket.close();
-    const second = new WebSocket(app.url, { origin });
-    await new Promise((resolve) => second.on('open', resolve));
-    const again = await ask(second, { t: 'profile.load' });
-    assert.equal(again.t === 'profile' && again.firstRun, false);
-    second.close();
-  } finally {
-    await app.close();
-  }
-});
-
-/** Sends one control message and waits for the next `profile` reply. */
-function ask(socket: WebSocket, message: ClientMessage): Promise<ServerMessage> {
-  return new Promise((resolve, reject) => {
-    const onMessage = (data: unknown, isBinary: boolean) => {
-      if (isBinary) return;
-      const parsed = JSON.parse(String(data)) as ServerMessage;
-      if (parsed.t !== 'profile') return;
-      socket.off('message', onMessage);
-      resolve(parsed);
-    };
-    socket.on('message', onMessage);
-    socket.send(JSON.stringify(message));
-    setTimeout(() => reject(new Error(`no answer to ${message.t}`)), 4000).unref();
-  });
-}
 
 async function collect(url: string, origin: string, count: number): Promise<ServerMessage[]> {
   const socket = new WebSocket(url, { origin });

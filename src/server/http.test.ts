@@ -6,8 +6,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 
-import { AvatarStudio } from '../core/avatar/studio.ts';
-import { Gallery } from '../core/gallery/gallery.ts';
 import { createRequestHandler, missingBuildPage } from './http.ts';
 
 /**
@@ -26,19 +24,12 @@ after(() => {
 async function serve(allowedOrigins?: ReadonlySet<string>) {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-http-'));
   const webRoot = path.join(root, 'web');
-  const galleryDir = path.join(root, 'gallery');
   await mkdir(webRoot, { recursive: true });
-  await mkdir(galleryDir, { recursive: true });
 
   await writeFile(path.join(webRoot, 'index.html'), '<!doctype html><title>Hers</title>');
   await writeFile(path.join(webRoot, 'app.js'), 'console.log(1)');
-  await writeFile(path.join(galleryDir, 'smiling.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
-  // The things a traversal would be aiming at.
+  // The thing a traversal would be aiming at.
   await writeFile(path.join(root, 'secret.txt'), 'the api key');
-  await writeFile(path.join(galleryDir, '..', 'mood.state.json'), '{"secret":true}');
-
-  const gallery = new Gallery(galleryDir);
-  const avatar = new AvatarStudio({ dir: path.join(root, 'avatar') });
 
   const keys: string[] = [];
   const resets: number[] = [];
@@ -47,8 +38,6 @@ async function serve(allowedOrigins?: ReadonlySet<string>) {
     createRequestHandler({
       ...(allowedOrigins ? { allowedOrigins } : {}),
       webRoot,
-      gallery: () => gallery,
-      avatar: () => avatar,
       onMissingBuild: missingBuildPage,
       status: () => ({ version: '1.0.0' }),
       setKey: async (key) => {
@@ -113,31 +102,6 @@ test('status is JSON', async () => {
   const response = await app.get('/api/status');
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { version: '1.0.0' });
-});
-
-test('the gallery serves a known file', async () => {
-  const app = await serve();
-  const response = await app.get('/gallery/smiling.jpg');
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get('content-type'), 'image/jpeg');
-  assert.equal((await response.arrayBuffer()).byteLength, 4);
-});
-
-test('the gallery refuses anything it does not already list', async () => {
-  const app = await serve();
-  for (const attempt of [
-    '/gallery/../secret.txt',
-    '/gallery/%2e%2e%2fsecret.txt',
-    '/gallery/..%2F..%2Fsecret.txt',
-    '/gallery/mood.state.json',
-    '/gallery/....//secret.txt',
-    '/gallery/..\\secret.txt',
-  ]) {
-    const response = await app.get(attempt);
-    const body = await response.text();
-    assert.ok(!body.includes('the api key'), `${attempt} escaped the gallery`);
-    assert.ok(!body.includes('"secret"'), `${attempt} reached app state`);
-  }
 });
 
 test('static serving cannot be walked out of', async () => {

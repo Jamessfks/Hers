@@ -26,7 +26,6 @@ test('an empty environment still produces a working configuration', () => {
   assert.equal(config.port, 5175);
   assert.equal(config.maxSilenceMs, 180_000, 'the three-minute promise is the default');
   assert.equal(config.telegram, null);
-  assert.equal(config.livekit, null);
   assert.deepEqual(config.warnings, []);
 });
 
@@ -68,33 +67,6 @@ test('frame rates cannot exceed what the Live API accepts', () => {
   assert.equal(config.cameraFps, 1, 'the API takes at most one frame per second');
   assert.equal(config.screenFps, 0.25, 'and a decimal comma is what half the world types');
   assert.match(config.warnings.join(' '), /1 frame per second/);
-});
-
-test('half-configured LiveKit is off, and says why', () => {
-  const config = loadConfig(env({ LIVEKIT_URL: 'wss://x.livekit.cloud' }));
-  assert.equal(config.livekit, null);
-  assert.match(config.warnings.join(' '), /half configured/);
-});
-
-test('fully configured LiveKit is on', () => {
-  const config = loadConfig(
-    env({
-      LIVEKIT_URL: 'wss://x.livekit.cloud',
-      LIVEKIT_API_KEY: 'key',
-      LIVEKIT_API_SECRET: 'secret',
-      HERS_CALL_PAGE_URL: 'https://example.github.io/hers/',
-    }),
-  );
-  assert.equal(config.livekit?.url, 'wss://x.livekit.cloud');
-  assert.deepEqual(config.warnings, []);
-});
-
-test('LiveKit without a call page warns, because /call would have nowhere to point', () => {
-  const config = loadConfig(
-    env({ LIVEKIT_URL: 'wss://x', LIVEKIT_API_KEY: 'k', LIVEKIT_API_SECRET: 's' }),
-  );
-  assert.ok(config.livekit);
-  assert.match(config.warnings.join(' '), /HERS_CALL_PAGE_URL/);
 });
 
 test('a Telegram bot with no allowlist is flagged, loudly', () => {

@@ -4,33 +4,11 @@
  * Kept apart from `main.ts` so that the wiring — sockets, microphones, frame
  * timers — can be read without stepping over `document.getElementById`, and so
  * that the two can fail independently. There is no framework here because there
- * are about thirty elements, and the reactive machinery to manage thirty
- * elements is larger than thirty elements.
+ * are a handful of elements, and the reactive machinery to manage a handful of
+ * elements is larger than a handful of elements.
  */
 
-import type {
-  AvatarView,
-  IntimacyView,
-  MoodReadout,
-  RememberedFact,
-  SenseName,
-  ServerMessage,
-  TelegramView,
-} from '../shared/protocol.ts';
-import { SENSE_NAMES } from '../shared/protocol.ts';
-import { PROFILE_FILES } from '../shared/profile-files.ts';
-import { frontmatterValue, setFrontmatterValue } from '../shared/frontmatter.ts';
-import { DEFAULT_VOICE, FEMALE_VOICES, VOICES } from '../shared/voices.ts';
-import { Wizard } from './wizard.ts';
-
-/**
- * How long one of her faces stays up.
- *
- * Long enough to be seen and short enough that she is not stuck wearing it. She
- * calls `look` about as often as a person changes expression, so overlapping
- * calls are normal — each one restarts this rather than queueing.
- */
-const LOOK_MS = 4200;
+import type { IntimacyView, MoodReadout, ServerMessage, TelegramView } from '../shared/protocol.ts';
 
 function need<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -39,30 +17,9 @@ function need<T extends HTMLElement>(id: string): T {
 }
 
 export interface UiHandlers {
-  onToggleSense(sense: SenseName, on: boolean): void;
-  /**
-   * Whether that sense's device is open right now, asked of the device.
-   *
-   * The indicator is drawn from this and not from the argument, so nothing that
-   * reaches the socket can darken a light while the camera is still on.
-   */
-  senseIsLive(sense: SenseName): boolean;
   onWake(): void;
-  onSay(text: string): void;
-  onLoadProfile(): void;
-  /**
-   * Write these back. `quiet` suppresses the server's "she picks up the changes
-   * the next time she wakes" note, which is true of the profile editor and
-   * wrong of the wizard — that one is about to wake her.
-   */
-  onSaveProfile(files: Record<string, string>, quiet?: boolean): void;
-  onUploadFace(file: File): void;
   /** Take the conversation back from whichever tab has it. */
   onClaim(): void;
-  onLoadMemory(): void;
-  onEditMemory(id: number, text: string): void;
-  onForgetMemory(id: number): void;
-  onAddMemory(text: string): void;
   /** A pasted Gemini key. Resolves to null on success, or to why not. */
   onSaveKey(key: string): Promise<string | null>;
   /**
@@ -73,36 +30,8 @@ export interface UiHandlers {
    * is not in it.
    */
   onSaveBotToken(token: string): Promise<{ error?: string; username?: string; link?: string }>;
-  /** Generate one of her expressions from the photograph. */
-  onMakeFace(expression: string): void;
   /** Delete everything. Resolves to null on success, or to why not. */
   onReset(confirm: string): Promise<string | null>;
-  /** Put closeness where the user wants it, 0-1. */
-  onPinIntimacy(score: number): void;
-  /** Hand closeness back to time and contact. */
-  onAutoIntimacy(): void;
-  /** Permission to read these folders, once. Resolves to a report or an error. */
-  onScan(folders: string[]): Promise<ScanOutcomeView>;
-  /** Ask what she has already been allowed to read. */
-  onLoadKnowledge(): Promise<KnowledgeView>;
-}
-
-/** What the server says about the scan afterwards. */
-export interface ScanOutcomeView {
-  ok?: boolean;
-  error?: string;
-  learned?: number;
-  seen?: number;
-  read?: number;
-  refused?: number;
-  denied?: { folder: string; reason: string }[];
-}
-
-/** What she has been allowed to read, and where it makes sense to offer. */
-export interface KnowledgeView {
-  folders?: string[];
-  scannedAt?: number;
-  suggested?: string[];
 }
 
 /** What has to be typed before the delete button will do anything. */
@@ -116,7 +45,6 @@ const RESET_PHRASE = 'start over';
  * the honest shape of the answer: there is no name there yet.
  */
 const UNNAMED_TITLE = 'Hers';
-const UNNAMED_SPEAKER = 'She';
 
 export class Ui {
   readonly #handlers: UiHandlers;
@@ -125,33 +53,10 @@ export class Ui {
   readonly #name = need('name');
   readonly #moodLabel = need('mood');
   readonly #state = need('state');
-  readonly #wake = need<HTMLButtonElement>('wake');
   readonly #hint = need('hint');
-  readonly #transcript = need('transcript');
-  readonly #empty = need('empty');
-  readonly #previews = need('previews');
   readonly #toast = need('toast');
   readonly #notice = need('notice');
-  readonly #settings = need<HTMLDialogElement>('settings');
-  readonly #tabs = need('tabs');
-  readonly #editor = need<HTMLTextAreaElement>('editor');
-  readonly #saved = need('saved');
-  readonly #input = need<HTMLInputElement>('input');
-  readonly #orb = need('orb');
-  readonly #portrait = need('portrait');
-  readonly #still = need<HTMLImageElement>('portrait-still');
-  readonly #faceList = need('face-list');
-  readonly #faceStatus = need('face-status');
-  /** The photograph, so a shown expression can be put back. */
-  #sourceUrl: string | null = null;
-  #lookTimer: ReturnType<typeof setTimeout> | null = null;
-  /** The face this page asked for, so its own line can be resolved. */
-  #asked: string | null = null;
-  readonly #face = need<HTMLDialogElement>('face');
-  readonly #dropzone = need<HTMLLabelElement>('dropzone');
-  readonly #facePreview = need<HTMLImageElement>('face-preview');
-  readonly #dropzoneLabel = need('dropzone-label');
-  readonly #facesEmpty = need('faces-empty');
+  readonly #orb = need<HTMLButtonElement>('orb');
 
   /*
    * How much of her voice reaches the orb, given what the machine asked for.
@@ -171,7 +76,6 @@ export class Ui {
    * silently never matches.
    */
   readonly #calm = window.matchMedia('(prefers-reduced-motion: reduce)');
-  readonly #giveFace = need<HTMLButtonElement>('give-face');
   readonly #takeover = need('takeover');
   readonly #setup = need<HTMLDialogElement>('setup');
   readonly #keyInput = need<HTMLInputElement>('key-input');
@@ -185,27 +89,8 @@ export class Ui {
   readonly #resetConfirm = need<HTMLInputElement>('reset-confirm');
   readonly #resetGo = need<HTMLButtonElement>('reset-go');
   readonly #resetStatus = need('reset-status');
-  readonly #scanFolders = need('scan-folders');
-  readonly #scanGo = need<HTMLButtonElement>('scan-go');
-  readonly #scanStatus = need('scan-status');
-  readonly #intimacyReadout = need('intimacy-readout');
-  readonly #intimacyRange = need<HTMLInputElement>('intimacy-range');
-  readonly #intimacyAuto = need<HTMLButtonElement>('intimacy-auto');
-  readonly #memory = need<HTMLDialogElement>('memory');
-  readonly #memoryList = need('memory-list');
-  readonly #memorySummary = need('memory-summary');
-  readonly #memoryNew = need<HTMLInputElement>('memory-new');
 
-  readonly #senseButtons = new Map<SenseName, HTMLButtonElement>();
-  /** The in-progress line per speaker, replaced until the turn closes. */
-  readonly #pending = new Map<'user' | 'her', HTMLElement>();
-  #profileFiles: Record<string, string> = {};
-  readonly #voicePick = need<HTMLElement>('voice-pick');
-  readonly #voiceSelect = need<HTMLSelectElement>('voice-select');
-  #openFile = 'personality';
   #awake = false;
-  /** True between clicking Save and the folder coming back. */
-  #saving = false;
   #toastTimer: number | null = null;
   /** Written by two independent meters; the louder wins. */
   #micLevel = 0;
@@ -214,156 +99,25 @@ export class Ui {
   #offeredSetup = false;
   /** Whatever she calls herself, or empty until she has chosen. */
   #herName = '';
-  /**
-   * What the server said about the key, and about the folder.
-   *
-   * Held rather than acted on the moment each arrives, because the two answers
-   * come in two messages and the decision needs both: an unconfigured server on
-   * a fresh profile must open the wizard, not the Setup panel on top of it. See
-   * {@link #offerFirstThing}.
-   */
-  #configured = false;
-  #profileSeen = false;
-  #firstRun = false;
-  /** A wizard save is in flight, and the wake behind it is waiting for it. */
-  #savePending = false;
-  #wakeAfterSave = false;
-  /**
-   * How long the wizard waits for the folder to come back before saying so.
-   *
-   * The last step holds the wake until the server echoes the saved profile, so
-   * that her first system instruction is built from what the wizard wrote rather
-   * than from what it replaced. That is right when the reply arrives. When it
-   * does not — a dropped socket between the save and the echo — the wait was
-   * forever, and the first run ended on a focused button and no explanation,
-   * which is the worst possible last impression for a ceremony about meeting
-   * somebody.
-   *
-   * So it gives up out loud. Not by waking anyway: that would reintroduce the
-   * race the wait exists to prevent, and guessing on the one conversation where
-   * she chooses her name is not a trade worth making. It says what happened and
-   * leaves the button there.
-   *
-   * A local round trip is milliseconds. Eight seconds is not a guess about
-   * latency, it is long enough that anything still outstanding is broken.
-   */
-  static readonly #SAVE_REPLY_TIMEOUT_MS = 8000;
-  #saveTimer: ReturnType<typeof setTimeout> | null = null;
-  readonly #wizard: Wizard;
 
   constructor(handlers: UiHandlers) {
     this.#handlers = handlers;
 
-    this.#wizard = new Wizard({
-      onSave: (files) => {
-        this.#profileFiles = { ...this.#profileFiles, ...files };
-        this.#savePending = true;
-        this.#handlers.onSaveProfile(files, true);
-      },
-      onUploadFace: (file) => this.#handlers.onUploadFace(file),
-      onSaveKey: (key) => this.#handlers.onSaveKey(key),
-      /*
-       * "Meet her" means meet her.
-       *
-       * A companion that opens a billed session because a dialog closed is a
-       * companion nobody should install, and that is still true — which is why
-       * Escape and Close do not do this. But a button labelled *Meet her*, on a
-       * card that has just spent two paragraphs promising she will choose her
-       * own name the first time you talk to her, is the explicit gesture. It is
-       * also the gesture the audio path needs; browsers will not start playback
-       * without one. Ending here on a wake button and a toast reading "she picks
-       * up the changes the next time she wakes" is a ceremony that introduces
-       * nobody.
-       *
-       * Held until the folder comes back rather than sent now. The two messages
-       * are handled concurrently by the server, so waking immediately races the
-       * save and can build her first system instruction out of the profile the
-       * wizard just replaced — the one conversation where that matters most.
-       */
-      onDone: ({ meet }) => {
-        this.#wake.focus();
-        if (!meet) return;
-        if (!this.#savePending) {
-          this.#handlers.onWake();
-          return;
-        }
-        this.#wakeAfterSave = true;
-        this.#saveTimer = setTimeout(() => {
-          this.#saveTimer = null;
-          if (!this.#wakeAfterSave) return;
-          this.#wakeAfterSave = false;
-          this.#savePending = false;
-          this.toast('Saved, but she has not confirmed it. Press Wake her when you are ready.');
-        }, Ui.#SAVE_REPLY_TIMEOUT_MS);
-      },
-    });
-
     /*
-     * The menu edits the same text the editor is showing rather than saving on
-     * its own. One writer: whatever is on screen is what Save sends, so picking
-     * a voice and then typing in the file cannot produce two answers.
+     * Tapping her is the only way in, and it has to be a real gesture.
+     *
+     * `player.unlock()` will not run outside one — every browser requires a
+     * user gesture before audio may play — and v1 had two affordances racing
+     * for it, a Wake button and a hearing toggle. Whichever the user pressed
+     * first was the one that unlocked audio, and pressing the other one first
+     * gave a companion who talked silently. One target removes the race, and
+     * it is the thing on the screen that already looks like her.
      */
-    this.#voiceSelect.addEventListener('change', () => {
-      const current = this.#openFile === 'voice' ? this.#editor.value : (this.#profileFiles.voice ?? '');
-      const updated = setFrontmatterValue(current, 'voice', this.#voiceSelect.value);
-      this.#profileFiles.voice = updated;
-      if (this.#openFile === 'voice') this.#editor.value = updated;
-    });
-
-    for (const sense of SENSE_NAMES) {
-      const button = need<HTMLButtonElement>(`sense-${sense}`);
-      this.#senseButtons.set(sense, button);
-      button.addEventListener('click', () => {
-        this.#handlers.onToggleSense(sense, button.getAttribute('aria-pressed') !== 'true');
-      });
-    }
-
-    this.#wake.addEventListener('click', () => this.#handlers.onWake());
-
-    need<HTMLFormElement>('composer').addEventListener('submit', (event) => {
-      event.preventDefault();
-      const text = this.#input.value.trim();
-      if (!text) return;
-      this.#input.value = '';
-      this.#handlers.onSay(text);
-    });
-
-    need('settings-open').addEventListener('click', () => {
-      this.#handlers.onLoadProfile();
-      this.#settings.showModal();
-    });
-
-    need('save').addEventListener('click', () => {
-      this.#profileFiles[this.#openFile] = this.#editor.value;
-      this.#saving = true;
-      this.#handlers.onSaveProfile(this.#profileFiles);
-      this.#saved.textContent = 'Saving…';
-    });
-
-    need('face-open').addEventListener('click', () => this.#face.showModal());
-    this.#giveFace.addEventListener('click', () => this.#face.showModal());
-    need('memory-open').addEventListener('click', () => {
-      this.#handlers.onLoadMemory();
-      this.#memory.showModal();
-    });
-
-    const addMemory = () => {
-      const text = this.#memoryNew.value.trim();
-      if (!text) return;
-      this.#memoryNew.value = '';
-      this.#handlers.onAddMemory(text);
-    };
-    need('memory-add').addEventListener('click', addMemory);
-    this.#memoryNew.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') addMemory();
-    });
+    this.#orb.addEventListener('click', () => this.#handlers.onWake());
 
     need('setup-open').addEventListener('click', () => {
-      void this.#loadKnowledge();
       this.#setup.showModal();
     });
-
-    this.#scanGo.addEventListener('click', () => void this.#scan());
 
     this.#keySave.addEventListener('click', () => void this.#saveKey());
     this.#botSave.addEventListener('click', () => void this.#saveBotToken());
@@ -383,53 +137,12 @@ export class Ui {
     this.#resetConfirm.addEventListener('input', armReset);
     this.#resetGo.addEventListener('click', () => void this.#reset());
 
-    /*
-     * Committed on release rather than on input.
-     *
-     * Dragging a slider fires continuously, and each step would be a message,
-     * a disk write and a repaint. What the user means is where they let go.
-     */
-    this.#intimacyRange.addEventListener('change', () => {
-      this.#handlers.onPinIntimacy(Number(this.#intimacyRange.value) / 100);
-    });
-    this.#intimacyAuto.addEventListener('click', () => this.#handlers.onAutoIntimacy());
-
     need('takeover-claim').addEventListener('click', () => {
       this.#takeover.hidden = true;
       this.#handlers.onClaim();
     });
 
     this.#calm.addEventListener('change', () => this.#paintLevel());
-
-    const picker = need<HTMLInputElement>('face-file');
-    picker.addEventListener('change', () => {
-      const file = picker.files?.[0];
-      if (file) this.#handlers.onUploadFace(file);
-      // Cleared so choosing the same file twice still fires a change event.
-      picker.value = '';
-    });
-
-    for (const event of ['dragenter', 'dragover'] as const) {
-      this.#dropzone.addEventListener(event, (drag) => {
-        drag.preventDefault();
-        this.#dropzone.dataset.over = 'true';
-      });
-    }
-    for (const event of ['dragleave', 'drop'] as const) {
-      this.#dropzone.addEventListener(event, () => {
-        this.#dropzone.dataset.over = 'false';
-      });
-    }
-    this.#dropzone.addEventListener('drop', (drag) => {
-      drag.preventDefault();
-      const file = drag.dataTransfer?.files?.[0];
-      if (file) this.#handlers.onUploadFace(file);
-    });
-
-    this.#editor.addEventListener('input', () => {
-      this.#profileFiles[this.#openFile] = this.#editor.value;
-      this.#saved.textContent = '';
-    });
   }
 
   // -------------------------------------------------------------------------
@@ -440,9 +153,6 @@ export class Ui {
     switch (message.t) {
       case 'ready':
         this.#setName(message.named ? message.name : '');
-        for (const [sense, on] of Object.entries(message.senses)) {
-          this.setSense(sense as SenseName, on);
-        }
         this.#setConfigured(message.configured, message.keyHint);
         return;
 
@@ -462,44 +172,8 @@ export class Ui {
         this.setTelegram(message.telegram);
         return;
 
-      case 'transcript':
-        this.line(message.who, message.text, message.final);
-        return;
-
-      case 'sense':
-        this.setSense(message.sense, message.on);
-        return;
-
-      case 'show':
-        this.media(message.url, message.kind, message.caption);
-        return;
-
       case 'trouble':
         this.toast(message.message);
-        return;
-
-      case 'profile':
-        this.#setProfile(message.files, message.firstRun);
-        return;
-
-      case 'avatar':
-        this.setAvatar(message.avatar);
-        return;
-
-      case 'look':
-        this.showLook(message.expression);
-        return;
-
-      case 'memory':
-        this.setMemory(message.facts, message.summary);
-        return;
-
-      case 'intimacy':
-        this.setIntimacy(message.intimacy);
-        return;
-
-      case 'history':
-        this.setHistory(message.turns);
         return;
 
       case 'interrupted':
@@ -516,8 +190,8 @@ export class Ui {
     this.#app.dataset.state = state;
     this.#state.textContent = state;
     this.#awake = state !== 'asleep' && state !== 'error';
-    this.#wake.textContent = this.#awake ? 'Let her rest' : 'Wake her';
-    this.#wake.dataset.awake = String(this.#awake);
+    this.#orb.dataset.awake = String(this.#awake);
+    this.#orb.setAttribute('aria-label', this.#awake ? 'Let her rest' : 'Wake her');
     this.#dot.title = state;
   }
 
@@ -535,111 +209,6 @@ export class Ui {
     const lift = (mood.current.energy + 1) / 2;
     document.documentElement.style.setProperty('--mood-hue', String(hue));
     document.documentElement.style.setProperty('--mood-lift', lift.toFixed(2));
-  }
-
-  /**
-   * Draws a sense as on or off — subject to the device agreeing.
-   *
-   * `on` is a request, not a fact. The browser owns the microphone, the camera
-   * and the screen share; the server is told about them and never the other way
-   * round. So a claim that contradicts the hardware is dropped rather than
-   * drawn, in both directions: a message cannot switch a light off over a live
-   * track, and it cannot switch one on over a device that was never opened.
-   *
-   * The direction that matters is the first one. Anything that reached this
-   * socket could otherwise send `{t:'sense',sense:'sight',on:false}` and leave
-   * the button dark, the self-preview hidden, and the camera wide open with
-   * frames still going to Google — an interface lying about the one thing a
-   * person would check.
-   */
-  setSense(sense: SenseName, requested: boolean): void {
-    // `requested` is what somebody asked for and is deliberately not used to
-    // draw anything. Keeping it in the signature keeps the call sites honest
-    // about their intent; the device decides what appears.
-    void requested;
-    const on = this.#handlers.senseIsLive(sense);
-    const button = this.#senseButtons.get(sense);
-    button?.setAttribute('aria-pressed', String(on));
-    const any = [...this.#senseButtons.values()].some(
-      (each) => each.getAttribute('aria-pressed') === 'true',
-    );
-    this.#previews.hidden = !(
-      this.#senseButtons.get('sight')?.getAttribute('aria-pressed') === 'true' ||
-      this.#senseButtons.get('screen')?.getAttribute('aria-pressed') === 'true'
-    );
-    this.#hint.textContent = any
-      ? 'She is here. She will speak first if it goes quiet.'
-      : 'Turn on a sense and she can hear you.';
-  }
-
-  attachPreview(which: 'camera' | 'screen', video: HTMLVideoElement, show: boolean): void {
-    const figure = need(`preview-${which}`);
-    figure.hidden = !show;
-    if (show && video.parentElement !== figure) figure.prepend(video);
-  }
-
-  /**
-   * Adds or updates a line.
-   *
-   * A non-final line replaces the previous non-final line from the same speaker
-   * rather than appending, because live transcription revises itself constantly
-   * and appending each revision produces a stuttering wall of near-duplicates.
-   */
-  line(who: 'user' | 'her', text: string, final: boolean): void {
-    this.#empty.hidden = true;
-    const existing = this.#pending.get(who);
-    const element = existing ?? this.#newLine(who);
-
-    const said = element.querySelector('.said');
-    if (said) said.textContent = text;
-    element.dataset.pending = String(!final);
-
-    if (final) this.#pending.delete(who);
-    else this.#pending.set(who, element);
-
-    this.#scroll();
-  }
-
-  /**
-   * A picture she sent.
-   *
-   * The caption goes underneath, small and muted, rather than into the line
-   * where her words go — it is a caption, not something she said out loud.
-   *
-   * Whatever arrives here is safe to show: the gallery only sends a caption a
-   * person actually wrote, and sends nothing for a picture she generated. The
-   * filtering used to happen here instead, which was both a second mechanism
-   * for one rule and quietly wrong — it dropped lower-case captions, and
-   * "laughing in the kitchen" is a perfectly good thing for a human to type.
-   */
-  media(url: string, kind: 'image' | 'clip', caption?: string): void {
-    this.#empty.hidden = true;
-    const element = this.#newLine('her');
-    const said = element.querySelector('.said');
-    said?.remove();
-
-    if (kind === 'clip') {
-      const video = document.createElement('video');
-      video.src = url;
-      video.controls = true;
-      video.playsInline = true;
-      element.append(video);
-    } else {
-      const image = document.createElement('img');
-      image.src = url;
-      image.alt = caption ?? (this.#herName ? `A picture from ${this.#herName}` : 'A picture she sent');
-      image.loading = 'lazy';
-      element.append(image);
-    }
-
-    const label = (caption ?? '').trim();
-    if (label) {
-      const figcaption = document.createElement('p');
-      figcaption.className = 'said-caption';
-      figcaption.textContent = label;
-      element.append(figcaption);
-    }
-    this.#scroll();
   }
 
   /**
@@ -661,169 +230,6 @@ export class Ui {
   }
 
   /**
-   * Puts one of her faces on screen, then puts the photograph back.
-   *
-   * A timed swap rather than a state she stays in, because the alternative is a
-   * portrait frozen mid-laugh for the rest of the conversation. The photograph is
-   * the resting state and everything returns to it, which is also what makes the
-   * cut read as one person: the frame never moves.
-   */
-  showLook(expression: string): void {
-    if (!this.#sourceUrl) return;
-    if (this.#lookTimer) clearTimeout(this.#lookTimer);
-
-    this.#still.src = `/avatar/face/${encodeURIComponent(expression)}`;
-    this.#lookTimer = setTimeout(() => {
-      if (this.#sourceUrl) this.#still.src = this.#sourceUrl;
-      this.#lookTimer = null;
-    }, LOOK_MS);
-  }
-
-  #renderFaceList(avatar: AvatarView): void {
-    /*
-     * Resolve this page's own line before redrawing.
-     *
-     * The success toast goes to every page, which is right — the face belongs to
-     * her. But the "Making…" line belongs to the tab that clicked, and without
-     * this it sits there indefinitely looking like the request never finished.
-     */
-    if (this.#asked && !avatar.making.includes(this.#asked)) {
-      const done = avatar.ready.includes(this.#asked);
-      this.#status(
-        this.#faceStatus,
-        done ? `She can look ${this.#asked} now.` : `${this.#asked} did not come back. Try again.`,
-        done ? 'good' : 'bad',
-      );
-      this.#asked = null;
-    }
-
-    this.#faceList.replaceChildren();
-    this.#facesEmpty.hidden = avatar.hasSource;
-    if (!avatar.hasSource) return;
-
-    for (const name of avatar.all) {
-      const ready = avatar.ready.includes(name);
-      const making = avatar.making.includes(name);
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'face-chip';
-      button.textContent = making ? `${name}…` : name;
-      button.dataset.ready = String(ready);
-      button.disabled = making;
-      button.title = ready
-        ? `${name} exists — click to make it again`
-        : `Generate ${name} from her photograph`;
-      button.addEventListener('click', () => {
-        this.#asked = name;
-        this.#status(this.#faceStatus, `Making ${name}… this takes about ten seconds.`, 'working');
-        this.#handlers.onMakeFace(name);
-      });
-      this.#faceList.append(button);
-    }
-  }
-
-  /** Her photograph, or the orb when there is not one yet. */
-  setAvatar(avatar: AvatarView): void {
-    const hasSource = avatar.hasSource && Boolean(avatar.sourceUrl);
-
-    this.#portrait.hidden = !hasSource;
-    this.#orb.hidden = hasSource;
-    this.#giveFace.hidden = hasSource;
-
-    this.#renderFaceList(avatar);
-    this.#wizard.setAvatar(hasSource ? avatar.sourceUrl : null);
-
-    if (hasSource && avatar.sourceUrl) {
-      this.#sourceUrl = avatar.sourceUrl;
-      if (this.#still.getAttribute('src') !== avatar.sourceUrl) {
-        this.#still.src = avatar.sourceUrl;
-        this.#facePreview.src = avatar.sourceUrl;
-      }
-      this.#facePreview.hidden = false;
-      this.#dropzoneLabel.hidden = true;
-      if (avatar.width > 0 && avatar.height > 0) {
-        this.#portrait.style.setProperty(
-          '--portrait-ratio',
-          String(avatar.width / avatar.height),
-        );
-      }
-    } else {
-      this.#facePreview.hidden = true;
-      this.#dropzoneLabel.hidden = false;
-    }
-  }
-
-  /**
-   * The conversation so far, wherever it happened.
-   *
-   * Replaces whatever is on screen rather than appending: this arrives on
-   * connect, and a reconnect that appended would show the last hour twice.
-   */
-  setHistory(turns: readonly { speaker: 'user' | 'her'; text: string }[]): void {
-    this.#transcript.replaceChildren(this.#empty);
-    this.#pending.clear();
-    this.#empty.hidden = turns.length > 0;
-    for (const turn of turns) this.line(turn.speaker, turn.text, true);
-  }
-
-  /**
-   * Everything she remembers, editable in place.
-   *
-   * A textarea per fact rather than a modal per edit: the whole point is that
-   * the list reads as a list you can cross things out of, and an edit that
-   * costs three clicks is an edit nobody makes.
-   */
-  setMemory(facts: RememberedFact[], summary: string): void {
-    this.#memoryList.replaceChildren();
-
-    if (facts.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'empty';
-      empty.textContent = 'She has not kept anything yet.';
-      this.#memoryList.append(empty);
-    }
-
-    for (const fact of facts) {
-      const row = document.createElement('div');
-      row.className = 'fact';
-
-      const kind = document.createElement('span');
-      kind.className = 'fact-kind';
-      kind.textContent = fact.kind;
-
-      const text = document.createElement('textarea');
-      text.className = 'fact-text';
-      text.rows = 1;
-      text.value = fact.text;
-      const grow = () => {
-        text.style.height = 'auto';
-        text.style.height = `${text.scrollHeight}px`;
-      };
-      text.addEventListener('input', grow);
-      // Committed on blur rather than per keystroke: every save re-embeds the
-      // sentence, and re-embedding on every letter is a request per letter.
-      text.addEventListener('blur', () => {
-        if (text.value.trim() && text.value !== fact.text) {
-          this.#handlers.onEditMemory(fact.id, text.value);
-        }
-      });
-
-      const forget = document.createElement('button');
-      forget.className = 'danger';
-      forget.type = 'button';
-      forget.textContent = 'Forget';
-      forget.addEventListener('click', () => this.#handlers.onForgetMemory(fact.id));
-
-      row.append(kind, text, forget);
-      this.#memoryList.append(row);
-      grow();
-    }
-
-    this.#memorySummary.hidden = !summary;
-    this.#memorySummary.textContent = summary;
-  }
-
-  /**
    * How close she is, in a sentence rather than a progress bar.
    *
    * No bar, no XP, no "next level in 12 days" as the headline — the whole design
@@ -832,32 +238,7 @@ export class Ui {
    * is the thing; the percentage is a detail, and the days are there so the
    * slowness is honest rather than mysterious.
    */
-  setIntimacy(intimacy: IntimacyView): void {
-    const parts = [
-      `<span class="who-you-are">${intimacy.stage}</span> · ${intimacy.percent}%`,
-    ];
 
-    if (intimacy.pinned) {
-      parts.push('<span class="set-by-you">set by you</span>');
-    } else if (intimacy.known > 0) {
-      const days = Math.round(intimacy.days);
-      parts.push(`${intimacy.known} days since you met, ${days} of them together`);
-      if (intimacy.nextStage) {
-        parts.push(`${intimacy.toNextStage} more before ${intimacy.nextStage}`);
-      }
-    } else {
-      parts.push('you have not spoken yet');
-    }
-
-    this.#intimacyReadout.innerHTML = parts.join(' · ');
-    // Not while they are dragging it, or the value fights the thumb.
-    if (document.activeElement !== this.#intimacyRange) {
-      this.#intimacyRange.value = String(intimacy.percent);
-    }
-    this.#intimacyAuto.hidden = !intimacy.pinned;
-  }
-
-  /** Another tab has her, and this one has stopped trying. */
   setSuperseded(superseded: boolean): void {
     this.#takeover.hidden = !superseded;
   }
@@ -870,10 +251,6 @@ export class Ui {
   setHerLevel(level: number): void {
     this.#herLevel = level;
     this.#paintLevel();
-  }
-
-  focusInput(): void {
-    this.#input.focus();
   }
 
   // -------------------------------------------------------------------------
@@ -979,21 +356,6 @@ export class Ui {
 
     this.#resetConfirm.value = '';
     this.#status(this.#resetStatus, 'Gone. She does not know you.', 'good');
-    /*
-     * The folder was deleted and rebuilt, so it is a genuinely fresh profile
-     * again and gets the wizard again — which is the honest reading of "she
-     * meets you as a stranger with a new face". Asking for the profile is what
-     * makes the server say so; forgetting is what lets this page listen.
-     */
-    this.#wizard.forget();
-    this.#handlers.onLoadProfile();
-    // Out of the way, so the wizard is not the second modal on a stack of two.
-    if (this.#setup.open) this.#setup.close();
-    // The server re-sends everything; this only clears what it has no reason
-    // to send — an empty transcript is an absence, not a message.
-    this.#transcript.replaceChildren(this.#empty);
-    this.#pending.clear();
-    this.#empty.hidden = false;
   }
 
   /**
@@ -1002,11 +364,9 @@ export class Ui {
    * A page with no key opens something by itself. Everything here is inert
    * without one, and a first-time user staring at a wake button that does
    * nothing has no way to discover why — that used to be a line of toast telling
-   * them to go and edit a file. *Which* thing it opens is decided one message
-   * later, by {@link #offerFirstThing}.
+   * them to go and edit a file.
    */
   #setConfigured(configured: boolean, keyHint: string): void {
-    this.#configured = configured;
     this.#notice.hidden = configured;
     if (!configured) {
       this.#notice.textContent = 'She needs a Gemini API key before she can hear you.';
@@ -1014,8 +374,10 @@ export class Ui {
 
     this.#keyInput.placeholder = keyHint ? `${keyHint} — paste a new one to replace it` : 'AIza…';
 
-    this.#wizard.setConfigured(configured);
-    this.#offerFirstThing();
+    if (!configured && !this.#offeredSetup) {
+      this.#offeredSetup = true;
+      if (!this.#setup.open) this.#setup.showModal();
+    }
   }
 
   /**
@@ -1025,84 +387,17 @@ export class Ui {
    * somebody's private documents — the user has to do something for it to
    * happen, and if they read nothing and click nothing then nothing is read.
    */
-  async #loadKnowledge(): Promise<void> {
-    const view = await this.#handlers.onLoadKnowledge();
-    const already = new Set(view.folders ?? []);
-    const offered = view.suggested ?? [];
-
-    this.#scanFolders.replaceChildren();
-    for (const folder of offered) {
-      const label = document.createElement('label');
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.value = folder;
-      const name = document.createElement('span');
-      name.textContent = folder.split('/').pop() ?? folder;
-      const full = document.createElement('code');
-      full.textContent = folder;
-      label.append(box, name, full);
-      this.#scanFolders.append(label);
-    }
-
-    if (already.size > 0 && view.scannedAt) {
-      const when = new Date(view.scannedAt).toLocaleDateString();
-      this.#status(
-        this.#scanStatus,
-        `Last read ${when}: ${[...already].map((f) => f.split('/').pop()).join(', ')}.`,
-        'good',
-      );
-    }
-  }
-
-  async #scan(): Promise<void> {
-    const chosen = [...this.#scanFolders.querySelectorAll<HTMLInputElement>('input:checked')].map(
-      (box) => box.value,
-    );
-    if (chosen.length === 0) {
-      this.#status(this.#scanStatus, 'Tick a folder first.', 'bad');
-      return;
-    }
-
-    this.#scanGo.disabled = true;
-    this.#status(this.#scanStatus, 'Reading…', 'working');
-    const outcome = await this.#handlers.onScan(chosen);
-    this.#scanGo.disabled = false;
-
-    if (outcome.error && !outcome.ok) {
-      this.#status(this.#scanStatus, outcome.error, 'bad');
-      return;
-    }
-
-    const parts = [
-      `${outcome.seen ?? 0} files seen, ${outcome.read ?? 0} read`,
-      `${outcome.refused ?? 0} skipped for looking private`,
-      `${outcome.learned ?? 0} things kept`,
-    ];
-    // A refusal is the ordinary case on macOS until access is granted, and the
-    // reason from the server carries the remedy.
-    for (const denial of outcome.denied ?? []) {
-      parts.push(`${denial.folder.split('/').pop() ?? denial.folder}: ${denial.reason}`);
-    }
-    if (outcome.error) parts.push(outcome.error);
-    parts.push('She will have it the next time she wakes.');
-
-    this.#status(this.#scanStatus, parts.join(' · '), outcome.denied?.length ? 'bad' : 'good');
-  }
 
   /**
-   * Puts her name everywhere it appears, including on turns already on screen.
+   * Puts her name in the header.
    *
    * She chooses it during the first wake, so the first `ready` of a fresh install
-   * carries no name at all — and by then there may already be lines in the
-   * transcript, which get relabelled here when one arrives.
-   *
-   * An empty string is a real answer and not a failure: she has not got a name
-   * yet. The page used to ship the placeholder in its markup and print `Anna` in
-   * the header, the tab title and the portrait's alt text from the first frame,
-   * which meant the wizard card explaining that she has not chosen one was
-   * displayed under the name it says she does not have. A stranger reads that as
-   * a lie or a bug and cannot tell which. So nothing is drawn where the name
-   * goes, and the prose that has to say something says "she".
+   * carries no name at all. An empty string is a real answer and not a failure:
+   * she has not got a name yet. The page used to ship the placeholder in its
+   * markup and print `Anna` in the header and the tab title from the first
+   * frame, which meant a companion who had not chosen a name yet was introduced
+   * under one anyway. So nothing is drawn where the name goes until she has
+   * chosen it.
    */
   #setName(name: string): void {
     const chosen = name.trim();
@@ -1111,15 +406,10 @@ export class Ui {
     this.#herName = chosen;
     this.#name.textContent = chosen;
     document.title = chosen || UNNAMED_TITLE;
-    this.#still.alt = chosen || 'Her photograph';
-    for (const label of this.#transcript.querySelectorAll('.line[data-who="her"] .who')) {
-      label.parentElement?.setAttribute('aria-label', this.#herName);
-      label.textContent = chosen || UNNAMED_SPEAKER;
-    }
     // Prose in the markup that names her. Marked in the HTML rather than listed
     // here, so a new sentence about her does not have to remember to come back.
     for (const spot of document.querySelectorAll('[data-her-name]')) {
-      spot.textContent = chosen || UNNAMED_SPEAKER;
+      spot.textContent = chosen || 'She';
     }
   }
 
@@ -1132,146 +422,5 @@ export class Ui {
     const heard = Math.max(this.#micLevel * 0.5, this.#herLevel);
     const level = (this.#calm.matches ? heard * 0.2 : heard).toFixed(3);
     this.#orb.style.setProperty('--level', level);
-    this.#portrait.style.setProperty('--level', level);
-  }
-
-  #newLine(who: 'user' | 'her'): HTMLElement {
-    const element = document.createElement('div');
-    element.className = 'line';
-    element.dataset.who = who;
-    // Consecutive bubbles from the same speaker drop the name and tuck up
-    // against the one above, so a three-part answer reads as one turn.
-    const previous = this.#transcript.lastElementChild as HTMLElement | null;
-    element.dataset.same = String(previous?.dataset?.who === who);
-    // The thread prints no name on a bubble, so the speaker has to reach the
-    // accessibility tree some other way: `role="article"` gives the line a name
-    // of its own, and `.who` stays in the document as that name.
-    element.setAttribute('role', 'article');
-    element.innerHTML = '<span class="who"></span><p class="said"></p>';
-    const label = element.querySelector('.who');
-    const speaker = who === 'her' ? this.#herName || UNNAMED_SPEAKER : 'You';
-    if (label) label.textContent = speaker;
-    element.setAttribute('aria-label', speaker);
-    this.#transcript.append(element);
-    return element;
-  }
-
-  #scroll(): void {
-    // Only follow when they are already at the bottom: yanking the view down
-    // while someone is reading back a message is worse than a missed line.
-    const distance =
-      this.#transcript.scrollHeight - this.#transcript.scrollTop - this.#transcript.clientHeight;
-    if (distance < 120) this.#transcript.scrollTop = this.#transcript.scrollHeight;
-  }
-
-  #setProfile(files: Record<string, string>, firstRun: boolean): void {
-    this.#profileFiles = files;
-    this.#profileSeen = true;
-    this.#firstRun = firstRun;
-    this.#renderProfile();
-    this.#offerFirstThing();
-
-    // The folder on disk is now the one the wizard wrote, so the first system
-    // instruction will be built out of it rather than out of what it replaced.
-    this.#savePending = false;
-    if (this.#saveTimer !== null) {
-      clearTimeout(this.#saveTimer);
-      this.#saveTimer = null;
-    }
-    if (this.#wakeAfterSave) {
-      this.#wakeAfterSave = false;
-      this.#handlers.onWake();
-    }
-  }
-
-  /**
-   * Opens exactly one of the two things a new arrival can be shown.
-   *
-   * The wizard wins when the folder has never been used, even with no key, and
-   * the key is asked for on its last card instead. That ordering is the point of
-   * the whole feature: the first questions somebody is asked about a companion
-   * should be about her, and the one question about their toolchain should come
-   * after they have decided who she is rather than before they have met her.
-   *
-   * Called from both messages because either can arrive last, and it does
-   * nothing until the profile has been seen — which is guaranteed, because the
-   * page asks for the profile the moment the server says it is ready.
-   */
-  #offerFirstThing(): void {
-    if (!this.#profileSeen) return;
-
-    if (this.#firstRun && !this.#wizard.shown) {
-      this.#offeredSetup = true;
-      this.#wizard.offer(this.#profileFiles, this.#configured);
-      return;
-    }
-
-    if (!this.#configured && !this.#offeredSetup) {
-      this.#offeredSetup = true;
-      if (!this.#setup.open) this.#setup.showModal();
-    }
-  }
-
-  #renderProfile(): void {
-    const files = this.#profileFiles;
-    // Only claim to have saved when a save is what brought this back. Opening
-    // the editor and being told "Saved." is a small lie that makes the label
-    // useless for the one thing it is for.
-    this.#saved.textContent = this.#saving ? 'Saved.' : '';
-    this.#saving = false;
-    this.#tabs.replaceChildren();
-
-    const names: string[] = PROFILE_FILES.filter((name) => name in files);
-    if (!names.includes(this.#openFile)) this.#openFile = names[0] ?? '';
-
-    for (const name of names) {
-      const tab = document.createElement('button');
-      tab.type = 'button';
-      tab.textContent = name;
-      tab.setAttribute('aria-selected', String(name === this.#openFile));
-      tab.addEventListener('click', () => {
-        this.#profileFiles[this.#openFile] = this.#editor.value;
-        this.#openFile = name;
-        this.#renderProfile();
-      });
-      this.#tabs.append(tab);
-    }
-
-    this.#editor.value = files[this.#openFile] ?? '';
-
-    // Shown only on the file it writes to, and read back from that file every
-    // time: someone who types a voice name by hand should see the menu agree.
-    const isVoice = this.#openFile === 'voice';
-    this.#voicePick.hidden = !isVoice;
-    if (isVoice) this.#renderVoices(frontmatterValue(files.voice ?? '', 'voice')?.trim() ?? '');
-  }
-
-  /**
-   * The menu, and whatever the file actually says.
-   *
-   * Offers the female voices, because she is a woman. But `voice.md` is a file
-   * somebody may have edited by hand, and a menu that silently displayed
-   * `Aoede` over a file reading `voice: Puck` would be lying about the thing it
-   * is sitting on top of. So a voice the file names that is not on the offered
-   * list is added to the menu as its own option, and stays until it is changed.
-   */
-  #renderVoices(chosen: string): void {
-    const match = (name: string): boolean => name.toLowerCase() === chosen.toLowerCase();
-    const offered = [...FEMALE_VOICES];
-    if (chosen && !offered.some((voice) => match(voice.name))) {
-      const known = VOICES.find((voice) => match(voice.name));
-      offered.push(known ?? { name: chosen, character: 'from your file', gender: 'female' });
-    }
-
-    this.#voiceSelect.replaceChildren();
-    for (const { name, character } of offered) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = `${name} — ${character}`;
-      this.#voiceSelect.append(option);
-    }
-    this.#voiceSelect.value = offered.some((voice) => match(voice.name))
-      ? (offered.find((voice) => match(voice.name))?.name ?? DEFAULT_VOICE)
-      : DEFAULT_VOICE;
   }
 }

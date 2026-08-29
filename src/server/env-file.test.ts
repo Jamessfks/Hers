@@ -35,7 +35,7 @@ test('everything else in the file survives, comments and order included', async 
   const file = await envFile(
     [
       '# Hers',
-      'LIVEKIT_URL=wss://example.livekit.cloud',
+      'HERS_HOST=127.0.0.1',
       '',
       'GEMINI_API_KEY=old',
       'HERS_PORT=5175',
@@ -48,7 +48,7 @@ test('everything else in the file survives, comments and order included', async 
 
   assert.deepEqual(lines.slice(0, 5), [
     '# Hers',
-    'LIVEKIT_URL=wss://example.livekit.cloud',
+    'HERS_HOST=127.0.0.1',
     '',
     'GEMINI_API_KEY=AIzaNew',
     'HERS_PORT=5175',
@@ -112,7 +112,7 @@ test('the keys this program actually stores are all acceptable', async () => {
     // a real key one careless edit later.
     ['GEMINI_API_KEY', 'AIzaEXAMPLE_example-EXAMPLE'],
     ['TELEGRAM_ALLOWED_CHAT_IDS', '100000000'],
-    ['LIVEKIT_URL', 'wss://example.livekit.cloud'],
+    ['HERS_HOST', '127.0.0.1'],
     ['TELEGRAM_BOT_TOKEN', '1000000000:EXAMPLE-example_EXAMPLE'],
   ] as const) {
     await setEnvValue(file, name, value);

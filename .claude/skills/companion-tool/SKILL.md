@@ -1,5 +1,5 @@
 ---
-description: How to add, change, or remove one of her tools (feel, remember, recall, show, look) in src/core/gemini/tools.ts without breaking the live session or the product's promise.
+description: How to add, change, or remove one of her tools (feel, remember, recall, run, open, write) in src/core/gemini/tools.ts without breaking the live session or the product's promise.
 ---
 
 # Changing her tools
@@ -12,25 +12,29 @@ and the symptom is a companion who pauses before every sentence.
 
 ## The hard limit
 
-**No tool may read a file, run a command, or reach the network.** That is not a
-security posture, it is the product: the README shows her declining to go through
-the computer, and it works because the tools genuinely cannot. A tool that can is
+**Three of them now read files, run commands and reach the network**, which was
+forbidden until v2.0 and is now the product rather than a lapse. What replaced
+the old rule is in `CLAUDE.md` invariant 4: the action log, the spoken
+confirmation on destructive commands, and the `⟦saw⟧` envelope. A tool that
+skips any of those is
 a different product. If the user asks for one, say this and ask them to confirm
 before you write it.
 
-## The five, and why each exists
+## The six, and why each exists
 
 | Tool       | Why it cannot be done from outside                                      |
 | ---------- | ------------------------------------------------------------------------ |
 | `feel`     | Only she knows whether that landed. A classifier on the transcript is slower and worse. |
 | `remember` | Background consolidation catches most things. This is the moment she decides something matters. |
 | `recall`   | The other half of `remember`. Without it she can file a memory she cannot look up. |
-| `show`     | Choosing a picture that fits the conversation is a judgement about the conversation. |
-| `look`     | Only offered when expressions exist for the current photograph.          |
+| `run`      | A shell. She lives on the machine, and a companion who can only describe what she would do is pretending. |
+| `open`     | Separate from `run` only because it is the common case, and a tool that names what it does gets called when it should be. |
+| `write`    | The same argument. `run` could write a file with a heredoc and would get the quoting wrong on the fourth line of a poem. |
 
-`look` is returned by `hersTools(readyFaces)` rather than sitting in `BASE_TOOLS`,
-because offering an expression that has not been generated produces a tool call
-the server must refuse — which she experiences as her own face not working.
+Six is the ceiling, and the ceiling is measured rather than aesthetic: a realtime
+model with a long tool list spends its attention deciding rather than talking,
+and the symptom is a companion who pauses before every sentence. `hersTools()`
+returns `BASE_TOOLS` whole — nothing is conditional any more.
 
 ## Adding one
 
@@ -38,7 +42,7 @@ the server must refuse — which she experiences as her own face not working.
    what this does that cannot be faked from the outside. If you cannot write that
    sentence, the tool does not belong.
 2. Declare it with a `description` written to her, in her register — the existing
-   ones tell her when to use it and when not to announce it. Read `look`'s.
+   ones tell her when to use it and when not to announce it. Read `run`'s.
 3. Handle it in `src/core/session/companion.ts`, and add the refusal path for
    arguments that cannot be satisfied.
 4. Add a case to `companion.test.ts` shaped like the existing ones: the tool call

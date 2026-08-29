@@ -79,10 +79,6 @@ export const SENSE_NAMES: readonly SenseName[] = ['hearing', 'sight', 'screen'];
 export type ClientMessage =
   /** Sent once on connect. */
   | { t: 'hello' }
-  /** Something the user typed rather than said. */
-  | { t: 'say'; text: string }
-  /** A sense was switched on or off in the UI. */
-  | { t: 'sense'; sense: SenseName; on: boolean }
   /**
    * The user is present and doing things, or is not.
    *
@@ -107,41 +103,8 @@ export type ClientMessage =
   | { t: 'wake' }
   /** Close the live session and stop the clock. */
   | { t: 'sleep' }
-  /**
-   * Write changes back to the profile folder.
-   *
-   * `quiet` suppresses the note the server otherwise sends back about the change
-   * landing on the next wake. That note is correct for the profile editor and
-   * wrong for the first-run wizard, which is about to wake her — and it travels
-   * on the `trouble` channel, so the last line of a first run was an error-styled
-   * toast about scheduling.
-   */
-  | { t: 'profile.save'; files: Record<string, string>; quiet?: boolean }
-  /** Ask for the profile folder as it is on disk. */
-  | { t: 'profile.load' }
-  /** Ask for the current avatar state. */
-  | { t: 'avatar.load' }
-  /**
-   * Browser -> server. Make one of her faces.
-   *
-   * One expression per request rather than a batch: each is a paid image, and a
-   * button that quietly spends six of them is a button nobody should have.
-   */
-  | { t: 'avatar.make'; expression: string }
-  /** Ask for everything she remembers. */
-  | { t: 'memory.load' }
-  /** Change the wording of one thing she remembers. */
-  | { t: 'memory.edit'; id: number; text: string }
-  /** Make her forget one thing. */
-  | { t: 'memory.forget'; id: number }
-  /** Tell her something to keep. */
-  | { t: 'memory.add'; text: string }
   /** Ask how close she is. */
-  | { t: 'intimacy.load' }
-  /** Set closeness by hand, 0-1. It stays there until released. */
-  | { t: 'intimacy.pin'; score: number }
-  /** Hand closeness back to time and contact. */
-  | { t: 'intimacy.auto' };
+  | { t: 'intimacy.load' };
 
 // ---------------------------------------------------------------------------
 // Control messages: server -> browser
@@ -215,10 +178,10 @@ export type ServerMessage =
        * False while it is still the placeholder the project ships with and she
        * has not had her first conversation — the same pair of conditions
        * `ensureNamed` reads, so a name typed into `identity.md` by hand counts
-       * as chosen. The page draws no name at all when this is false: the wizard
-       * spends a whole card explaining that she has not got one yet, and a
-       * header reading "Anna" over that card is either a lie or a bug, and a
-       * stranger cannot tell which.
+       * as chosen. The page draws no name at all when this is false, rather than
+       * the shipped placeholder: a header reading "Anna" for a companion who has
+       * not chosen a name yet is either a lie or a bug, and a stranger cannot
+       * tell which.
        */
       named: boolean;
       voice: string;
@@ -234,7 +197,6 @@ export type ServerMessage =
        */
       keyHint: string;
       telegram: boolean;
-      livekit: boolean;
       /**
        * Frames per second the server will actually forward.
        *
@@ -247,8 +209,6 @@ export type ServerMessage =
     }
   | { t: 'state'; state: ConnectionState }
   | { t: 'mood'; mood: MoodReadout }
-  /** Server -> browser. Put this face on screen for a moment. */
-  | { t: 'look'; expression: string }
   /** Server -> browser. The bot, as far as the page is allowed to know. */
   | { t: 'telegram'; telegram: TelegramView }
   /**
@@ -260,41 +220,10 @@ export type ServerMessage =
    * else.
    */
   | { t: 'name'; name: string }
-  /**
-   * A line of conversation.
-   *
-   * `final` is false for the running transcription of speech in progress and
-   * true once the turn is closed. The UI replaces rather than appends while
-   * false, or the transcript stutters.
-   */
-  | { t: 'transcript'; who: 'user' | 'her'; text: string; final: boolean }
   /** Her audio was cut off. Drop whatever is still queued for playback. */
   | { t: 'interrupted' }
-  | { t: 'sense'; sense: SenseName; on: boolean }
   /** Something went wrong, phrased for a person rather than a log. */
   | { t: 'trouble'; message: string }
-  /** A picture or clip she chose to show. Served from /gallery. */
-  | { t: 'show'; url: string; kind: 'image' | 'clip'; caption?: string }
-  | {
-      t: 'profile';
-      files: Record<string, string>;
-      /**
-       * Nothing has ever happened in this profile, so the browser should offer
-       * the first-run wizard.
-       *
-       * On this message rather than on `ready` because it is a fact about the
-       * folder, and this is the message that carries the folder. It also makes
-       * the ordering unambiguous: the page asks for the profile the moment it is
-       * ready, and the answer arrives with the files the wizard needs to edit,
-       * so there is no window in which the page knows it is a first run and has
-       * nothing to write into. See `core/profile/first-run.ts` for what the
-       * server means by fresh.
-       */
-      firstRun: boolean;
-    }
-  /** Her photograph, as the page needs to draw it. */
-  | { t: 'avatar'; avatar: AvatarView }
-  | { t: 'memory'; facts: RememberedFact[]; summary: string }
   /**
    * How close she is, for the one control that shows it.
    *
@@ -302,16 +231,7 @@ export type ServerMessage =
    * raw number: the stage and the days are what a person understands, and the
    * percentage on its own reads as a score to be farmed.
    */
-  | { t: 'intimacy'; intimacy: IntimacyView }
-  /**
-   * The conversation so far, whichever surface it happened on.
-   *
-   * Sent once on connect. Memory is already shared between Telegram and the
-   * web — one `Brain`, one database — but the transcript was not *shown*
-   * anywhere except the session that produced it, so opening the web after
-   * talking on your phone looked like she had forgotten the whole thing.
-   */
-  | { t: 'history'; turns: PastTurn[] };
+  | { t: 'intimacy'; intimacy: IntimacyView };
 
 /** Closeness, as the interface needs to draw it. */
 export interface IntimacyView {
@@ -327,40 +247,6 @@ export interface IntimacyView {
   /** Days of contact still needed to reach the next stage. 0 at the top. */
   toNextStage: number;
   nextStage: string;
-}
-
-export interface PastTurn {
-  speaker: 'user' | 'her';
-  text: string;
-  at: number;
-}
-
-/**
- * One thing she remembers, as the editor needs it.
- *
- * Sent in full rather than paged: a person accumulates a few hundred of these
- * over years, and a list you cannot see all of is a list you cannot audit.
- */
-export interface RememberedFact {
-  id: number;
-  kind: string;
-  text: string;
-  confidence: number;
-}
-
-/** The avatar, as the browser needs to draw it. */
-export interface AvatarView {
-  hasSource: boolean;
-  /** Expressions that exist for the photograph in force. */
-  ready: string[];
-  /** Every expression that could be made. */
-  all: string[];
-  /** Being generated right now. */
-  making: string[];
-  /** Content-hashed, so replacing the photograph busts the cache. */
-  sourceUrl: string | null;
-  width: number;
-  height: number;
 }
 
 // ---------------------------------------------------------------------------

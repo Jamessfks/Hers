@@ -1,17 +1,17 @@
 # Builds the downloadable applications.
 #
-# `npm run package` only ever produces an application for the machine it runs
-# on, and not because electron-builder cannot cross-compile — it can. The
-# blocker is one dependency: LiveKit's media binding ships as a separate
-# prebuilt package per platform and architecture, and `npm install` fetches only
-# the one matching the machine doing the installing. A Windows installer built
-# on a Mac would carry a macOS `.node` file and would fail on the first import.
-# So each artifact is built on its own runner, which does its own install.
+# Each artifact is built on its own runner. Since v2.0 that is a choice rather
+# than a constraint — cutting the phone bridge removed the only native
+# dependency in the tree, so a Mac could in principle build the Windows
+# installer — but a Windows runner building the Windows installer is the version
+# that stays true when a native dependency comes back.
 #
-# This has never run. It was written on a Mac, alongside the macOS build it
-# describes, and the Windows half of it is untested in the strict sense that
-# nobody has watched it succeed. It is here because a workflow somebody can push
-# a tag at and correct is worth more than a paragraph saying Windows is possible.
+# What this workflow did wrong until v2.0, and it is the whole reason anybody
+# noticed: it uploaded *workflow artifacts* and stopped. Those are ZIP-wrapped,
+# they expire after ninety days, and they need a GitHub login to download —
+# while the README linked `releases/latest`, which had nothing in it. Every
+# download link in this project was broken and every build was green. The
+# release step below is what makes a tag produce something a stranger can click.
 #
 # Nothing here is signed. See the README for what that means and what to click.
 
@@ -23,7 +23,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # Needed to create the release. The default is read, which is why the release
+  # step below would have failed silently even once it existed.
+  contents: write
 
 jobs:
   build:
@@ -69,3 +71,15 @@ jobs:
           name: hers-${{ matrix.os }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
+
+      # The artifact above is for a `workflow_dispatch` run, which has no tag to
+      # release against. A tag gets a real release, with files a stranger can
+      # download without an account.
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: ${{ matrix.artifact }}
+          draft: false
+          # Both platforms upload to the same release, and whichever runner
+          # finishes first creates it.
+          fail_on_unmatched_files: true

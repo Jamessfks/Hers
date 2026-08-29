@@ -1,4 +1,3 @@
-import { cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,51 +6,10 @@ import { defineConfig } from 'vite';
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Copies the phone's call page into the build.
- *
- * `call/` is a single static file with no build step of its own, and its real
- * home is GitHub Pages — a phone cannot reach the machine Hers runs on, so the
- * page has to be somewhere public. Copying it here as well means the same file
- * is reachable at `http://localhost:5175/call/`, which is how you check the
- * call UI without publishing anything first.
- */
-function copyCallPage() {
-  return {
-    name: 'hers-copy-call-page',
-    async closeBundle() {
-      await cp(path.join(root, 'call'), path.join(root, 'dist', 'web', 'call'), {
-        recursive: true,
-      });
-
-      /*
-       * LiveKit's client, copied in beside the page rather than fetched from a
-       * CDN at run time.
-       *
-       * The page used to `import` it from `cdn.jsdelivr.net`, which was the one
-       * outbound host in this project that nobody had written down — and the
-       * hardest kind to notice, because the request comes from the *phone*, so
-       * a network monitor on the machine Hers runs on never sees it. It was
-       * also third-party executable JavaScript arriving with no integrity hash:
-       * version-pinned, not content-pinned.
-       *
-       * `livekit-client` is a devDependency now, so the version is in the
-       * lockfile and the file is the one on this disk. The published ESM bundle
-       * is self-contained — no bare imports — which is why a single file works
-       * without a bundler, and is why this is a copy rather than a build step.
-       */
-      await cp(
-        path.join(root, 'node_modules', 'livekit-client', 'dist', 'livekit-client.esm.mjs'),
-        path.join(root, 'dist', 'web', 'call', 'livekit-client.esm.mjs'),
-      );
-    },
-  };
-}
-
-/**
  * Builds the website into `dist/web`, which is what the Node server serves.
  *
  * There is no dev server here on purpose. the local server owns the WebSocket, the
- * gallery route and the origin check, and running Vite's server alongside it
+ * static routes and the origin check, and running Vite's server alongside it
  * would mean a second origin that the WebSocket handshake has to be taught to
  * trust — which is exactly the check that stops a hostile page reaching in. So
  * `npm run dev` runs `vite build --watch` and lets the real server serve it.
@@ -61,7 +19,6 @@ function copyCallPage() {
 export default defineConfig({
   root: 'src/web',
   base: './',
-  plugins: [copyCallPage()],
   build: {
     outDir: '../../dist/web',
     emptyOutDir: true,

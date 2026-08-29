@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,14 +9,7 @@ import { Brain } from '../../core/session/brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import { TelegramBridge } from './bridge.ts';
 import { Conversation } from '../../core/session/conversation.ts';
-import type {
-  BotCommand,
-  TelegramClient,
-  TelegramMessage,
-  TelegramPhotoSize,
-  TelegramUpdate,
-  UploadFile,
-} from './api.ts';
+import type { BotCommand, TelegramClient, TelegramMessage, TelegramUpdate, UploadFile } from './api.ts';
 
 /**
  * The allowlist is the only thing standing between one person's private life
@@ -70,42 +64,6 @@ class FakeTelegram implements TelegramClient {
   }
 }
 
-/** A 400x400 PNG, which is what the studio validates rather than the claim. */
-function pngBytes(width = 400, height = 400): Buffer {
-  const header = Buffer.alloc(33);
-  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
-  header.writeUInt32BE(13, 8);
-  header.write('IHDR', 12);
-  header.writeUInt32BE(width, 16);
-  header.writeUInt32BE(height, 20);
-  header[24] = 8;
-  header[25] = 6;
-  return header;
-}
-
-function photoMessage(
-  chatId: number,
-  sizes: TelegramPhotoSize[],
-  options: { caption?: string; updateId?: number } = {},
-): TelegramUpdate {
-  const id = options.updateId ?? 1;
-  return {
-    update_id: id,
-    message: {
-      message_id: id,
-      date: 0,
-      chat: { id: chatId, type: 'private' },
-      from: { id: chatId, is_bot: false },
-      photo: sizes,
-      ...(options.caption ? { caption: options.caption } : {}),
-    },
-  };
-}
-
-function size(width: number, height: number, fileId: string): TelegramPhotoSize {
-  return { file_id: fileId, file_unique_id: fileId, width, height };
-}
-
 function textMessage(chatId: number, text: string, updateId = 1): TelegramUpdate {
   return {
     update_id: updateId,
@@ -149,114 +107,18 @@ async function pump(bridge: TelegramBridge, ms = 700): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
-// -- the face ---------------------------------------------------------------
-
 test('the command menu is published on startup', async () => {
   const f = await fixture([100]);
   await pump(f.bridge);
   const names = f.api.commands.map((command) => command.command);
-  assert.ok(names.includes('face'), 'the whole point of a menu is that /face is in it');
-  assert.ok(names.includes('me'), 'and that /me is, since it is how she is asked for her photograph');
+  assert.ok(names.includes('mood'));
+  assert.ok(names.includes('bye'));
+  assert.ok(names.includes('whoami'));
+  assert.ok(names.includes('help'));
   for (const command of f.api.commands) {
     assert.match(command.command, /^[a-z0-9_]{1,32}$/, `${command.command} is not a legal name`);
     assert.ok(command.description.length >= 1 && command.description.length <= 256);
   }
-});
-
-test('a photo captioned /face becomes her face', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['big'] = pngBytes(512, 640);
-  f.api.queue([
-    photoMessage(100, [size(90, 90, 'small'), size(512, 640, 'big')], { caption: '/face' }),
-  ]);
-  await pump(f.bridge);
-
-  assert.equal(f.brain.avatar.state().hasSource, true);
-  assert.equal(f.brain.avatar.state().width, 512);
-  assert.match(f.api.sent.map((m) => m.text).join(' '), /That's me now/);
-});
-
-test('/face then a photo becomes her face', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['pic'] = pngBytes(400, 400);
-  f.api.queue([textMessage(100, '/face', 1)]);
-  f.api.queue([photoMessage(100, [size(400, 400, 'pic')], { updateId: 2 })]);
-  await pump(f.bridge);
-
-  assert.equal(f.brain.avatar.state().hasSource, true);
-  assert.match(f.api.sent[0]?.text ?? '', /becomes my face/);
-});
-
-test('the largest rendition is used, whatever order they arrive in', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['tiny'] = pngBytes(90, 90);
-  f.api.downloads['huge'] = pngBytes(1280, 960);
-  // Largest first — the Bot API documents no ordering, so this is legal.
-  f.api.queue([
-    photoMessage(100, [size(1280, 960, 'huge'), size(90, 90, 'tiny')], { caption: '/face' }),
-  ]);
-  await pump(f.bridge);
-
-  assert.equal(f.brain.avatar.state().width, 1280, 'it took the thumbnail, not the photograph');
-});
-
-test('a photo with no /face is something she looks at, not her face', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['pic'] = pngBytes(400, 400);
-  f.api.queue([photoMessage(100, [size(400, 400, 'pic')])]);
-  await pump(f.bridge);
-
-  assert.equal(
-    f.brain.avatar.state().hasSource,
-    false,
-    'sending her a picture must not silently replace her face',
-  );
-});
-
-test('a picture that breaks the rules is refused, in words', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['tiny'] = pngBytes(64, 64);
-  f.api.queue([photoMessage(100, [size(64, 64, 'tiny')], { caption: '/face' })]);
-  await pump(f.bridge);
-
-  assert.match(f.api.sent.map((m) => m.text).join(' '), /256 pixels/);
-  assert.equal(f.brain.avatar.state().hasSource, false);
-});
-
-test('replacing her face says what it cost', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['a'] = pngBytes(400, 400);
-  f.api.downloads['b'] = pngBytes(500, 500);
-  f.api.queue([photoMessage(100, [size(400, 400, 'a')], { caption: '/face', updateId: 1 })]);
-  await pump(f.bridge);
-  f.api.sent.length = 0;
-
-  f.api.queue([photoMessage(100, [size(500, 500, 'b')], { caption: '/face', updateId: 2 })]);
-  await pump(f.bridge);
-  assert.equal(f.brain.avatar.state().width, 500);
-});
-
-test('/me sends the photograph itself, not a generation', async () => {
-  const f = await fixture([100]);
-  f.api.downloads['pic'] = pngBytes(400, 400);
-  f.api.queue([photoMessage(100, [size(400, 400, 'pic')], { caption: '/face', updateId: 1 })]);
-  f.api.queue([textMessage(100, '/me', 2)]);
-  await pump(f.bridge, 1200);
-
-  assert.equal(f.api.photos.length, 1, 'it did not send a picture');
-  assert.match(
-    f.api.photos[0]?.name ?? '',
-    /^source\./,
-    `sent ${f.api.photos[0]?.name} instead of the source`,
-  );
-});
-
-test('/me says so when there is no face yet', async () => {
-  const f = await fixture([100]);
-  f.api.queue([textMessage(100, '/me', 1)]);
-  await pump(f.bridge);
-  assert.equal(f.api.photos.length, 0);
-  assert.match(f.api.sent[0]?.text ?? '', /given me a face/);
 });
 
 test('with an allowlist, only those chats are answered', async () => {
@@ -312,8 +174,7 @@ test('/help lists what she does, in her own name', async () => {
 
   const text = f.api.sent[0]?.text ?? '';
   assert.match(text, /Anna/);
-  assert.match(text, /\/call/);
-  assert.match(text, /\/photo/);
+  assert.match(text, /\/mood/);
 });
 
 test('a command addressed to the bot in a group still works', async () => {
@@ -331,13 +192,6 @@ test('/mood answers in words, never in numbers', async () => {
   const text = f.api.sent[0]?.text ?? '';
   assert.ok(text.length > 0);
   assert.ok(!/-?\d+\.\d+/.test(text), `the mood leaked a number: ${text}`);
-});
-
-test('/call without LiveKit says so rather than failing silently', async () => {
-  const f = await fixture([100]);
-  f.api.queue([textMessage(100, '/call', 1)]);
-  await pump(f.bridge);
-  assert.match(f.api.sent[0]?.text ?? '', /LiveKit is not configured/);
 });
 
 test('an unknown command is answered rather than ignored', async () => {
@@ -401,4 +255,30 @@ test('a bridge with an allowlist never reports a chat', async () => {
   f.api.queue([textMessage(4242, 'hello?', 1), textMessage(100, 'hi', 2)]);
   await pump(bridge);
   assert.deepEqual(seen, []);
+});
+
+test('the commands she offers are the ones that still exist', async () => {
+  const f = await fixture([100]);
+  await pump(f.bridge);
+  const names = f.api.commands.map((command) => command.command);
+  for (const gone of ['me', 'photo', 'face', 'call']) {
+    assert.ok(!names.includes(gone), `/${gone} was removed in v2.0`);
+  }
+});
+
+/**
+ * The v1 gate, asserted gone.
+ *
+ * It read `text.length <= 320 && (theySpoke || Math.random() < 0.25)`, so a
+ * long answer was always text and a short one was text three times in four.
+ * Reading the source is a blunt way to check a deletion, and it is the right
+ * one here: the behaviour it guards is a branch that no longer exists, so
+ * there is nothing left to drive a test through.
+ */
+test('nothing decides whether she speaks on a coin toss any more', () => {
+  const source = readFileSync(new URL('./bridge.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /Math\.random/);
+  assert.doesNotMatch(source, /text\.length <= 320/);
+  // The transcript that used to trail every voice note is gone too.
+  assert.equal(source.split('sendMessage(chatId, text)').length - 1, 1);
 });

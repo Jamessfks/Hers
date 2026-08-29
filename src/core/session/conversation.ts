@@ -46,8 +46,11 @@
  * conversation can be *seen*.
  */
 
+import { homedir } from 'node:os';
+
 import type { ConnectionState, MoodReadout, SenseName } from '../../shared/protocol.ts';
-import type { GalleryItem } from '../gallery/gallery.ts';
+import { isFirstRun } from '../profile/first-run.ts';
+import { SetupSession } from '../setup/session.ts';
 import { Companion } from './companion.ts';
 import type { Brain } from './brain.ts';
 import type { LiveConnector } from '../gemini/live.ts';
@@ -75,9 +78,6 @@ export interface Surface {
   readonly name: SurfaceName;
   transcript(who: 'user' | 'her', text: string, final: boolean, origin: Origin): void;
   audio?(pcm: Buffer, origin: Origin): void;
-  show?(item: GalleryItem, origin: Origin): void;
-  /** She changed her expression. No origin: her face is not addressed to anyone. */
-  look?(expression: string): void;
   state?(state: ConnectionState): void;
   mood?(mood: MoodReadout): void;
   /** She named herself. No origin: it is true everywhere at once. */
@@ -96,6 +96,8 @@ export class Conversation {
   readonly #options: ConversationOptions;
   readonly #surfaces = new Map<SurfaceName, Surface>();
   #companion: Companion | null = null;
+  /** Non-null only during the first-run interview. */
+  #setup: SetupSession | null = null;
   /**
    * Whoever is being answered.
    *
@@ -150,14 +152,57 @@ export class Conversation {
    * that would mean this class had two owners.
    */
   async wake(): Promise<void> {
+    if (await this.#interviewFirst()) return;
     this.#ensure();
     await this.#companion?.wake();
   }
 
+  /**
+   * The first wake is not a wake at all.
+   *
+   * She has no profile yet, so before anything else she has the three-minute
+   * interview and composes one — see `core/setup/session.ts`. The branch is
+   * here rather than inside `Companion` because the two share nothing: one is
+   * built from the profile folder and the other exists to write it.
+   *
+   * Returns true when setup took the turn. The reconnect afterwards is
+   * deliberate and not an implementation detail: the voice she chose is a
+   * connect-time parameter on the Live API, so meeting her in it means a new
+   * socket.
+   */
+  async #interviewFirst(): Promise<boolean> {
+    const brain = this.#options.brain;
+    if (this.#setup) return true;
+    if (!isFirstRun(brain.config.profileDir)) return false;
+    if (!brain.config.geminiApiKey) return false;
+
+    const setup = new SetupSession({
+      brain,
+      home: homedir(),
+      ...(this.#options.connect ? { connect: this.#options.connect } : {}),
+      sink: {
+        audio: (pcm) => this.#each((surface) => surface.audio?.(pcm, null)),
+        state: (state) => this.#each((surface) => surface.state?.(state)),
+        trouble: (message) => this.#each((surface) => surface.trouble?.(message)),
+        named: (name) => this.#each((surface) => surface.named?.(name)),
+        done: () => {
+          this.#setup = null;
+          void this.wake();
+        },
+      },
+    });
+    this.#setup = setup;
+    await setup.start();
+    return true;
+  }
+
   async sleep(): Promise<void> {
     const companion = this.#companion;
+    const setup = this.#setup;
     this.#companion = null;
+    this.#setup = null;
     this.#origin = null;
+    await setup?.close();
     await companion?.sleep();
   }
 
@@ -170,6 +215,12 @@ export class Conversation {
   /** Microphone audio. Only the website has one. */
   hear(pcm: Buffer, from: SurfaceName): void {
     this.#origin = from;
+    // During the interview she is the only thing listening, and it is the one
+    // conversation in this product that has to be spoken rather than typed.
+    if (this.#setup) {
+      this.#setup.hear(pcm);
+      return;
+    }
     this.#companion?.hear(pcm);
   }
 
@@ -219,7 +270,6 @@ export class Conversation {
         transcript: (who, text, final) => {
           this.#each((surface, origin) => surface.transcript(who, text, final, origin));
         },
-        show: (item) => this.#each((surface, origin) => surface.show?.(item, origin)),
         state: (state) => {
           this.#each((surface) => surface.state?.(state));
           /*
@@ -234,7 +284,6 @@ export class Conversation {
         },
         mood: (mood) => this.#each((surface) => surface.mood?.(mood)),
         named: (name) => this.#each((surface) => surface.named?.(name)),
-        look: (expression) => this.#each((surface) => surface.look?.(expression)),
         interrupted: () => this.#each((surface) => surface.interrupted?.()),
         trouble: (message) => this.#each((surface) => surface.trouble?.(message)),
       },

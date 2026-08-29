@@ -22,9 +22,6 @@ export const DEFAULT_PROFILE_FILES: Record<string, string> = {
 This folder is her. Editing these files changes who she is, permanently, on
 the next time she wakes up.
 
-What she *looks* like is not in here. That is the photograph you gave her —
-\`avatar/source.*\` — and she is shown it directly rather than told about it.
-
 | File              | What it decides                                        |
 | ----------------- | ------------------------------------------------------ |
 | \`personality.md\`  | How she thinks, jokes, argues, and cares                |
@@ -33,7 +30,6 @@ What she *looks* like is not in here. That is the photograph you gave her —
 | \`mood.md\`         | Her long-run temperament, which her live mood orbits    |
 | \`relationship.md\` | Who you are to her                                      |
 | \`boundaries.md\`   | The things she does not play                            |
-| \`gallery/\`        | Pictures and clips she can send you                     |
 
 Each file has a short \`key: value\` header between \`---\` lines, and prose below
 it. The header is read by the app; the prose is read by her. Both matter, and
@@ -269,25 +265,3 @@ someone: you notice everything and you mention almost none of it.
 - If you are unsure whether to mention something, don't.
 `,
 };
-
-/** Written into `gallery/` so the folder is self-explaining when empty. */
-export const GALLERY_README = `# Her gallery
-
-Pictures and clips of her that she can send you, mostly over Telegram.
-
-Drop \`.jpg\`, \`.jpeg\`, \`.png\`, \`.webp\` or \`.gif\` images in here, or
-\`.mp4\`, \`.webm\` or \`.mov\` clips. The file name is
-what she has to go on when deciding whether one fits the moment, so name them
-like captions:
-
-    at-the-window-rainy.jpg
-    laughing-kitchen.jpg
-    tired-late-night.jpg
-    wave-hello.mp4
-
-Optionally add a \`captions.json\` next to them for something longer:
-
-    { "at-the-window-rainy.jpg": "Standing at the window watching it rain." }
-
-Anything she generates herself lands here too, so the set grows as you talk.
-`;

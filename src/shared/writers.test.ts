@@ -152,10 +152,11 @@ test('the profile files the code ships are the profile files the list claims', (
 test('nothing writes outside the roots the document names', () => {
   // A sanity check on the shape of the list rather than on the code: every
   // entry has to hang off the profile folder, the data folder, the working
-  // directory, or — since the desktop build — the application's own folder,
-  // because those are the only ones the document tells you to look in.
+  // directory, the application's own folder, or — since v2.0 gave her a `write`
+  // tool — nowhere in particular, because those are the only ones the document
+  // tells you to look in.
   for (const writer of WRITERS) {
-    assert.ok(['profile', 'data', 'cwd', 'app'].includes(writer.root), writer.module);
+    assert.ok(['profile', 'data', 'cwd', 'app', 'anywhere'].includes(writer.root), writer.module);
   }
   // The only thing outside the two directories Start over deletes is `.env`,
   // plus the application's log, which is rewritten on every launch anyway.
@@ -163,6 +164,22 @@ test('nothing writes outside the roots the document names', () => {
   assert.deepEqual(outside, ['.env']);
   const app = WRITERS.filter((writer) => writer.root === 'app').flatMap((w) => w.writes);
   assert.deepEqual(app, ['hers.log']);
+});
+
+/**
+ * The one unbounded writer, held to being the only one.
+ *
+ * `anywhere` is a hole in the guarantee the rest of this file makes, and the
+ * point of naming it as its own root was so that the hole could be counted.
+ * A second module quietly acquiring the same freedom is exactly the drift these
+ * tests exist to catch, so it fails here rather than being noticed later.
+ */
+test('exactly one module can write to a path the user chose', () => {
+  const unbounded = WRITERS.filter((writer) => writer.root === 'anywhere');
+  assert.deepEqual(
+    unbounded.map((writer) => writer.module),
+    ['core/hands/hands.ts'],
+  );
 });
 
 /**
@@ -179,7 +196,6 @@ test('a new top-level directory of code cannot appear unnoticed', () => {
     'electron',
     'scripts',
     'build',
-    'call',
     'docs',
     'dist',
     'release',

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -50,18 +50,11 @@ test('a wipe leaves her a stranger, with the defaults back', async () => {
   await f.brain.memory.remember('identity', 'their sister is Mei', { confidence: 0.9 });
   f.brain.mood.feel('exchange');
   await f.brain.mood.flush();
-  await f.brain.avatar.setSource(pngBytes(), 'image/png');
-  await mkdir(path.join(f.config.profileDir, 'gallery'), { recursive: true });
-  await writeFile(path.join(f.config.profileDir, 'gallery', 'her.jpg'), 'not really a jpeg');
-
-  assert.ok(f.brain.avatar.face(), 'she had a face to start with');
 
   await f.brain.wipe();
 
   assert.equal(f.brain.memory.turnCount(), 0, 'the conversation is gone');
   assert.equal(f.brain.memory.allFacts().length, 0, 'and so is everything she kept');
-  assert.equal(f.brain.avatar.face(), null, 'and her face');
-  assert.deepEqual(await f.brain.gallery.list(), [], 'and her pictures');
   assert.equal(f.brain.hasHistory, false);
 
   // The defaults are back rather than an empty folder: she has to be someone.
@@ -100,68 +93,6 @@ test('what is safe to delete, and what is not', () => {
   assert.equal(safe(home), false, 'their home directory');
   assert.equal(safe(cwd), false, 'the folder the program is running in');
   assert.equal(safe('/Users/someone/code'), false, 'and anything containing it');
-});
-
-/**
- * A PNG header the studio will accept.
- *
- * Dimensions are read out of IHDR rather than taken on trust, so the bytes have
- * to be real even though the pixels never are.
- */
-function pngBytes(width = 512, height = 640): Buffer {
-  const header = Buffer.alloc(33);
-  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
-  header.writeUInt32BE(13, 8);
-  header.write('IHDR', 12);
-  header.writeUInt32BE(width, 16);
-  header.writeUInt32BE(height, 20);
-  header[24] = 8;
-  header[25] = 6;
-  return header;
-}
-
-test('a borrowed profile is a copy, so nothing a test does reaches the real one', async () => {
-  /*
-   * The property that makes it safe to seed a throwaway profile from a real one.
-   *
-   * A check that wanted somebody's uploaded photograph used to open the real
-   * folder to get it, pin closeness to 70%, and put it back afterwards on a path
-   * that was not a `finally`. A throw in between would have left somebody's own
-   * relationship parked at a number a test chose, and it also wrote a generated
-   * picture into their gallery. Copying removes the failure rather than handling
-   * it, and this asserts what makes that work: two brains over two directories
-   * share nothing, even when one was seeded from the other.
-   */
-  const original = await fixture();
-  await original.brain.avatar.setSource(pngBytes(), 'image/png');
-  original.brain.intimacy.release();
-  await original.brain.intimacy.flush();
-
-  const borrowed = await mkdtemp(path.join(tmpdir(), 'hers-borrowed-'));
-  const { cp } = await import('node:fs/promises');
-  await cp(path.join(original.config.profileDir, 'avatar'), path.join(borrowed, 'avatar'), {
-    recursive: true,
-  });
-
-  const copy = await Brain.open(
-    loadConfig({
-      GEMINI_API_KEY: 'test-key',
-      HERS_PROFILE: borrowed,
-      HERS_DATA: path.join(borrowed, 'data'),
-    } as NodeJS.ProcessEnv),
-    { offline: true },
-  );
-
-  // The photograph came across, which is the only reason to borrow at all.
-  assert.ok(copy.avatar.face(), 'the photograph has to survive the copy');
-
-  copy.intimacy.pin(0.7);
-  await copy.intimacy.flush();
-  assert.equal(copy.intimacy.read().percent, 70);
-
-  const reread = await Brain.open(original.config, { offline: true });
-  assert.equal(reread.intimacy.read().pinned, false, 'the real relationship is untouched');
-  assert.equal(reread.intimacy.read().percent, 1);
 });
 
 // -- she names herself, once ------------------------------------------------

@@ -71,11 +71,9 @@ async function main(): Promise<number> {
     ok(`Profile at ${config.profileDir}`);
     note(
       `${brain.profile.identity.name}, ${brain.profile.identity.age}, ${brain.profile.identity.gender}, ` +
-        `voice ${brain.profile.voice.voice}, ` +
-        `${brain.avatar.face() ? 'has a photograph' : 'no photograph yet'}`,
+        `voice ${brain.profile.voice.voice}`,
     );
     ok(`Memory at ${config.dataDir} — ${brain.memory.turnCount()} turns in this conversation`);
-    ok(`Gallery has ${(await brain.gallery.list()).length} things in it`);
     ok(`Mood: ${brain.mood.read().label}`);
     await brain.close();
   } catch (error) {
@@ -86,7 +84,6 @@ async function main(): Promise<number> {
   // -- the bridges ----------------------------------------------------------
 
   console.log(config.telegram ? '  ✓ Telegram configured' : '  · Telegram off');
-  console.log(config.livekit ? '  ✓ LiveKit configured' : '  · Phone calls off');
 
   // -- what docs/PRIVACY.md claims, printed from the code ------------------
 
@@ -125,7 +122,7 @@ async function main(): Promise<number> {
  *
  * The filenames come from {@link WRITERS} rather than from a string literal
  * here. The literal is what this used to be, and it had already drifted: it had
- * stopped listing `README.md` and `gallery/README.md`, both of which
+ * stopped listing `README.md` and the mood state file, both of which
  * `profile.ts` writes on every first run. `writers.test.ts` now fails if a
  * module writes something this list does not know about.
  */
@@ -165,9 +162,7 @@ function printFiles(config: Config): void {
  *
  * The list is {@link DESTINATIONS}, which a test holds against both the source
  * and `docs/PRIVACY.md` — so this is not a summary of the document, it is the
- * same statement from the other end. Where a host comes from configuration the
- * configured value is substituted, because by the time anyone runs this the
- * program knows it and prose still does not.
+ * same statement from the other end.
  */
 function printDestinations(config: Config): void {
   console.log('\n  Every host this build can reach, and nothing else');
@@ -178,8 +173,7 @@ function printDestinations(config: Config): void {
   // so Google stays reachable even on a fresh install with nothing configured.
   const byHost = new Map<string, typeof DESTINATIONS>();
   for (const destination of DESTINATIONS) {
-    const host = resolveHost(destination.host, config);
-    byHost.set(host, [...(byHost.get(host) ?? []), destination]);
+    byHost.set(destination.host, [...(byHost.get(destination.host) ?? []), destination]);
   }
 
   for (const [host, reasons] of byHost) {
@@ -189,10 +183,6 @@ function printDestinations(config: Config): void {
     note(`${live ? '→' : '·'} ${host}${live || !off ? '' : `   (off — needs ${requiresOf(off)})`}`);
     for (const reason of reasons) {
       for (const line of wrap(`${reason.what} ${reason.when}`, 66)) note(`    ${line}`);
-      if (reason.fromPhone) {
-        note('    Reached by the phone, not by this machine. A network monitor');
-        note('    here will not show it; one on the phone will.');
-      }
     }
   }
 
@@ -201,33 +191,12 @@ function printDestinations(config: Config): void {
   note('see a hostname that is not on this list, that is a bug worth reporting.');
 }
 
-/** Substitutes a configured host for the placeholder, when there is one. */
-function resolveHost(host: string, config: Config): string {
-  const configured =
-    host === '<LIVEKIT_URL>'
-      ? config.livekit?.url
-      : host === '<HERS_CALL_PAGE_URL>'
-        ? config.livekit?.callPageUrl
-        : undefined;
-  if (!configured) return host;
-  try {
-    return new URL(configured).host;
-  } catch {
-    // An unparseable value is still worth showing; it is what would be dialled.
-    return configured;
-  }
-}
-
 function switchedOn(requires: Requires | null, config: Config): boolean {
   switch (requires) {
     case 'gemini':
       return Boolean(config.geminiApiKey);
     case 'telegram':
       return Boolean(config.telegram);
-    case 'livekit':
-      return Boolean(config.livekit);
-    case 'call-page':
-      return Boolean(config.livekit?.callPageUrl);
     default:
       return true;
   }

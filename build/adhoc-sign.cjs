@@ -93,15 +93,25 @@ async function hardenFuses(app) {
 }
 
 exports.default = async function adhocSign(context) {
+  /*
+   * Fuses first, and above the darwin guard rather than below it.
+   *
+   * This function returned early on anything that was not macOS, so every
+   * Windows build shipped with `RunAsNode` left on — and `RunAsNode` on means
+   * `ELECTRON_RUN_AS_NODE=1 Hers.exe -e '<js>'` runs arbitrary JavaScript under
+   * the application's own identity and its own permissions. The guard was
+   * written for the ad-hoc signature below, which genuinely is macOS-only, and
+   * it took the hardening with it. Nobody chose that.
+   */
+  const binary =
+    context.electronPlatformName === 'darwin'
+      ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+      : path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`);
+  await hardenFuses(binary);
+
   if (context.electronPlatformName !== 'darwin') return;
 
-  const app = path.join(
-    context.appOutDir,
-    `${context.packager.appInfo.productFilename}.app`,
-  );
-
-  // Before the signature, always. See the note above.
-  await hardenFuses(app);
+  const app = binary;
 
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
 

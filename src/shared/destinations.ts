@@ -30,12 +30,16 @@
  *   and it is the weakest claim on this page. A network monitor settles it in
  *   thirty seconds and does not have to take anyone's word.
  *
- *   **`LIVEKIT_URL` is a host you supply.** It is in the list as a variable
- *   because only the person who configured it knows what it resolves to.
+ *   **She has a shell.** Since v2.0 `run()` executes arbitrary commands, and a
+ *   hostname she composes at runtime is not a URL literal in any file here.
+ *   This list is therefore no longer "every host this program can contact"; it
+ *   is every host it dials *on its own, unasked*, which is a narrower claim and
+ *   the only one that was ever enforceable. `docs/PRIVACY.md` has a section
+ *   saying so under its own heading rather than in a parenthesis.
  */
 
 /** Which switch has to be on before a destination can be reached at all. */
-export type Requires = 'gemini' | 'telegram' | 'livekit' | 'call-page';
+export type Requires = 'gemini' | 'telegram';
 
 export interface Destination {
   /**
@@ -51,12 +55,6 @@ export interface Destination {
   when: string;
   /** Null for the ones that need nothing switched on. */
   requires: Requires | null;
-  /**
-   * True when the request is made by the phone's call page rather than by this
-   * program. Worth separating: those come from the phone's network, not the
-   * machine Hers runs on, so a network monitor here will not see them.
-   */
-  fromPhone?: boolean;
 }
 
 export const DESTINATIONS: readonly Destination[] = [
@@ -70,12 +68,6 @@ export const DESTINATIONS: readonly Destination[] = [
     host: 'generativelanguage.googleapis.com',
     what: 'Recent turns as text, for distilling into facts; a Telegram voice or video note, for transcribing; excerpts from folders you approved; a shortlist of names, on a first-ever conversation.',
     when: 'Every twelfth turn, when a media message arrives, when you press Read them once, and once when she has never been named.',
-    requires: 'gemini',
-  },
-  {
-    host: 'generativelanguage.googleapis.com',
-    what: 'The photograph you gave her as a reference, and a text prompt describing the picture wanted.',
-    when: 'Each time she generates a picture of herself, and once per expression you ask for.',
     requires: 'gemini',
   },
   {
@@ -103,17 +95,16 @@ export const DESTINATIONS: readonly Destination[] = [
     requires: 'telegram',
   },
   {
-    host: '<LIVEKIT_URL>',
-    what: "Her voice out, your phone's audio and video in. She dials out and waits in the room; nothing on your machine is listening.",
-    when: 'When you ask for a call, until it ends or an hour passes.',
-    requires: 'livekit',
+    host: 'geocoding-api.open-meteo.com',
+    what: 'One city name, taken from the last segment of your system timezone. Not your IP address, not a browser location prompt, and nothing else about you — several million people share the answer this sends.',
+    when: 'Once per run of the server, the first time she wants to know what it is doing outside. The latitude and longitude that come back are held in memory and never written down.',
+    requires: null,
   },
   {
-    host: '<HERS_CALL_PAGE_URL>',
-    what: 'A request for the call page itself. The room name and token travel in the URL fragment, which is never sent to the host serving it.',
-    when: 'When you open a call link on your phone.',
-    requires: 'call-page',
-    fromPhone: true,
+    host: 'api.open-meteo.com',
+    what: 'A latitude and a longitude rounded to whatever the geocoder returned for that city, asking for the current temperature, weather code and whether it is daylight.',
+    when: 'At most once an hour while the server is running, so that she can mention the weather the way somebody sitting by a window would.',
+    requires: null,
   },
 ];
 
@@ -133,10 +124,6 @@ export const MENTIONED_ONLY: readonly { host: string; why: string }[] = [
     why: "Google's own documentation for the Live API, cited in comments where this code depends on a documented behaviour. A link somebody may click while reading the source; nothing here requests it.",
   },
   {
-    host: 'cdn.jsdelivr.net',
-    why: 'Named in a comment in `call/index.html` saying why it is no longer used. The call page used to import LiveKit\'s client from here at run time, which was a request made by the phone rather than by this machine — so a network monitor here would never have shown it. The library is a devDependency now and is copied in beside the page at build time. Nothing fetches it.',
-  },
-  {
     host: 'docs.cloud.google.com',
     why: "Where Google publishes which of the thirty prebuilt voices it labels female, which is the table the voice menu is built from. Cited in a comment so the claim can be checked; nothing here requests it.",
   },
@@ -154,10 +141,6 @@ export function requiresOf(destination: Destination): string {
       return 'a Gemini key';
     case 'telegram':
       return 'TELEGRAM_BOT_TOKEN';
-    case 'livekit':
-      return 'the three LIVEKIT_ variables';
-    case 'call-page':
-      return 'LiveKit, and opening a call link';
     default:
       return 'nothing';
   }

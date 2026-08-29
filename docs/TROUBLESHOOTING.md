@@ -211,27 +211,38 @@ you launch her from a terminal with one exported, in that terminal.
 
 ## The senses
 
-### The button will not light up
+### She cannot hear me
 
-A denied permission arrives as an exception, and she says which one plainly.
-Where you undo the refusal depends on how you are running her.
+The microphone comes up when you touch the sphere and goes down when she sleeps —
+there is no switch, since v2.0. If the browser refused it you get a message
+saying so. Check the site permission for `127.0.0.1:5175`, and on macOS check
+System Settings → Privacy & Security → Microphone for the application you started
+her from.
 
-**In a browser**, it only asks once per site — after a refusal you have to allow
-it from the address bar and try again.
+### She will not run a command
 
-**In the application**, there is no address bar and the refusal was your
-operating system's, not the page's. On macOS: **System Settings → Privacy &
-Security**, then **Microphone**, **Camera** or **Screen & System Audio
-Recording**, and switch **Hers** on. macOS asks for each of the three separately
-and only the first time, so a decision made in a hurry months ago is the usual
-cause. Screen recording needs her restarted afterwards. On Windows: **Settings →
-Privacy & security → Microphone / Camera**, and allow desktop apps.
+Look in `hers-actions.log`, beside her memory database. Every attempt is there,
+including the refused ones, with the reason.
 
-### Screen sharing shares the wrong thing
+Three things refuse a command outright rather than asking about it: a path that
+looks like a credentials file, a write into her own profile or memory folders,
+and a write to `.env`. Everything destructive is not refused — she is supposed to
+describe it and wait for you to say yes. If she describes something and then does
+nothing, she probably did not hear the yes; say it again plainly.
 
-You pick the window or screen in the picker, not in Hers. Switch the sense off
-and on to be asked again. In the application on macOS that picker is macOS's own
-share sheet; in a browser it is the browser's.
+On macOS a command that reads files outside her own folders may come back with a
+permission error. That is Full Disk Access, and the grant follows the Node binary
+rather than the application, so upgrading Node silently revokes it: System
+Settings → Privacy & Security → Full Disk Access, and add whatever you start her
+from.
+
+### Screen recording
+
+She no longer opens a live screen share from the page. `getDisplayMedia` shows a
+picker on every single call — there is no remembered grant — and a dialog every
+time she wakes is worse than not having the sense. Ask her to take a screenshot
+instead; that is `run` and it works.
+
 
 ### The camera light is on but she cannot see me
 
@@ -239,29 +250,6 @@ If both the camera and screen are on, she is sent **one** composited picture —
 your screen with you inset in the corner — because the Live API takes stills on
 one channel with no way to label the source. She can still see you; you are
 smaller. Turn the screen sense off to send the camera full-frame.
-
----
-
-## Pictures
-
-### An expression will not generate
-
-Image models decline to draw a photorealistic person often enough that this is an
-ordinary outcome rather than a fault. It is retried three times before you are told, and
-trying again a minute later usually works. Each attempt is a paid image, which is why it
-does not retry forever.
-
-If it never works, check that her photograph is actually a photograph of a person — the
-model is being asked to reproduce a real face, and it will refuse on some inputs and not
-others.
-
-### She will not generate a picture of herself
-
-She has no photograph yet. Every generated picture starts from the one you
-uploaded, and without it she declines rather than inventing a stranger — that is
-deliberate, and it is what stops her face drifting.
-
-**Face → Give her a face**, then ask again.
 
 ---
 
@@ -303,8 +291,7 @@ TELEGRAM_BOT_TOKEN= TELEGRAM_ALLOWED_CHAT_IDS= \
   npm start
 ```
 
-Empty the LiveKit variables the same way if you do not want the second copy answering
-calls. Verified: with the key absent Node returns the `.env` value; with it set to an
+Verified: with the key absent Node returns the `.env` value; with it set to an
 empty string the empty string survives.
 
 ### Two of her are answering, or updates go missing
@@ -315,34 +302,12 @@ another program on the same token, takes the conversation in half. Stop the othe
 one. `npm run audit:bridges` also polls, so it will briefly interrupt a running
 server — the audit prints the conflict when it happens.
 
-### She sends a photograph that is not the one I uploaded
-
-`/me` sends the original file, byte for byte. `/photo` *generates* a new picture
-— it will be the same woman, in a different moment, which is the point of it.
-
-### Commands do not show in the `/` menu
-
-They are published on startup. Restart Hers; Telegram caches the list for a
-minute or two after that.
-
----
-
-## Calls
-
-### The link opens but the call never connects
-
-- Open it in Safari or Chrome, not Telegram's in-app browser. On iOS the in-app
-  browser does not reliably grant camera access.
-- Call links expire after fifteen minutes. Send `/call` again.
-- `HERS_CALL_PAGE_URL` has to be somewhere your **phone** can reach. A
-  `127.0.0.1` address works only from the machine Hers runs on.
-
----
 
 ## Starting over
 
 **Setup → Start over**, type `start over`, and everything she has accumulated is
-deleted: memory, conversations on every surface, mood, profile, gallery and
+deleted: memory, conversations on every surface, mood, her profile including
+the hours she chose, and
 photograph. Your API keys survive.
 
 If it refuses with *"Refusing to delete …"*, `HERS_PROFILE` or `HERS_DATA` points

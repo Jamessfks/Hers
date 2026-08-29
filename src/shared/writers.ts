@@ -10,7 +10,7 @@
  *
  * This list exists because the prose version had already drifted. The doctor
  * used to print a hand-written file tree, and it had quietly stopped mentioning
- * `README.md` and `gallery/README.md` — two files `profile.ts` demonstrably
+ * `README.md` and the six character files — which `profile.ts` demonstrably
  * writes on first run. A list of filenames in a string literal has nothing
  * holding it to the code that writes them, which is exactly the failure this
  * module is here to make impossible.
@@ -29,8 +29,16 @@
  * list has, and it is named here for the same reason.
  */
 
-/** Which directory a path is relative to. */
-export type Root = 'profile' | 'data' | 'cwd' | 'app';
+/**
+ * Which directory a path is relative to.
+ *
+ * `anywhere` is new in v2.0 and is the honest name for what her `write` tool
+ * does: the path is the one the user asked for, so there is no root to hang it
+ * from. It exists as its own value rather than being folded into `cwd` because
+ * a reader skimming this list should be able to see, without reading the
+ * prose, that exactly one entry is unbounded.
+ */
+export type Root = 'profile' | 'data' | 'cwd' | 'app' | 'anywhere';
 
 interface Writer {
   /** The module, relative to `src/`, exactly as the scan reports it. */
@@ -64,11 +72,11 @@ export const WRITERS: readonly Writer[] = [
       'mood.md',
       'relationship.md',
       'boundaries.md',
+      'rhythm.md',
       'README.md',
-      'gallery/README.md',
     ],
     what: 'Who she is. Plain markdown with a small frontmatter block, and the only description of her character there is.',
-    when: 'The six character files and both READMEs are written on first run, and rewritten when you save from Profile on the website.',
+    when: 'The README is written on the first start. The six character files are written on the first start as defaults and then rewritten once, by the setup interview, from what she decided about you. Nothing in the interface writes them after that.',
   },
   {
     module: 'core/mood/mood.ts',
@@ -85,29 +93,11 @@ export const WRITERS: readonly Writer[] = [
     when: 'Written on first run and updated as days pass.',
   },
   {
-    module: 'core/avatar/studio.ts',
-    root: 'profile',
-    writes: [
-      'avatar/source.jpg',
-      'avatar/face-<expression>-<id>.jpg',
-      'avatar/manifest.json',
-    ],
-    what: 'The photograph you chose as her face, the expressions generated from it, and a manifest recording their sizes, hashes and when they arrived.',
-    when: 'When you give her a face, and once per expression generated from it. The manifest is written to a `.incoming` file and renamed into place, so a failed write cannot leave a manifest that describes an image which is not there.',
-  },
-  {
-    module: 'core/gallery/gallery.ts',
-    root: 'profile',
-    writes: ['gallery/<her description>.jpg'],
-    what: 'Pictures of her, including any she generates. Never of you — every one starts from her photograph as the reference.',
-    when: 'When she decides to send you a picture that does not exist yet.',
-  },
-  {
     module: 'core/knowledge/scan.ts',
     root: 'profile',
     writes: ['knowledge.json'],
     what: 'The record of what you approved: absolute folder paths, when you said yes, and when the last scan finished.',
-    when: 'Written before the scan starts, so an interrupted scan still leaves a record of what was agreed to. Only exists if you use Setup → Let her read your files.',
+    when: 'Written before the scan starts, so an interview abandoned halfway still leaves a record of what was agreed to. Only exists if you said yes when she asked to read your files.',
   },
   {
     module: 'core/memory/store.ts',
@@ -115,6 +105,20 @@ export const WRITERS: readonly Writer[] = [
     writes: ['memory.db', 'memory.db-wal', 'memory.db-shm'],
     what: 'Every turn of conversation, the facts distilled from them, the rolling summary, and one embedding per fact. Written through `node:sqlite` rather than through `fs`, which is why it is the one entry the write scan finds by its import instead of its call.',
     when: 'Continuously, as the two of you talk. The `-wal` and `-shm` are SQLite running in WAL mode, not extra copies.',
+  },
+  {
+    module: 'core/hands/hands.ts',
+    root: 'data',
+    writes: ['hers-actions.log'],
+    what: 'One tab-separated line for every command she ran, file she opened, or document she wrote: the time, which tool, the exit code, the command itself and the first four hundred characters of what came back. It is the record of everything she did to this machine, and it carries whatever those commands printed — so treat it as being as sensitive as the things you ask her to do.',
+    when: 'Appended on every use of `run`, `open` or `write`, including the refused ones. Opened for append and owner-only; nothing in this program ever truncates or rewrites it. It does not exist until she has done something.',
+  },
+  {
+    module: 'core/hands/hands.ts',
+    root: 'anywhere',
+    writes: ['<the path you asked for>'],
+    what: 'Whatever you asked her to write down — a list, a draft, a note. This is the one entry on this page that is not a fixed path, because the path is the one you gave her. Her own two folders and anything that looks like a credentials file are refused.',
+    when: 'When you ask her to write something and she calls `write`. Every one of them is also a line in `hers-actions.log`.',
   },
   {
     module: 'core/session/brain.ts',

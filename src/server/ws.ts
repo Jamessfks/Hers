@@ -30,19 +30,12 @@ import {
   encodeMediaFrame,
   parseClientMessage,
 } from '../shared/protocol.ts';
-import type {
-  ClientMessage,
-  SenseName,
-  ServerMessage,
-  TelegramView,
-} from '../shared/protocol.ts';
+import type { ClientMessage, ServerMessage, TelegramView } from '../shared/protocol.ts';
 import type { Conversation, Origin } from '../core/session/conversation.ts';
-import { isExpression } from '../core/avatar/expressions.ts';
 import { maskKey } from './setup.ts';
 import { daysFor, nextStageAfter } from '../core/intimacy/intimacy.ts';
 import type { Brain } from '../core/session/brain.ts';
-import { readProfileFiles, saveProfileFiles } from '../core/profile/profile.ts';
-import { hasChosenName, isFirstRun } from '../core/profile/first-run.ts';
+import { hasChosenName } from '../core/profile/first-run.ts';
 
 /** A screen frame at 1080p JPEG is comfortably under this; nothing legitimate is not. */
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -104,10 +97,8 @@ export class WebBridge {
          * always sends one so absence must mean `curl` or the doctor. The first
          * half is true and the conclusion does not follow: it also meant any
          * other process on the machine, holding no secret, could find the port
-         * with one scan and get everything this socket carries — the last forty
-         * turns, every stored fact, her mood, the key hint — and, on the way
-         * back, `say`, `memory.forget`, `intimacy.pin` and `profile.save`, which
-         * rewrites the system instruction she is built from.
+         * with one scan and get everything this socket carries — her mood, the
+         * key hint, and a microphone she never granted.
          *
          * Nothing legitimate needed it. The website is a page and sends one; the
          * doctor speaks HTTP and never opens this socket; the audit scripts send
@@ -192,19 +183,14 @@ export class WebBridge {
     this.#options.conversation.attach({
       name: 'web',
       audio: (pcm) => this.#sendMedia(MediaKind.HERS_PCM24, pcm),
-      transcript: (who, text, final) => this.#send({ t: 'transcript', who, text, final }),
+      // The browser no longer shows a transcript, but the interface is still
+      // required — Telegram's surface uses the same event to know what to
+      // send back as a message or a voice note.
+      transcript: () => undefined,
       state: (state) => this.#send({ t: 'state', state }),
       mood: (mood) => this.#send({ t: 'mood', mood }),
       named: (name) => this.#send({ t: 'name', name }),
-      look: (expression) => this.#send({ t: 'look', expression }),
       interrupted: () => this.#send({ t: 'interrupted' }),
-      show: (item) =>
-        this.#send({
-          t: 'show',
-          url: `/gallery/${encodeURIComponent(item.name)}`,
-          kind: item.kind,
-          caption: item.label,
-        }),
       trouble: (message) => this.#send({ t: 'trouble', message }),
     });
   }
@@ -232,7 +218,7 @@ export class WebBridge {
     };
   }
 
-  /** Who she is, what she looks like, and what has been said so far. */
+  /** Who she is, her mood, and how close she is. */
   #sendOpening(socket: WebSocket): void {
     const brain = this.#options.brain;
     sendJson(socket, {
@@ -250,7 +236,6 @@ export class WebBridge {
       configured: Boolean(brain.config.geminiApiKey),
       keyHint: maskKey(brain.config.geminiApiKey),
       telegram: Boolean(brain.config.telegram),
-      livekit: Boolean(brain.config.livekit),
       cameraFps: brain.config.cameraFps,
       screenFps: brain.config.screenFps,
     });
@@ -258,15 +243,6 @@ export class WebBridge {
     sendJson(socket, this.#intimacy());
     const telegram = this.#options.telegram?.();
     if (telegram) sendJson(socket, { t: 'telegram', telegram });
-    sendJson(socket, { t: 'avatar', avatar: brain.avatar.state() });
-    sendJson(socket, {
-      t: 'history',
-      turns: brain.memory.liveTranscript(40).map((turn) => ({
-        speaker: turn.speaker,
-        text: turn.text,
-        at: turn.at,
-      })),
-    });
   }
 
   async #onMessage(socket: WebSocket, data: Buffer, isBinary: boolean): Promise<void> {
@@ -304,30 +280,6 @@ export class WebBridge {
         await companion.sleep();
         return;
 
-      case 'say':
-        if (typeof message.text !== 'string') return;
-        /*
-         * Typing to her while she is asleep is a request to talk to her.
-         *
-         * The browser does send `wake` as well, but the two messages are
-         * handled concurrently and there is no ordering between them: the text
-         * would reach a companion with no session, be filed into memory, and
-         * get no answer. Which is precisely what the first message after
-         * setting up a key is. Waking here is ordered by the `await` and is a
-         * no-op when a session already exists.
-         */
-        if (!companion.live) await companion.wake();
-        companion.say(message.text.slice(0, 4000), 'web');
-        return;
-
-      case 'sense': {
-        const sense = message.sense;
-        if (!isSense(sense)) return;
-        companion.setSense(sense, message.on === true);
-        this.#send({ t: 'sense', sense, on: message.on === true });
-        return;
-      }
-
       case 'presence':
         companion.notePresence(Number(message.idleSeconds) || 0, message.tabVisible !== false);
         return;
@@ -344,148 +296,13 @@ export class WebBridge {
         companion.interrupt();
         return;
 
-      case 'memory.load':
-        sendJson(socket, this.#memory());
-        return;
-
       case 'intimacy.load':
         sendJson(socket, this.#intimacy());
         return;
 
-      case 'intimacy.pin': {
-        const score = Number(message.score);
-        if (!Number.isFinite(score)) return;
-        this.#options.brain.intimacy.pin(score);
-        this.#send(this.#intimacy());
-        return;
-      }
-
-      case 'intimacy.auto':
-        this.#options.brain.intimacy.release();
-        this.#send(this.#intimacy());
-        return;
-
-      case 'memory.edit':
-        await this.#options.brain.memory.reword(Number(message.id), String(message.text ?? ''));
-        sendJson(socket, this.#memory());
-        return;
-
-      case 'memory.forget':
-        this.#options.brain.memory.forget(Number(message.id));
-        sendJson(socket, this.#memory());
-        return;
-
-      case 'memory.add': {
-        const text = String(message.text ?? '').trim();
-        if (!text) return;
-        // Typed by the owner, so it starts as certain as anything gets.
-        await this.#options.brain.memory.remember('identity', text.slice(0, 500), {
-          confidence: 0.95,
-        });
-        sendJson(socket, this.#memory());
-        return;
-      }
-
-      case 'avatar.load':
-        sendJson(socket, { t: 'avatar', avatar: this.#options.brain.avatar.state() });
-        return;
-
-      case 'avatar.make':
-        void this.#makeFace(socket, message.expression);
-        return;
-
-      case 'profile.load':
-        sendJson(socket, await this.#profile());
-        return;
-
-      case 'profile.save': {
-        if (typeof message.files !== 'object' || message.files === null) return;
-        await saveProfileFiles(this.#options.brain.config.profileDir, message.files);
-        await this.#options.brain.reloadProfile();
-        sendJson(socket, await this.#profile());
-        // Honest about when it lands: a Live session's system instruction is
-        // fixed at setup, so this is the next wake, not this sentence. Skipped
-        // when the caller says so — the first-run wizard wakes her itself, and
-        // ending a first run on an error-styled toast about scheduling is not a
-        // way to introduce anybody.
-        if (message.quiet !== true) {
-          this.#send({
-            t: 'trouble',
-            message: 'Saved. She picks up the changes the next time she wakes.',
-          });
-        }
-        return;
-      }
-
       default:
         return;
     }
-  }
-
-  /**
-   * The profile folder, and whether anybody has ever used it.
-   *
-   * The two travel together because the browser needs both at once: the wizard
-   * only opens on a fresh folder, and the first thing it does is edit the files
-   * in that same message. Answered from the files on disk rather than from the
-   * loaded `Profile`, because one of the three signals is a frontmatter key
-   * nothing else reads and `loadProfile` therefore does not keep.
-   */
-  async #profile(): Promise<ServerMessage> {
-    const files = await readProfileFiles(this.#options.brain.config.profileDir);
-    return {
-      t: 'profile',
-      files,
-      firstRun: isFirstRun({ files, hasHistory: this.#options.brain.hasHistory }),
-    };
-  }
-
-  #memory(): ServerMessage {
-    const memory = this.#options.brain.memory;
-    return {
-      t: 'memory',
-      facts: memory.allFacts().map((fact) => ({
-        id: fact.id,
-        kind: fact.kind,
-        text: fact.text,
-        confidence: fact.confidence,
-      })),
-      summary: memory.runningSummary() ?? '',
-    };
-  }
-
-  /** Tells whoever is connected that the photograph changed. */
-  announceAvatar(): void {
-    this.#send({ t: 'avatar', avatar: this.#options.brain.avatar.state() });
-  }
-
-  /**
-   * Generates one of her faces, and tells everyone how it went.
-   *
-   * Announced to every page rather than answered to the one that asked: the face
-   * belongs to her, not to a tab, and a second window with the Face dialog open
-   * should see it arrive. Failures are spoken in the words a person would use —
-   * an image model refusing to draw a photorealistic person is an ordinary
-   * outcome here, not an exception.
-   */
-  async #makeFace(socket: WebSocket, expression: string): Promise<void> {
-    const avatar = this.#options.brain.avatar;
-    if (!isExpression(expression)) {
-      sendJson(socket, { t: 'trouble', message: 'No such expression.' });
-      return;
-    }
-
-    this.announceAvatar();
-    try {
-      await avatar.makeFace(expression);
-      sendJson(socket, { t: 'trouble', message: `She can look ${expression} now.` });
-    } catch (error) {
-      sendJson(socket, {
-        t: 'trouble',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-    this.announceAvatar();
   }
 
   /**
@@ -516,17 +333,16 @@ export class WebBridge {
    * Repaints the whole interface from a brain that has just changed underneath
    * it — a key that has come into force, or everything having been deleted.
    *
-   * Everything is re-sent rather than a delta: after a reset, the correct
-   * transcript, memory, mood, avatar and configuration are all different at
-   * once, and a browser that patched some of them would be showing a mixture of
-   * two of her.
+   * Everything is re-sent rather than a delta: after a reset, the mood, the
+   * intimacy readout and the configuration are all different at once, and a
+   * browser that patched some of them would be showing a mixture of two of
+   * her.
    */
   refresh(): void {
     const socket = this.#socket;
     if (!socket || socket.readyState !== socket.OPEN) return;
     this.#attach();
     this.#sendOpening(socket);
-    sendJson(socket, this.#memory());
     sendJson(socket, {
       t: 'state',
       state: this.#options.conversation.live ? 'listening' : 'asleep',
@@ -575,8 +391,4 @@ export class WebBridge {
 function sendJson(socket: WebSocket, message: ServerMessage): void {
   if (socket.readyState !== socket.OPEN) return;
   socket.send(JSON.stringify(message));
-}
-
-function isSense(value: unknown): value is SenseName {
-  return value === 'hearing' || value === 'sight' || value === 'screen';
 }

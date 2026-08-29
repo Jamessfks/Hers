@@ -68,7 +68,6 @@ test('a fresh folder is written and reads back as the default Anna', async () =>
   for (const name of PROFILE_FILES) {
     assert.ok(files.includes(`${name}.md`), `${name}.md was not written`);
   }
-  assert.ok(files.includes('gallery'));
 
   assert.equal(profile.identity.name, 'Anna');
   assert.equal(profile.voice.voice, 'Aoede');

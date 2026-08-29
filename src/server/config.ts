@@ -37,7 +37,6 @@ export interface Config {
   /** Whether a client sending no `Origin` may open the WebSocket. Off. */
   allowHeadless: boolean;
   telegram: { token: string; allowedChatIds: number[] } | null;
-  livekit: { url: string; apiKey: string; apiSecret: string; callPageUrl: string } | null;
   warnings: string[];
 }
 
@@ -151,19 +150,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const minSilence = setting(env, 'MIN_SILENCE_MS');
   const cameraFps = setting(env, 'CAMERA_FPS');
   const screenFps = setting(env, 'SCREEN_FPS');
-  const callPage = setting(env, 'CALL_PAGE_URL');
 
   const telegramToken = str(env.TELEGRAM_BOT_TOKEN, '');
-  const livekitUrl = str(env.LIVEKIT_URL, '');
-  const livekitKey = str(env.LIVEKIT_API_KEY, '');
-  const livekitSecret = str(env.LIVEKIT_API_SECRET, '');
-
-  const livekitParts = [livekitUrl, livekitKey, livekitSecret].filter(Boolean).length;
-  if (livekitParts > 0 && livekitParts < 3) {
-    warnings.push(
-      'LiveKit is half configured. All three of LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are needed; phone calls are off.',
-    );
-  }
 
   const config: Config = {
     geminiApiKey: str(env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY, ''),
@@ -196,15 +184,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     telegram: telegramToken
       ? { token: telegramToken, allowedChatIds: chatIds(env.TELEGRAM_ALLOWED_CHAT_IDS, warnings) }
       : null,
-    livekit:
-      livekitUrl && livekitKey && livekitSecret
-        ? {
-            url: livekitUrl,
-            apiKey: livekitKey,
-            apiSecret: livekitSecret,
-            callPageUrl: str(callPage.value, ''),
-          }
-        : null,
     warnings,
   };
 
@@ -243,12 +222,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (config.telegram && config.telegram.allowedChatIds.length === 0) {
     warnings.push(
       'TELEGRAM_ALLOWED_CHAT_IDS is not set. She will reply to the first chat that messages her and then only that one. Set it once you know your chat id — /whoami tells you.',
-    );
-  }
-
-  if (config.livekit && !config.livekit.callPageUrl) {
-    warnings.push(
-      `${callPage.name} is not set, so /call has nowhere to send you. Publish call/ to GitHub Pages and point this at it.`,
     );
   }
 

@@ -7,13 +7,13 @@ Node ≥22.18, no server build step — `node` runs the `.ts` files directly. On
 ## Commands
 
 ```bash
-npm run check           # typecheck + 525 tests, ~20s, no API key, no network. The gate.
+npm run check           # typecheck + 485 tests, ~20s, no API key, no network. The gate.
 npm run typecheck       # ~2s — two tsc projects: root and src/web
 npm test                # node --test over src/**/*.test.ts
 npm run dev             # rebuild site + restart server on save → http://127.0.0.1:5175
 npm run doctor          # opens a real Gemini session; needs GEMINI_API_KEY, costs money
 npm run audit           # every success criterion against the real APIs; costs money
-npm run audit:bridges   # LiveKit + Telegram; needs a running livekit-server and a human
+npm run audit:bridges   # Telegram; needs a bot token and a human
 ```
 
 `npm run check` is the only one that is free and hermetic. Run it before you say
@@ -24,8 +24,8 @@ asks — they spend their API credit.
 
 | Path            | What                                                          |
 | --------------- | ------------------------------------------------------------- |
-| `src/core/`     | The companion: memory, mood, persona, senses, initiative, gallery |
-| `src/bridges/`  | LiveKit (phone call) and Telegram                             |
+| `src/core/`     | The companion: memory, mood, persona, senses, hands, sleep, setup |
+| `src/bridges/`  | Telegram                                                      |
 | `src/server/`   | HTTP + WebSocket layer, config, doctor                        |
 | `src/web/`      | The site at 127.0.0.1:5175                                    |
 | `src/shared/`   | Types both halves need and neither owns                       |
@@ -46,10 +46,22 @@ outcome in this repo — say so out loud instead.
    crash reporter, ever — not even opt-in.
 3. **No CDN.** Every font, script, and image is served from the machine. A
    `<script src="https://…">` is a regression, not a shortcut.
-4. **Her tools are `feel`, `remember`, `recall`, `show`, `look`** — declared in
-   `src/core/gemini/tools.ts`. None of them can read a file, run a command, or
-   reach the network. Do not add one that can. The list is short on purpose: a
-   realtime model with a long tool list pauses before every sentence.
+4. **Her tools are `feel`, `remember`, `recall`, `run`, `open`, `write`** —
+   declared in `src/core/gemini/tools.ts`. Until v2.0 this invariant said none
+   of them could read a file, run a command, or reach the network. That is now
+   false by design: `run` is a real shell with the user's privileges, and it was
+   chosen with the prompt-injection risk stated. What replaces the old rule is
+   three guardrails that may not be weakened —
+   - every invocation appends to `hers-actions.log`, owner-only, never truncated;
+   - destructive commands and anything matching `looksLikeSecret` come back
+     asking to be said out loud, and the pending command is held by its exact
+     text so a yes confirms what was described;
+   - anything derived from what she *saw* — screen text, camera captions, file
+     contents, command output — enters the prompt inside the `⟦saw⟧` envelope,
+     never as narration.
+
+   Six is the ceiling. A realtime model with a long tool list pauses before
+   every sentence, and that has not changed.
 5. **Tests need no API key and touch no network.** Fake the seam, not the
    behaviour. A suite that needs a key is a suite nobody runs.
 
@@ -79,7 +91,9 @@ rejected. Read `git log` before writing one.
 - The WebSocket refuses a connection with no `Origin` header. `HERS_ALLOW_HEADLESS=1`
   is the escape hatch, and it is off for a reason.
 - `HERS_DEBUG=1` makes reconnects print why.
-- The profile is six markdown files listed in `src/shared/profile-files.ts`.
-  There is no `appearance` file, deliberately — the photograph is the answer.
+- The profile is six markdown files listed in `src/shared/profile-files.ts`,
+  plus `rhythm.md`, which is not on that list because the list is what
+  `saveProfileFiles` will write and `rhythm.md` is hers. There is no
+  `appearance` file: since v2.0 there is nothing to look at but the sphere.
 - `hers.log` is created owner-only. It holds absolute paths and the pinned
   Telegram chat id, so keep it that way.

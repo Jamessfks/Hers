@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -9,7 +9,6 @@ import { Brain } from './brain.ts';
 import { loadConfig } from '../../server/config.ts';
 import type { LiveConnector, LiveSocket } from '../gemini/live.ts';
 import type { FunctionDeclaration, LiveServerMessage } from '@google/genai';
-import type { GalleryItem } from '../gallery/gallery.ts';
 import type { ConnectionState, MoodReadout } from '../../shared/protocol.ts';
 
 /**
@@ -69,10 +68,8 @@ async function fixture(env: Record<string, string> = {}) {
   const transcript: { who: string; text: string; final: boolean }[] = [];
   const states: ConnectionState[] = [];
   const moods: MoodReadout[] = [];
-  const shown: GalleryItem[] = [];
   const troubles: string[] = [];
   const names: string[] = [];
-  const looks: string[] = [];
 
   const companion = new Companion({
     brain,
@@ -85,9 +82,7 @@ async function fixture(env: Record<string, string> = {}) {
       state: (state) => states.push(state),
       mood: (mood) => moods.push(mood),
       named: (name) => names.push(name),
-      look: (expression) => looks.push(expression),
       interrupted: () => undefined,
-      show: (item) => shown.push(item),
       trouble: (message) => troubles.push(message),
     },
   });
@@ -103,10 +98,8 @@ async function fixture(env: Record<string, string> = {}) {
     transcript,
     states,
     moods,
-    shown,
     troubles,
     names,
-    looks,
     socket: () => sockets.at(-1)!,
   };
 }
@@ -114,9 +107,9 @@ async function fixture(env: Record<string, string> = {}) {
 /**
  * Lets a tool call finish.
  *
- * A timer rather than `setImmediate`: `show` reads a directory and stats every
- * file in it, which is several event-loop turns, and a one-tick wait made the
- * gallery look empty when it was not.
+ * A timer rather than `setImmediate`: `recall` queries the memory store, which
+ * is several event-loop turns, and a one-tick wait made the store look empty
+ * when it was not.
  */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 /** Long enough for a turn's transcript to go quiet. See live.ts SETTLE_MS. */
@@ -128,46 +121,11 @@ test('waking builds a prompt that actually contains who she is', async () => {
 
   const prompt = f.systemInstructions[0] ?? '';
   assert.match(prompt, /not an assistant/, 'her personality must reach the model');
-  assert.match(
-    prompt,
-    /no face yet/,
-    'with no photograph she must say so rather than invent a description',
-  );
   assert.match(prompt, /Chinese-American/);
   assert.match(prompt, /⟦director⟧/, 'without this she answers a stage direction out loud');
   assert.match(prompt, /⟦context⟧/);
   assert.match(prompt, /you can hear them/, 'the senses that are on must be stated');
   assert.match(prompt, /988/, 'the crisis floor is not optional');
-  await f.companion.sleep();
-});
-
-test('no picture of her is ever put into the conversation', async () => {
-  /*
-   * Measured against the live model, twice. With her photograph in the session
-   * and asked "do I have a tan?", she answered from it — describing her own
-   * body as the user's. Labelling the image "this is YOU, not the person you
-   * are talking to" did not stop it. With the image gone she says "my camera's
-   * off, so I'm seeing nothing right now", which is the truth.
-   */
-  const f = await fixture();
-  const png = Buffer.from(
-    '89504e470d0a1a0a0000000d49484452000001900000021808060000001f15c489',
-    'hex',
-  );
-  await f.brain.avatar.setSource(png, 'image/png');
-  await f.companion.wake();
-  await settle();
-
-  const sent = f.socket().content.map((entry) => JSON.stringify(entry.turns));
-  assert.ok(
-    !sent.some((body) => body.includes('inlineData')),
-    'an image of her in context is one a question about the user can land on',
-  );
-
-  const prompt = f.systemInstructions[0] ?? '';
-  assert.match(prompt, /never answer that question in words/i, 'the picture is the answer');
-  assert.match(prompt, /cannot see them/i, 'and the honest answer when blind is stated');
-  assert.ok(!/eye colour|hairstyle|body type/i.test(prompt), 'the prose description is back');
   await f.companion.sleep();
 });
 
@@ -413,95 +371,6 @@ test('she is given the recall tool and told to look before she answers', async (
   await f.companion.sleep();
 });
 
-test('the show tool sends what is in the gallery and never invents one', async () => {
-  const f = await fixture();
-  await writeFile(
-    path.join(f.brain.gallery.dir, 'at-the-window-rainy.jpg'),
-    Buffer.from([0xff, 0xd8, 0xff]),
-  );
-  await f.companion.wake();
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '1', name: 'show', args: { description: 'watching the rain' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.at(0)?.name, 'at-the-window-rainy.jpg');
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '2', name: 'show', args: { description: 'riding a motorbike on mars' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.length, 1, 'a bad match is worse than no picture');
-  await f.companion.sleep();
-});
-
-/** A real PNG header — enough for the studio, which reads the bytes not the name. */
-function png(width: number, height: number): Buffer {
-  const header = Buffer.alloc(33);
-  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
-  header.writeUInt32BE(13, 8);
-  header.write('IHDR', 12);
-  header.writeUInt32BE(width, 16);
-  header.writeUInt32BE(height, 20);
-  header[24] = 8;
-  header[25] = 6;
-  return header;
-}
-
-/**
- * The bug this is here for, end to end: asked for her picture on Telegram she
- * sent a generated drawing of somebody else, while the web showed the uploaded
- * photograph as her face. Both go through this tool call, so both are fixed by
- * it answering with the photograph.
- */
-test('asked for her picture, the show tool sends the photograph that was uploaded', async () => {
-  const f = await fixture();
-  await f.brain.avatar.setSource(png(512, 640), 'image/png');
-  // A previous generation sitting in the gallery, which is what used to win.
-  await writeFile(
-    path.join(f.brain.gallery.dir, 'a-picture-of-you-right-now-1786883162943.jpg'),
-    Buffer.from([0xff, 0xd8, 0xff]),
-  );
-  await f.companion.wake();
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you right now' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.at(0)?.name, 'source.png', 'she has a face; she should send that face');
-  assert.equal(f.shown.at(0)?.absolutePath, f.brain.avatar.sourcePath());
-  await f.companion.sleep();
-});
-
-test('a scene she is asked for is not answered with the bare photograph', async () => {
-  const f = await fixture();
-  await f.brain.avatar.setSource(png(512, 640), 'image/png');
-  await writeFile(
-    path.join(f.brain.gallery.dir, 'at-the-window-rainy.jpg'),
-    Buffer.from([0xff, 0xd8, 0xff]),
-  );
-  await f.companion.wake();
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '1', name: 'show', args: { description: 'watching the rain' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.at(0)?.name, 'at-the-window-rainy.jpg');
-  await f.companion.sleep();
-});
-
 test('an unknown tool is answered rather than left hanging', async () => {
   const f = await fixture();
   await f.companion.wake();
@@ -571,48 +440,14 @@ test('audio only flows while hearing is on', async () => {
 });
 
 test('saying hello does not cost a picture', async () => {
-  /*
-   * Every conversation used to open with a freshly generated portrait, fired on
-   * the first thing the user said. It was a nice trick exactly once, and after
-   * that it was a photograph arriving before the hello — every time, wanted or
-   * not, at about four cents each. A picture is worth something when it is
-   * chosen, so now it is only ever chosen: by her through `show`, or by them
-   * asking.
-   */
   const f = await fixture();
   await f.companion.wake();
-
-  let generated = 0;
-  f.brain.gallery.generate = async () => {
-    generated += 1;
-    return null;
-  };
 
   f.companion.say('hey');
   f.companion.say('you there?');
   await settle();
 
-  assert.equal(generated, 0, 'nothing was asked for and nothing should have been made');
-  assert.equal(f.shown.length, 0);
   assert.equal(f.brain.memory.liveTranscript(5).at(-1)?.text, 'you there?', 'the turns still landed');
-  await f.companion.sleep();
-});
-
-test('she can still send a picture when she reaches for one', async () => {
-  const f = await fixture();
-  // "a picture of you" is answered with the photograph itself rather than a
-  // generation, so there has to be one on disk for there to be anything to send.
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await f.companion.wake();
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.length, 1, 'the tool is how a picture is meant to arrive');
   await f.companion.sleep();
 });
 
@@ -644,9 +479,7 @@ test('no API key is said plainly rather than thrown', async () => {
       state: () => undefined,
       mood: () => undefined,
       named: () => undefined,
-      look: () => undefined,
       interrupted: () => undefined,
-      show: () => undefined,
       trouble: (message) => troubles.push(message),
     },
   });
@@ -683,9 +516,7 @@ test('memory carries between two conversations', async () => {
       state: () => undefined,
       mood: () => undefined,
       named: () => undefined,
-      look: () => undefined,
       interrupted: () => undefined,
-      show: () => undefined,
       trouble: () => undefined,
     },
   });
@@ -774,133 +605,6 @@ test('a frame from a sense that has since been switched off is not used', async 
     'the share is over; that picture is no longer of anything',
   );
 
-  await f.companion.sleep();
-});
-
-test('the prompt gives her one honest source for how somebody looks', async () => {
-  const f = await fixture();
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await f.companion.wake();
-
-  const prompt = f.systemInstructions.at(-1) ?? '';
-  assert.match(prompt, /comes from what your camera or/i);
-  assert.match(prompt, /never something borrowed from a picture of yourself/i);
-  await f.companion.sleep();
-});
-
-/** A PNG header the studio will accept — dimensions are read from IHDR. */
-function facePng(width = 512, height = 640): Buffer {
-  const header = Buffer.alloc(33);
-  header.write('\x89PNG\r\n\x1a\n', 0, 'binary');
-  header.writeUInt32BE(13, 8);
-  header.write('IHDR', 12);
-  header.writeUInt32BE(width, 16);
-  header.writeUInt32BE(height, 20);
-  header[24] = 8;
-  header[25] = 6;
-  return header;
-}
-
-test('asking to see her sends the photograph, without the model having to decide', async () => {
-  /*
-   * "What do you look like?" came back as "artist Maybe a little punk adjacent?
-   * You tell me." — no picture, and invented, because she has no written
-   * description of herself and the question demanded an answer anyway. A direct
-   * request deserves a direct answer, so this one does not go through the model.
-   */
-  const f = await fixture();
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await f.companion.wake();
-
-  f.companion.say('What do you look like?');
-  await settle();
-
-  assert.equal(f.shown.length, 1, 'the photograph should have gone out');
-  assert.equal(f.shown[0]?.name, 'source.png', 'and it is the one they uploaded, not a generation');
-
-  // She is told it went, so she does not describe a face she cannot see.
-  const told = f.socket().content.map((each) => JSON.stringify(each.turns)).join(' ');
-  assert.match(told, /has just been sent to them/);
-  await f.companion.sleep();
-});
-
-test('ordinary conversation does not trip the photograph', async () => {
-  const f = await fixture();
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await f.companion.wake();
-
-  // Every word of "how are you" is in the vocabulary that names only her, which
-  // is why the gallery's own classifier says yes to it and this one must not.
-  for (const line of ['how are you', 'hey', 'I finished it!', 'and we can move on']) {
-    f.companion.say(line);
-  }
-  await settle();
-
-  assert.equal(f.shown.length, 0, 'a photograph arriving because they said hello is the old bug');
-  await f.companion.sleep();
-});
-
-test('with no photograph yet, asking to see her sends nothing rather than something else', async () => {
-  const f = await fixture();
-  await f.companion.wake();
-
-  f.companion.say('send me a picture of you');
-  await settle();
-
-  assert.equal(f.shown.length, 0);
-  await f.companion.sleep();
-});
-
-test('one question does not get two identical photographs', async () => {
-  /*
-   * A request to see her is answered from code, and the model reasonably
-   * reaches for `show` on the same turn because it was just asked. Both resolve
-   * to the same file. Observed live: two copies of her photograph, seconds
-   * apart, for one "what do you look like?".
-   */
-  const f = await fixture();
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await f.companion.wake();
-
-  f.companion.say('What do you look like?');
-  await settle();
-  assert.equal(f.shown.length, 1);
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [{ id: '1', name: 'show', args: { description: 'a picture of you' } }],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.length, 1, 'the model asked for the one that had already gone');
-  const answered = (f.socket().tools[0] as Array<{ response: { ok: boolean } }>)[0];
-  assert.equal(answered?.response.ok, true, 'and she is told it worked, because it did');
-
-  await f.companion.sleep();
-});
-
-test('a different picture is still sent while the photograph is fresh', async () => {
-  const f = await fixture();
-  await f.brain.avatar.setSource(facePng(), 'image/png');
-  await writeFile(path.join(f.root, 'profile', 'gallery', 'at-the-window-rainy.jpg'), 'not a jpeg');
-  await f.companion.wake();
-
-  f.companion.say('What do you look like?');
-  await settle();
-  assert.equal(f.shown.length, 1);
-
-  f.socket().emit({
-    toolCall: {
-      functionCalls: [
-        { id: '1', name: 'show', args: { description: 'at the window watching the rain' } },
-      ],
-    },
-  } as unknown as LiveServerMessage);
-  await settle();
-
-  assert.equal(f.shown.length, 2, 'a scene is a different picture, not a duplicate');
-  assert.equal(f.shown[1]?.name, 'at-the-window-rainy.jpg');
   await f.companion.sleep();
 });
 
@@ -997,30 +701,3 @@ test('a name she chose during this wake reaches the page that watched her wake u
   assert.deepEqual(f.names, [chosen]);
 });
 
-test('she can only ask for a face that exists, and a wrong name is refused', async () => {
-  /*
-   * The enum handed to the model only ever contains ready faces, so a bad name
-   * should be impossible — which is exactly why it is checked. A tool call is a
-   * string from a model, and believing this one puts a 404 in her portrait.
-   */
-  const f = await fixture();
-  await f.companion.wake();
-  const socket = f.socket();
-
-  // No faces have been generated, so the tool is not even offered.
-  const declared = f.systemInstructions.at(-1) ?? '';
-  assert.doesNotMatch(declared, /^look /m, 'not offered when none exist');
-
-  const ask = (expression: string) =>
-    socket.emit({
-      toolCall: { functionCalls: [{ id: '1', name: 'look', args: { expression } }] },
-    } as unknown as LiveServerMessage);
-
-  ask('sneering');
-  await settle();
-  assert.deepEqual(f.looks, [], 'a name that is not an expression changes nothing');
-
-  ask('smiling');
-  await settle();
-  assert.deepEqual(f.looks, [], 'nor one that exists but has not been generated');
-});

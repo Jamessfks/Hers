@@ -531,7 +531,7 @@ test('a tool answer that arrives after a reconnect is dropped, not sent to a str
     toolCall: { functionCalls: [{ id: 'fc_1', name: 'show', args: {} }] },
   } as unknown as LiveServerMessage);
 
-  // The connection dies while the gallery is still working.
+  // The connection dies while a tool call is still in flight.
   first.fail('socket closed mid-render');
   await settle();
   await f.live.start();

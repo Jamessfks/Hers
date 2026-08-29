@@ -19,8 +19,7 @@
  *
  * Everything else in this repository is TypeScript, and Electron runs it
  * happily — Electron 44 carries Node 24, which strips types with no build step
- * exactly as `npm start` does, and `node:sqlite` and the LiveKit binding are
- * both there. This one file is `.js` anyway, because it is the entry point
+ * exactly as `npm start` does, and `node:sqlite` is there. This one file is `.js` anyway, because it is the entry point
  * named in `package.json`: if type stripping ever broke, a `.ts` entry point
  * would fail before there was a window to say so in, and the failure would be a
  * dock icon that bounces once and disappears. The logic worth testing lives in
@@ -277,7 +276,10 @@ function allowMediaFor(origin) {
          * worse outcome than sharing and a much better one than hanging.
          */
         try {
-          const sources = await desktopCapturer.getSources({ types: ['screen'] });
+          // `window` as well as `screen`: the fallback runs when the system
+          // picker is unavailable, and a person who wants to show her the one
+          // document they are stuck on should not have to share the desktop.
+          const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
           if (sources.length === 0) return callback({});
           if (sources.length === 1) return callback({ video: sources[0] });
 

@@ -43,7 +43,6 @@ function input(over: Partial<PromptInput> = {}): PromptInput {
     localTime: 'Monday 11:40pm',
     channel: 'desktop',
     returning: false,
-    hasFace: true,
     intimacy: {
       score: 0.02,
       percent: 2,
@@ -88,28 +87,6 @@ test('a sense that is on is not described as off', () => {
   );
   assert.doesNotMatch(prompt, /switched off right now/i);
   assert.match(prompt, /one picture/i, 'both cameras composite into one frame');
-});
-
-test('she is only told about expressions that exist', () => {
-  const none = buildSystemInstruction(input());
-  assert.doesNotMatch(none, /^look /m, 'no faces made, so no tool to offer');
-
-  const some = buildSystemInstruction(input({ faces: ['smiling', 'curious'] }));
-  assert.match(some, /^look /m);
-  assert.match(some, /smiling, curious/);
-});
-
-test('she is told she has a face and must never describe it in words', () => {
-  // The invention this prevents, observed: asked what she looked like she said
-  // "artist… maybe a little punk adjacent?" — every word of it made up.
-  const prompt = buildSystemInstruction(input({ hasFace: true }));
-  assert.match(prompt, /never answer that question in words/i);
-  assert.match(prompt, /Do not say your hair is any colour/i, 'the prohibition is explicit');
-
-  // And with no photograph she is told that instead, rather than being told to
-  // stay quiet about a face she does not have.
-  const faceless = buildSystemInstruction(input({ hasFace: false }));
-  assert.doesNotMatch(faceless, /never answer that question in words/i);
 });
 
 test('she is forbidden two questions in a row, counted per turn', () => {
@@ -332,7 +309,7 @@ test('the same position is closed to the machinery she speaks through', () => {
     prompt.indexOf('WHAT A TURN ENDS ON'),
     prompt.indexOf('THE FIRST THING YOU EVER SAY'),
   );
-  for (const tool of ['feel', 'remember', 'recall', 'show', 'look']) {
+  for (const tool of ['feel', 'remember', 'recall']) {
     assert.doesNotMatch(
       section,
       new RegExp(`["'\`⟦]${tool}\\b`, 'i'),

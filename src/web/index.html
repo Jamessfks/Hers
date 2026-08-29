@@ -18,9 +18,6 @@
         </div>
         <div class="bar-actions">
           <span class="state" id="state">asleep</span>
-          <button class="ghost" id="face-open" type="button">Avatar</button>
-          <button class="ghost" id="memory-open" type="button">Memory</button>
-          <button class="ghost" id="settings-open" type="button" aria-label="Settings">Profile</button>
           <button class="ghost" id="setup-open" type="button" aria-label="Setup">Setup</button>
         </div>
       </header>
@@ -29,173 +26,14 @@
 
       <main class="stage">
         <div class="presence">
-          <div class="portrait" id="portrait" hidden>
-            <img id="portrait-still" alt="" />
-          </div>
-          <div class="orb" id="orb">
+          <button class="orb" id="orb" type="button" aria-label="Wake her">
             <div class="orb-core"></div>
             <div class="orb-ring"></div>
-          </div>
-          <div class="presence-actions">
-            <button class="wake" id="wake" type="button">Wake her</button>
-            <button class="give-face" id="give-face" type="button" hidden>Give her a face</button>
-          </div>
-          <p class="hint" id="hint">Turn on a sense and she can hear you.</p>
+          </button>
+          <p class="hint" id="hint">Touch her to wake her.</p>
         </div>
-
-        <section class="conversation">
-          <div class="transcript" id="transcript" role="log" aria-label="Conversation">
-            <!--
-              The empty pane speaks as the application, never as her.
-
-              It is set at the top of the column, above where the first
-              bubble will land. Rejected: putting it in a bubble of her own.
-              A greeting the application wrote, in the shape her words arrive
-              in, is the one thing this product does not do.
-            -->
-            <div class="pane-empty" id="empty">
-              <p class="pane-empty-lead">Nothing yet.</p>
-              <p class="pane-empty-note">
-                Her words appear here as she says them, and yours beside them.
-                Nothing is written on her behalf, which is why this is empty
-                rather than welcoming.
-              </p>
-            </div>
-          </div>
-
-          <div class="previews" id="previews" hidden>
-            <figure class="preview" id="preview-camera" hidden>
-              <figcaption>You</figcaption>
-            </figure>
-            <figure class="preview" id="preview-screen" hidden>
-              <figcaption>Your screen</figcaption>
-            </figure>
-          </div>
-
-          <footer class="controls">
-        <div class="senses" role="group" aria-label="Senses">
-          <button class="sense" id="sense-hearing" type="button" aria-pressed="false" aria-label="Hearing — let her hear you">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>
-            <span>Hearing</span>
-          </button>
-          <button class="sense" id="sense-sight" type="button" aria-pressed="false" aria-label="Sight — let her see you">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></svg>
-            <span>Sight</span>
-          </button>
-          <button class="sense" id="sense-screen" type="button" aria-pressed="false" aria-label="Screen — let her see your screen">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-            <span>Screen</span>
-          </button>
-        </div>
-
-        <form class="composer" id="composer">
-          <input
-            id="input"
-            type="text"
-            placeholder="Say something to her…"
-            autocomplete="off"
-            spellcheck="false"
-          />
-            <button class="send" type="submit" aria-label="Send">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
-            </button>
-          </form>
-          </footer>
-        </section>
       </main>
     </div>
-
-    <dialog class="settings" id="settings">
-      <form method="dialog" class="settings-head">
-        <h2>Who she is</h2>
-        <button class="ghost" value="close" aria-label="Close">Close</button>
-      </form>
-      <p class="settings-note">
-        These are the files in her profile folder. Changes take effect the next time she wakes.
-      </p>
-      <nav class="tabs" id="tabs"></nav>
-      <div class="voice-pick" id="voice-pick" hidden>
-        <label for="voice-select">How she sounds</label>
-        <select id="voice-select"></select>
-        <p class="settings-note">
-          Thirty voices, described in Google's own words. Picking one writes it into the
-          file below, so you can still change it by hand.
-        </p>
-      </div>
-      <textarea id="editor" spellcheck="false" aria-label="Profile file"></textarea>
-      <div class="settings-foot">
-        <span id="saved"></span>
-        <button class="primary" id="save" type="button">Save</button>
-      </div>
-    </dialog>
-
-    <dialog class="settings face" id="face">
-      <form method="dialog" class="settings-head">
-        <h2>Avatar</h2>
-        <button class="ghost" value="close" aria-label="Close">Close</button>
-      </form>
-      <p class="settings-note">
-        Give her a photograph. It is what she looks like — the interface shows it, she
-        sends it when you ask to see her, and every picture she generates of herself
-        starts from it.
-      </p>
-
-      <div class="face-body">
-        <!--
-          The input is transparent rather than hidden. `hidden` and
-          `display: none` both tell assistive technology the control is not
-          interactive, which is why there was no keyboard path to giving her a
-          face at all — MDN says to use opacity for exactly this reason. It
-          still covers the whole zone, so a click anywhere opens the picker and
-          the drop target is unchanged.
-        -->
-        <label class="dropzone" id="dropzone">
-          <input class="file-input" type="file" id="face-file"
-                 accept="image/jpeg,image/png,image/webp" aria-label="Choose a photograph of her" />
-          <img id="face-preview" alt="" hidden />
-          <span class="dropzone-body" id="dropzone-label">
-            <span class="dropzone-hint">Drop a picture here</span>
-            <span class="dropzone-button">Choose a picture</span>
-          </span>
-        </label>
-      </div>
-
-      <section class="faces">
-        <h3>Her expressions</h3>
-        <p class="settings-note">
-          She can only show a face that exists. Each one is generated once from the
-          photograph above, takes a few seconds, and costs about four pence — the same
-          Gemini key, nothing else to sign up for. Once it exists she chooses when to
-          use it, the way a face moves while talking.
-        </p>
-        <p class="faces-empty" id="faces-empty">
-          Nothing to generate from yet — give her a photograph above and the
-          expressions appear here.
-        </p>
-        <div class="face-list" id="face-list"></div>
-        <p class="setup-status" id="face-status"></p>
-      </section>
-    </dialog>
-
-    <dialog class="settings" id="memory">
-      <form method="dialog" class="settings-head">
-        <h2>What she remembers</h2>
-        <button class="ghost" value="close" aria-label="Close">Close</button>
-      </form>
-      <p class="settings-note">
-        Everything she has kept about you. Edit a line to change it, or cross it out.
-        Changes apply the next time she wakes.
-      </p>
-
-      <div class="memory-body">
-        <div class="memory-add">
-          <input id="memory-new" type="text" placeholder="Something she should know…" autocomplete="off" />
-          <button class="primary" id="memory-add" type="button">Add</button>
-        </div>
-        <div class="memory-list" id="memory-list"></div>
-        <p class="memory-summary" id="memory-summary" hidden></p>
-      </div>
-    </dialog>
 
     <dialog class="settings" id="setup">
       <form method="dialog" class="settings-head">
@@ -264,55 +102,12 @@
           </p>
         </section>
 
-        <section class="setup-block">
-          <h3>Let her read your files</h3>
-          <p class="settings-note">
-            She can read the folders you tick, once, so she knows who she is talking to
-            before you say anything. Only plain text is opened; everything else
-            contributes its name. Anything that looks like a password, a key or a wallet
-            is skipped without being opened. What she keeps is a handful of facts — the
-            text itself is not stored and not kept in her context.
-          </p>
-          <p class="settings-note">
-            This does <strong>not</strong> make her feel closer to you. Knowing about
-            someone is not the same as knowing them, and that is still earned.
-          </p>
-          <div class="scan-folders" id="scan-folders"></div>
-          <div class="setup-row">
-            <button class="primary" id="scan-go" type="button">Read them once</button>
-          </div>
-          <p class="setup-status" id="scan-status"></p>
-        </section>
-
-        <section class="setup-block">
-          <h3>How close she is</h3>
-          <p class="settings-note">
-            Earned, not set. It moves by days spent talking to her and nothing else —
-            a stranger on the first day, and years of turning up before it means
-            anything. You can put it wherever you like, and she will believe you.
-          </p>
-          <p class="intimacy-readout" id="intimacy-readout">—</p>
-          <div class="setup-row">
-            <input
-              class="intimacy-range"
-              id="intimacy-range"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              aria-label="How close she is, as a percentage"
-            />
-            <button class="ghost" id="intimacy-auto" type="button">Let it develop</button>
-          </div>
-        </section>
-
         <section class="setup-block danger-block">
           <h3>Start over</h3>
           <p class="settings-note">
             Everything she has: what she remembers, this conversation and every
-            conversation on Telegram, her mood, her profile, her photograph and every
-            picture generated from it. All of it deleted, and she meets you as a
-            stranger with a new face. Your API keys are not touched.
+            conversation on Telegram, her mood and her profile. All of it deleted, and
+            she meets you as a stranger. Your API keys are not touched.
           </p>
           <div class="setup-row">
             <input
@@ -327,43 +122,6 @@
           </div>
           <p class="setup-status" id="reset-status"></p>
         </section>
-      </div>
-    </dialog>
-
-    <!--
-      The first run.
-
-      Deliberately the same dialog as every other panel — same head, same note,
-      same buttons — because it is not a separate product with its own manners.
-      Everything inside it is drawn by `wizard.ts`: the steps are data, and
-      markup for eight of them written out by hand here would be eight places to
-      forget to change something.
-    -->
-    <dialog class="settings wizard" id="wizard">
-      <!--
-        The only dialog head here that is not a `method="dialog"` form.
-
-        That form closes the dialog by submitting it, and the `close` event it
-        raises is a *queued* task — which is a fine way to hear about a closed
-        panel and a bad way to be told to save somebody's answers. A page that is
-        not visible defers those tasks, so the answers were written or not
-        depending on whether the window happened to be in front. This button
-        finishes the wizard in its own click handler, and closes it afterwards.
-      -->
-      <div class="settings-head">
-        <h2 id="wizard-title" tabindex="-1">Before you meet her</h2>
-        <button class="ghost" id="wizard-close" type="button" aria-label="Close">Close</button>
-      </div>
-      <p class="settings-note" id="wizard-note"></p>
-      <div class="wizard-body" id="wizard-body"></div>
-      <div class="wizard-foot">
-        <div class="wizard-pips" id="wizard-pips" aria-hidden="true"></div>
-        <span class="wizard-count" id="wizard-count" aria-live="polite"></span>
-        <div class="wizard-nav">
-          <button class="ghost" id="wizard-back" type="button">Back</button>
-          <button class="ghost" id="wizard-skip" type="button">Skip</button>
-          <button class="primary" id="wizard-next" type="button">Next</button>
-        </div>
       </div>
     </dialog>
 

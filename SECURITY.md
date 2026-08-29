@@ -16,7 +16,10 @@ your bot can message it. Her memory is your private life, so
 `TELEGRAM_ALLOWED_CHAT_IDS` is not a nicety. Until you set it she pins herself
 to the first chat that speaks to her and ignores everyone else.
 
-**Your LiveKit key and secret, if you use the call bridge.**
+**Whatever a command she ran had access to.** Since v2.0 her `run` tool is a
+real shell with your privileges, so a compromise of her context is a compromise
+of anything you can reach from a terminal. `hers-actions.log` is the record of
+what she actually did.
 
 **Her memory.** `data/memory.db` is a plain SQLite file holding everything she
 has been told. It is gitignored. It is also readable by anything else running as
@@ -43,7 +46,8 @@ counts as one without a certificate; another host does not.
   one. Check <https://ai.studio/spend> for usage you did not make.
 - **Telegram:** send `/revoke` to [@BotFather](https://t.me/BotFather), then
   `/token` for a fresh one.
-- **LiveKit:** rotate the key and secret in your project settings.
+- **Anything a command touched:** read `hers-actions.log` first — it is
+  append-only and holds every invocation, including the refused ones.
 
 A key committed to git is still in the history after you delete the line. Rotate
 it; do not only remove it.

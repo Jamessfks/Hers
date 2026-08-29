@@ -49,21 +49,12 @@ test('a keys file that does not exist yet says so rather than pointing at nothin
 test('the banner reports the bridges and the model', () => {
   const off = startupBanner(loadConfig(env({})), '/tmp/.env').join('\n');
   assert.match(off, /telegram {2}off/);
-  assert.match(off, /calls {5}off/);
 
   const on = startupBanner(
-    loadConfig(
-      env({
-        TELEGRAM_BOT_TOKEN: '1:x',
-        LIVEKIT_URL: 'wss://x.livekit.cloud',
-        LIVEKIT_API_KEY: 'k',
-        LIVEKIT_API_SECRET: 's',
-      }),
-    ),
+    loadConfig(env({ TELEGRAM_BOT_TOKEN: '1:x' })),
     '/tmp/.env',
   ).join('\n');
   assert.match(on, /telegram {2}on/);
-  assert.match(on, /calls {5}on/);
 });
 
 test('VERSION agrees with package.json', async () => {

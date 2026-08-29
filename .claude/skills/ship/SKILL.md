@@ -21,7 +21,7 @@ a tag without the user saying so in this session.
    committing.
 6. **The paid gate — the user's call, and their money.** Ask before running:
    - `npm run audit` (a few cents; `--quick` skips the multi-minute checks)
-   - `npm run audit:bridges` (needs `livekit-server --dev` and a human who has
+   - `npm run audit:bridges` (needs a bot token and a human who has
      messaged the Telegram bot)
    Report what each observed, not just PASS.
 7. **Commit.** Subject `Version $1`. Body: the one thing worth knowing before

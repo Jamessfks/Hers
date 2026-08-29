@@ -8,6 +8,8 @@ import { Brain } from './brain.ts';
 import { Conversation } from './conversation.ts';
 import type { Origin, Surface, SurfaceName } from './conversation.ts';
 import { loadConfig } from '../../server/config.ts';
+import { writeRhythm } from '../profile/profile.ts';
+import { DEFAULT_RHYTHM } from '../sleep/rhythm.ts';
 import type { LiveConnector, LiveSocket } from '../gemini/live.ts';
 import type { LiveServerMessage } from '@google/genai';
 
@@ -36,6 +38,11 @@ function recorder(name: SurfaceName) {
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'hers-conv-'));
+  // Every test in this file is about routing between surfaces for a companion
+  // who already exists. `rhythm.md` is what `isFirstRun` reads, so writing it
+  // is how the fixture says "setup already happened" — without it, the first
+  // `wake()` opens the interview instead of the session.
+  await writeRhythm(path.join(root, 'profile'), DEFAULT_RHYTHM);
   const brain = await Brain.open(
     loadConfig({
       GEMINI_API_KEY: 'test-key',

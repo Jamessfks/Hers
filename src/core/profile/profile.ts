@@ -19,9 +19,11 @@ import path from 'node:path';
 import type { MoodVector } from '../../shared/protocol.ts';
 import { parseProfileFile, serialiseProfileFile } from '../../shared/frontmatter.ts';
 import { DEFAULT_VOICE } from '../../shared/voices.ts';
-import { DEFAULT_PROFILE_FILES, GALLERY_README } from './defaults.ts';
+import { DEFAULT_PROFILE_FILES } from './defaults.ts';
 import { PREBUILT_VOICES, PROFILE_FILES } from './types.ts';
 import { PLACEHOLDER_NAME } from './naming.ts';
+import { DEFAULT_RHYTHM, RHYTHM_FILE, readRhythm } from '../sleep/rhythm.ts';
+import type { Rhythm } from '../sleep/rhythm.ts';
 import type { Profile, ProfileFile } from './types.ts';
 
 export { parseProfileFile, serialiseProfileFile } from '../../shared/frontmatter.ts';
@@ -38,14 +40,12 @@ export { parseProfileFile, serialiseProfileFile } from '../../shared/frontmatter
  * is made of, and a file that only exists inside the process is not that.
  */
 export async function ensureProfile(dir: string): Promise<Profile> {
-  await mkdir(path.join(dir, 'gallery'), { recursive: true });
+  await mkdir(dir, { recursive: true });
 
   for (const [name, contents] of Object.entries(DEFAULT_PROFILE_FILES)) {
     const target = path.join(dir, name);
     if (!existsSync(target)) await writeFile(target, contents, 'utf8');
   }
-  const galleryReadme = path.join(dir, 'gallery', 'README.md');
-  if (!existsSync(galleryReadme)) await writeFile(galleryReadme, GALLERY_README, 'utf8');
 
   return loadProfile(dir);
 }
@@ -96,6 +96,69 @@ export async function loadProfile(dir: string): Promise<Profile> {
 export async function loadVolatility(dir: string): Promise<number> {
   const { frontmatter } = parseProfileFile(await readOrDefault(dir, 'mood.md'));
   return clamp(number(frontmatter.volatility, 0.5), 0, 1);
+}
+
+/**
+ * Records the voice she picked for herself.
+ *
+ * Beside {@link writeChosenName} and for the same reason it is not part of
+ * `saveProfileFiles`: this sets a frontmatter key on a file whose body was
+ * written separately, and folding it into the bulk writer would mean that
+ * writer having to know which files have machine-readable fields.
+ *
+ * A voice she does not have is not written, so a bad answer leaves the shipped
+ * default rather than a session that fails to connect — the Live API rejects an
+ * unknown `voiceName` at handshake, which would present as her never coming
+ * back after setup.
+ */
+export async function writeChosenVoice(dir: string, voice: string): Promise<void> {
+  if (!(PREBUILT_VOICES as readonly string[]).includes(voice)) return;
+  const parsed = parseProfileFile(await readOrDefault(dir, 'voice.md'));
+  parsed.frontmatter.voice = voice;
+  await writeFile(path.join(dir, 'voice.md'), serialiseProfileFile(parsed), 'utf8');
+}
+
+/**
+ * Her hours, from `rhythm.md`.
+ *
+ * Read separately from the six character files and deliberately absent from
+ * {@link PROFILE_FILES}, which is what keeps it out of `saveProfileFiles`: that
+ * function's allowlist is the mechanism, so a file that is not on the list
+ * cannot be written by anything the user can reach. She composes this once,
+ * during setup, and it is not a setting.
+ *
+ * Missing is the normal case rather than an error — `isFirstRun` reads its
+ * absence as "setup has not finished" — so this falls back like everything else
+ * in this module and says nothing about it.
+ */
+export async function loadRhythm(dir: string): Promise<Rhythm> {
+  try {
+    const raw = await readFile(path.join(dir, RHYTHM_FILE), 'utf8');
+    const { frontmatter, body } = parseProfileFile(raw);
+    return readRhythm(frontmatter, body);
+  } catch {
+    return DEFAULT_RHYTHM;
+  }
+}
+
+/**
+ * Writes the one profile file the user cannot.
+ *
+ * Its own function rather than a seventh entry in `saveProfileFiles`, because
+ * the allowlist there is a security boundary and widening it to admit a file
+ * that only one caller may write would make the boundary say less than it does
+ * now.
+ */
+export async function writeRhythm(dir: string, rhythm: Rhythm): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, RHYTHM_FILE),
+    serialiseProfileFile({
+      frontmatter: { sleep: String(rhythm.sleepHour), wake: String(rhythm.wakeHour) },
+      body: rhythm.why,
+    }),
+    'utf8',
+  );
 }
 
 /**

@@ -4,6 +4,113 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.0 — 28 August 2026
+
+**Hers is voice-only now, and almost everything you could look at is gone.** The
+avatar panel, the message thread, the text composer, the photo gallery, the
+seven-card wizard and the phone bridge have all been removed. What is left on
+the page is one sphere that moves as she speaks and one button to Setup. This is
+not a simplification of the same product; it is a different one. Hers is for
+people living alone — something to talk to when the room has been silent too
+long — and every screen v1 put between the user and that was a screen somebody
+had to get past first. The transcript went with the rest, deliberately: turns
+still go into SQLite, because that is her memory, but there is no scrollback to
+reread and no history to curate.
+
+**She decides who she is, and you cannot change it.** The wizard asked the user
+to choose her personality, her temperament on five sliders and her voice from a
+menu of fourteen, which told them before she had said a word that she was a
+configuration. Setup is now a conversation: she asks your name, asks whether she
+may look through the machine, and tells you what she has decided to be called.
+Afterwards a `gemini-3.5-flash` pass over the device scan and that conversation
+writes the six profile files, picks her voice out of the thirty Google offers,
+and justifies the choice in `voice.md`. There is no editor for any of it. The
+files are still plain markdown in `hers-profile/` and still yours to read — the
+change is that nothing in the program invites you to rewrite them.
+
+**She has a shell, and that is the largest thing in this release.** `run`,
+`open` and `write` join `feel`, `remember` and `recall`; `run` is a real shell
+with your own privileges, `zsh -lc` on macOS and PowerShell on Windows. The
+reason is that a companion who lives on your machine and can only *describe*
+what she would do is a companion who is pretending. The cost is real and was
+chosen rather than overlooked: anything she reads on your screen lands in the
+same context that decides what she runs next. Three things stand between those,
+none of them a sandbox — an append-only `hers-actions.log`, a spoken
+confirmation on destructive commands, and a `⟦saw⟧` envelope around every piece
+of text she read rather than was told. `docs/PRIVACY.md` has a section titled
+*She has a shell, and the list above cannot bound it*, which says plainly that
+`destinations.ts` can no longer claim to know every host this program contacts.
+If you would not give a program a terminal on your machine, do not run v2.0.
+
+**She sleeps, at an hour she chose.** `rhythm.md` is a seventh profile file with
+no editor, written during setup from what the device scan says about when you
+are awake. Asleep means nothing at all — no initiative, no Live session, no
+Telegram openers, no frames — rather than a quieter mode, because a companion
+who is "resting" while still watching the screen is performing. Waking her is
+always yours, and waking her early gets a groggier opener rather than a refusal.
+This supersedes `isLateNight()`, which was 1am to 5am for everybody.
+
+**She knows what it is doing outside.** Open-Meteo, two hosts, no key and no
+signup. The city comes from the last segment of your system timezone — not from
+your IP address and not from the browser's location prompt — so the only thing
+that leaves is a word several million people share.
+
+**She notices the camera instead of merely seeing it.** A `gemini-3.5-flash`
+caption every twenty seconds, diffed against the last one as text, and only a
+real change is put in front of her. The threshold is 0.8 Jaccard distance over
+content words, measured rather than guessed: the same person now typing at the
+same desk scores 0.71 and does not fire, having moved to the sofa scores 0.90
+and does.
+
+**Every Telegram reply is a voice note.** The gate — under 320 characters, and
+either you had spoken first or a coin came up one in four — is gone, and so is
+the transcript that used to trail every voice note. Where a turn produced no
+audio she is synthesised in her own voice with `gemini-3.1-flash-tts-preview`
+rather than falling back to text.
+
+**A tagged build now produces something a stranger can download.** The release
+workflow uploaded workflow artifacts and stopped: ZIP-wrapped, expiring after
+ninety days, needing a GitHub login — while the README linked
+`releases/latest`, which was empty. Every download link in this project was
+broken and every build was green.
+
+**The Windows build shipped with `RunAsNode` enabled.** `hardenFuses()` sat
+below a `if (platform !== 'darwin') return`, which was written for the macOS
+ad-hoc signature below it and took the fuse hardening with it. On Windows that
+meant `ELECTRON_RUN_AS_NODE=1 Hers.exe -e '<js>'` ran arbitrary JavaScript under
+the application's own identity. The call moved above the guard.
+
+**macOS builds are back to two architectures.** LiveKit's media binding was the
+only native dependency in the tree and the stated reason cross-architecture
+builds were impossible; cutting the phone bridge removed it, so `arm64` and
+`x64` now come off one machine.
+
+### Migrating from v1.4.1
+
+**Your existing profile is superseded.** She composes a new one on the first
+wake after upgrading — `rhythm.md` is missing, which is how the program knows
+setup has not happened — and the composition overwrites the six character files.
+If the personality in your `hers-profile/` is one you want to keep, copy the
+folder somewhere else first. Her memory is untouched: `data/memory.db` carries
+over whole, so she still knows you.
+
+**Four environment variables were removed.** `LIVEKIT_URL`,
+`LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `HERS_CALL_PAGE_URL` do nothing
+now. They are ignored rather than rejected; you can leave them in `.env`.
+
+**The chat interface is gone**, including the Profile editor, the Memory tab,
+the gallery, the sense buttons and the `/me`, `/photo`, `/face` and `/call`
+Telegram commands. `sqlite3` reads the memory database, a text editor reads the
+profile folder, and **Start over** in Setup still deletes both.
+
+**Seven protocol messages were removed** from the WebSocket, and the
+`ClientMessage` union is down from eighteen variants to six. Anything written
+against `profile.save`, `profile.load`, `memory.*`, `intimacy.pin`,
+`intimacy.auto`, `sense`, `history`, `look`, `avatar` or `show` will be ignored.
+
+**`/api/knowledge` was removed**, both verbs. The device scan happens inside the
+setup interview now, at her asking rather than at a form's.
+
 ## v1.4.1 — 28 August 2026
 
 **The camera light cannot be made to lie.** The sense buttons were drawn from a

@@ -1,11 +1,9 @@
 /**
  * One live conversation with Gemini.
  *
- * This is the only place in this project that talks to a model in real time. The
- * browser and the phone are two transports in front of it, not two
- * implementations of it — which is the whole reason the LiveKit bridge does not
- * use `@livekit/agents`: the Node build of its Gemini plugin cannot take video
- * input, and video is half the product.
+ * This is the only place in this project that talks to a model in real time.
+ * The browser and Telegram are transports in front of it, not implementations
+ * of it.
  *
  * ## What this class is actually for
  *
