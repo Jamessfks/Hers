@@ -7,7 +7,7 @@ Node ≥22.18, no server build step — `node` runs the `.ts` files directly. On
 ## Commands
 
 ```bash
-npm run check           # typecheck + 515 tests, ~20s, no API key, no network. The gate.
+npm run check           # typecheck + 516 tests, ~20s, no API key, no network. The gate.
 npm run typecheck       # ~2s — two tsc projects: root and src/web
 npm test                # node --test over src/**/*.test.ts
 npm run dev             # rebuild site + restart server on save → http://127.0.0.1:5175

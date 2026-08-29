@@ -204,6 +204,13 @@ export class Companion {
   #toldPlace = '';
   #weatherTimer: ReturnType<typeof setInterval> | null = null;
   readonly #foreground: ForegroundSense;
+  /**
+   * Senses the caller asked for explicitly, which survive a wake.
+   *
+   * Telegram has no camera and the audits deliberately run her blind, and both
+   * would otherwise be overridden by the wake defaults a moment later.
+   */
+  readonly #pinnedSenses: Partial<Record<SenseName, boolean>>;
   #foregroundTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: CompanionOptions) {
@@ -241,7 +248,8 @@ export class Companion {
       now: this.#now,
     });
 
-    for (const [sense, on] of Object.entries(options.senses ?? {})) {
+    this.#pinnedSenses = options.senses ?? {};
+    for (const [sense, on] of Object.entries(this.#pinnedSenses)) {
       this.situation.setSense(sense as SenseName, Boolean(on));
     }
 
@@ -306,13 +314,21 @@ export class Companion {
     /*
      * The senses come up with her, every time, whatever the last session left.
      *
-     * The field default in `Situation` covers construction; this covers the
-     * rest — a `Companion` reused across a sleep, or one built by a caller that
-     * passed `senses` for its own reasons. Waking is the moment the product
+     * The field default in `Situation` covers construction; this covers a
+     * `Companion` reused across a sleep. Waking is the moment the product
      * promises she can hear, so it is the moment to say so rather than to hope.
+     *
+     * The caller's own `senses` are applied afterwards and win. Without that
+     * order this loop silently overrode them, which made the option a lie and
+     * broke the one audit check that asks her whether she can see with the
+     * camera deliberately off — she could, because this had just turned it back
+     * on underneath the test.
      */
     this.situation.setSense('hearing', true);
     this.situation.setSense('sight', true);
+    for (const [sense, on] of Object.entries(this.#pinnedSenses)) {
+      this.situation.setSense(sense as SenseName, Boolean(on));
+    }
 
     this.#memories = await this.#recall();
 

@@ -203,7 +203,7 @@ worth the twenty minutes if you are going to leave her running.
 ## Working on it
 
 ```bash
-npm run check      # typecheck + 515 tests, ~20s. No API key, no network. The gate.
+npm run check      # typecheck + 516 tests, ~20s. No API key, no network. The gate.
 npm run dev        # rebuild and restart on save
 npm run package    # a .dmg or an installer for this machine
 ```

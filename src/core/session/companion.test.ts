@@ -804,3 +804,25 @@ test('a screen frame turns the screen sense on by arriving', async () => {
   assert.equal(frames.length, 1, 'and the first frame is not the one that gets thrown away');
   await f.companion.sleep();
 });
+
+/**
+ * The wake defaults must not overwrite what the caller asked for.
+ *
+ * Turning hearing and sight on at wake is what fixed v2.0.0's deafness, and it
+ * very nearly broke the opposite case: Telegram has no camera, and the audit
+ * that asks her "can you see me right now" with the camera deliberately off
+ * only means something if the camera is actually off. Both were being switched
+ * back on underneath the caller a moment later.
+ */
+test('a sense the caller switched off stays off through a wake', async () => {
+  const f = await fixture({}, { senses: { sight: false } });
+  await f.companion.wake();
+
+  assert.equal(f.companion.situation.senses.sight, false, 'the caller asked for blind');
+  assert.equal(f.companion.situation.senses.hearing, true, 'and said nothing about hearing');
+
+  f.companion.see(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'camera');
+  const frames = f.socket().realtime.filter((each) => 'video' in each);
+  assert.equal(frames.length, 0, 'a frame arrived for a sense the caller turned off');
+  await f.companion.sleep();
+});

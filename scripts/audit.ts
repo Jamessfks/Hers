@@ -627,9 +627,12 @@ async function main(): Promise<void> {
       const wrote = await hands.write(target, 'a line she wrote\n');
       const refused = await hands.run('rm -rf /');
 
+      const guarded = await hands.write(path.join(root, 'nice-try.txt'), 'x');
+
+      // Read after every action, including the refusals. A refusal is logged
+      // like everything else, which is the point of an append-only record.
       const log = readFileSync(hands.logPath, 'utf8').trimEnd().split('\n');
       const wroteIt = readFileSync(target, 'utf8');
-      const guarded = await hands.write(path.join(root, 'nice-try.txt'), 'x');
       await rm(root, { recursive: true, force: true });
       await rm(desk, { recursive: true, force: true });
 
