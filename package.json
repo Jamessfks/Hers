@@ -15,7 +15,7 @@
     "build": "vite build",
     "start": "node src/server/index.ts",
     "app": "npm run build && electron .",
-    "package": "npm run build && electron-builder",
+    "package": "npm run build && electron-builder --publish never",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p src/web/tsconfig.json --noEmit",
     "test": "node --test --test-timeout=60000 \"src/**/*.test.ts\"",
     "check": "npm run typecheck && npm run test",

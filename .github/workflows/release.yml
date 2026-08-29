@@ -59,6 +59,12 @@ jobs:
       # place to find out a test was red.
       - run: npm run check
 
+      # `--publish never` is inside the script, and it is load-bearing.
+      # electron-builder defaults to `onTagOrDraft`, so on a tag push it tries
+      # to create the release itself, discovers there is no `GH_TOKEN`, and
+      # fails the build *after* the installer has been built — which is exactly
+      # how v1.4.0 and v1.4.1 died with a finished .dmg sitting on the runner.
+      # Publishing is the release step's job, below.
       - run: npm run package
         env:
           # Never go looking in a keychain for a certificate. There isn't one,
