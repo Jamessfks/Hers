@@ -15,8 +15,19 @@ import type { LiveServerMessage } from '@google/genai';
 
 class FakeSocket implements LiveSocket {
   readonly content: { turns?: unknown; turnComplete?: boolean }[] = [];
+  /**
+   * Recorded rather than discarded, since v2.0.1.
+   *
+   * This method used to be an empty body, and that is the whole reason a
+   * release shipped in which she could not hear: the only thing that proves
+   * microphone audio left the machine is that this was called, and nothing
+   * asked. It records now, and three tests below ask.
+   */
+  readonly realtime: Record<string, unknown>[] = [];
   emit: (message: LiveServerMessage) => void = () => undefined;
-  sendRealtimeInput(): void {}
+  sendRealtimeInput(params: Record<string, unknown>): void {
+    this.realtime.push(params);
+  }
   sendClientContent(params: { turns?: unknown; turnComplete?: boolean }): void {
     this.content.push(params);
   }
@@ -217,4 +228,60 @@ test('sleeping ends it, and the next word starts a fresh one', async () => {
   await f.conversation.wake();
   assert.equal(f.sockets.length, 2, 'a new conversation is a new session');
   assert.ok(f.conversation.live);
+});
+
+// ---------------------------------------------------------------------------
+// The senses, through the path production actually uses
+// ---------------------------------------------------------------------------
+
+/*
+ * These three exist because v2.0.0 shipped unable to hear.
+ *
+ * `Conversation.#ensure` built a `Companion` with no `senses`, `Situation`
+ * defaulted all three to false, and `Companion.hear` and `Companion.see` both
+ * return early on that flag — so every microphone frame and every camera frame
+ * was dropped, on every install, for the whole release.
+ *
+ * Nothing caught it. `companion.test.ts` constructs `Companion` directly and
+ * hands it `senses: { hearing: true }`, so the suite proved the class worked
+ * and never asked what the application did. The test above at "what the website
+ * switched on" proves `setSense` plumbs through and likewise never asks what
+ * the default is.
+ *
+ * So the rule these encode is narrower than "senses work": **the object
+ * production builds, waking the way production wakes it, can hear.** They go
+ * through `Conversation` for that reason and must not be rewritten to construct
+ * a `Companion`.
+ */
+
+test('a wake through the conversation leaves her able to hear', async () => {
+  const f = await fixture();
+  await f.conversation.wake();
+
+  f.conversation.hear(Buffer.from([1, 2, 3, 4]), 'web');
+
+  const audio = f.socket().realtime.filter((frame) => 'audio' in frame);
+  assert.equal(audio.length, 1, 'microphone audio never reached the session');
+});
+
+test('camera frames reach the session without anybody switching a sense on', async () => {
+  const f = await fixture();
+  await f.conversation.wake();
+
+  f.conversation.see(Buffer.from([0xff, 0xd8, 0xff]), 'camera', 'web');
+
+  const video = f.socket().realtime.filter((frame) => 'video' in frame);
+  assert.equal(video.length, 1, 'a camera frame never reached the session');
+});
+
+test('sleeping takes the senses down with her', async () => {
+  const f = await fixture();
+  await f.conversation.wake();
+  assert.equal(f.conversation.situation?.senses.hearing, true);
+
+  await f.conversation.sleep();
+
+  // Asleep means nothing at all, not a quieter mode. A microphone still open
+  // while she is asleep is the camera-light problem in another form.
+  assert.equal(f.conversation.situation, null, 'the companion goes with her');
 });

@@ -387,6 +387,9 @@ test('an unknown tool is answered rather than left hanging', async () => {
 test('a sense being switched off is told to her, quietly', async () => {
   const f = await fixture();
   await f.companion.wake();
+  // Off and on again: sight comes up with her since v2.0.1, so setting it true
+  // is no longer a change and no longer injects anything.
+  f.companion.setSense('sight', false);
   f.companion.setSense('sight', true);
 
   const injected = f.socket().content.at(-1);
@@ -399,6 +402,7 @@ test('frames are dropped when a sense is off, and rate-limited when it is on', a
   const f = await fixture({ HERS_CAMERA_FPS: '1' });
   await f.companion.wake();
 
+  f.companion.setSense('sight', false);
   f.companion.see(Buffer.from([1]), 'camera');
   assert.equal(f.socket().realtime.length, 0, 'a frame arrived for a sense that is off');
 

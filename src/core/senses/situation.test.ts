@@ -158,6 +158,9 @@ test('what she can see goes stale when the frames stop', () => {
 
 test('a frame through a sense that is off does not count', () => {
   const situation = new Situation(clock().now);
+  // Explicit since v2.0.1: sight is on by default now, so a test about a sense
+  // being off has to turn it off rather than assume it.
+  situation.setSense('sight', false);
   situation.noteFrame('camera');
   assert.equal(situation.snapshot().seeing.camera, false);
 
@@ -166,4 +169,16 @@ test('a frame through a sense that is off does not count', () => {
 
   situation.setSense('sight', false);
   assert.equal(situation.snapshot().seeing.camera, false, 'and it stops counting immediately');
+});
+
+/**
+ * The default, asserted rather than assumed.
+ *
+ * v2.0.0 shipped with all three false and nothing turning them on, so every
+ * microphone frame was dropped for a whole release. The default is now part of
+ * the contract and this is where it is written down.
+ */
+test('hearing and sight come up with her; the screen does not', () => {
+  const senses = new Situation(clock().now).snapshot().senses;
+  assert.deepEqual(senses, { hearing: true, sight: true, screen: false });
 });

@@ -28,6 +28,7 @@
  *     that cannot be bypassed by a client that has been modified or has a bug.
  */
 
+import { SENSE_NAMES } from '../../shared/protocol.ts';
 import type {
   ConnectionState,
   MoodReadout,
@@ -269,6 +270,17 @@ export class Companion {
       this.#sink.named(named);
     }
 
+    /*
+     * The senses come up with her, every time, whatever the last session left.
+     *
+     * The field default in `Situation` covers construction; this covers the
+     * rest — a `Companion` reused across a sleep, or one built by a caller that
+     * passed `senses` for its own reasons. Waking is the moment the product
+     * promises she can hear, so it is the moment to say so rather than to hope.
+     */
+    this.situation.setSense('hearing', true);
+    this.situation.setSense('sight', true);
+
     this.#memories = await this.#recall();
 
     /*
@@ -371,6 +383,10 @@ export class Companion {
     this.#waking = null;
     this.#initiative.stop();
     this.#watcher.reset();
+    // Asleep is nothing at all rather than a quieter mode. A sense left on
+    // while she is asleep is the camera-light problem in another form: the
+    // hardware would say she is watching and the product would say she is not.
+    for (const sense of SENSE_NAMES) this.situation.setSense(sense, false);
     const live = this.#live;
     this.#live = null;
     await live?.close();
@@ -744,6 +760,7 @@ export class Companion {
         ? { summary: this.#brain.memory.runningSummary() }
         : {}),
       senses: snapshot.senses,
+      seeing: snapshot.seeing,
       localTime: snapshot.localTime,
       channel: this.#channel,
       returning: this.#brain.hasHistory,

@@ -87,7 +87,26 @@ const FRAME_FRESH_MS = 15_000;
 
 export class Situation {
   readonly #now: () => number;
-  #senses: Record<SenseName, boolean> = { hearing: false, sight: false, screen: false };
+  /*
+   * Hearing and sight are on by default; the screen is not.
+   *
+   * All three were false until v2.0.1, from when they were user-facing
+   * switches and nothing could be assumed. The switches went in v2.0 and the
+   * default did not move with them, so the shipped application built a
+   * `Companion` that dropped every microphone frame and every camera frame —
+   * `hear()` and `see()` both return early on this map. She could not hear, for
+   * a whole release.
+   *
+   * The default is the right place for the fix rather than a `senses` argument
+   * threaded down from `Conversation`: an argument fixes one call site and
+   * leaves the same trap for the next constructor. What is true of this product
+   * is that hearing and sight come up with her, so that is what the field says.
+   *
+   * The screen stays off because it costs an operating-system picker to turn
+   * on, and because `setSense('screen', false)` is still how a stale "still for
+   * forty minutes" reading gets cleared when a share ends.
+   */
+  #senses: Record<SenseName, boolean> = { hearing: true, sight: true, screen: false };
   #presence: Presence = { idleSeconds: 0, tabVisible: true, at: 0 };
   #sawCameraAt = 0;
   #sawScreenAt = 0;

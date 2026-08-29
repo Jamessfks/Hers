@@ -40,6 +40,14 @@ export interface PromptInput {
   summary?: string;
   /** Which senses are switched on right now. */
   senses: { hearing: boolean; sight: boolean; screen: boolean };
+  /**
+   * Whether a picture has actually arrived, as opposed to a sense being on.
+   *
+   * The two are not the same and the difference is load-bearing — see
+   * {@link sensesSection}. Optional so that the prompt tests, which care about
+   * one section at a time, do not all have to carry it.
+   */
+  seeing?: { camera: boolean; screen: boolean };
   /** Formatted local time, e.g. "Friday 11:40pm". */
   localTime: string;
   /** How this conversation reaches her: at her desk, or over the phone. */
@@ -489,11 +497,30 @@ function intimacySection({ intimacy }: PromptInput): string {
   return lines.join('\n');
 }
 
-function sensesSection({ senses }: PromptInput): string {
+/*
+ * What she is told she can see is whether a picture arrived, not whether a
+ * sense is on.
+ *
+ * Those came apart in v2.0.1, when hearing and sight started coming up with
+ * her rather than being switched on by hand. A camera the operating system has
+ * refused leaves `senses.sight` true and no frame behind it, and this section
+ * would then tell her she can see them — which is the exact failure recorded
+ * below, where she answered "I see you, bright and clear, actually" to somebody
+ * whose camera was off.
+ *
+ * `seeing` is the honest half: the sense is on *and* a frame arrived inside the
+ * last fifteen seconds. Hearing has no equivalent — there is no "a sound
+ * arrived" signal — so it is still read from the switch, which is safe because
+ * nothing downstream lets her claim to have heard a specific thing she did not.
+ */
+function sensesSection({ senses, seeing }: PromptInput): string {
+  const canSee = seeing ? seeing.camera : senses.sight;
+  const canScreen = seeing ? seeing.screen : senses.screen;
+
   const on: string[] = [];
   if (senses.hearing) on.push('you can hear them');
-  if (senses.sight) on.push('you can see them through their camera');
-  if (senses.screen) on.push('you can see what is on their screen');
+  if (canSee) on.push('you can see them through their camera');
+  if (canScreen) on.push('you can see what is on their screen');
 
   /*
    * What is *off* is named as flatly as what is on.
@@ -512,8 +539,8 @@ function sensesSection({ senses }: PromptInput): string {
    */
   const off: string[] = [];
   if (!senses.hearing) off.push('you cannot hear them');
-  if (!senses.sight) off.push('you cannot see them');
-  if (!senses.screen) off.push('you cannot see their screen');
+  if (!canSee) off.push('you cannot see them');
+  if (!canScreen) off.push('you cannot see their screen');
 
   /*
    * The all-off case used to be the weaker of the two, which is the wrong way
