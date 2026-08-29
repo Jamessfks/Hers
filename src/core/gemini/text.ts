@@ -58,6 +58,19 @@ export function createGeminiDistiller(
           systemInstruction: system,
           temperature: 0.2,
           maxOutputTokens,
+          /*
+           * The third call in this file to need this, and the last one without it.
+           *
+           * The header above already explains that Gemini 3 spends part of any
+           * output allowance reasoning before it writes, and it was written for
+           * this function — yet the fix went to the caption and the transcriber
+           * and not to the distiller. Observed truncating a real consolidation
+           * on 2026-08-29: two facts written, "ran out of output budget; the
+           * last fact was dropped" on the third. Extracting facts from a
+           * transcript is mechanical, so thinking here can only take room the
+           * facts need.
+           */
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
           abortSignal: AbortSignal.timeout(DISTIL_TIMEOUT_MS),
         },
       });
