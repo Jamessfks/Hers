@@ -93,7 +93,10 @@
    *
    * The rule that set the old `--ink-faint` has not changed: it is the dimmest
    * ink that still clears 4.5:1 on the lightest surface it ever sits on, which
-   * here is `--raised` at 19%. 63% measures 4.9:1 there and 6.9:1 on the ground.
+   * here is `--raised` at 25%. 68% measures 5.63:1 there, 6.35:1 on the ground
+   * and 6.77:1 on `--sunken`. Re-measured when the ground became violet rather
+   * than carried over — a ratio quoted from a palette that no longer exists is
+   * the kind of comment this sheet is otherwise careful not to leave behind.
    */
   --ink: oklch(97% 0.014 278);
   --ink-soft: oklch(80% 0.024 278);
@@ -106,9 +109,10 @@
    * On paper the accent had to stay dark enough for white to sit on it, so it
    * lived at 49–53%. On night it has to be bright enough to look emitted rather
    * than painted, so it lives at 62–68% — and the text that sits on it is the
-   * ground rather than white, which measures 6.1:1 at the dimmest end of the
-   * range and gets better from there. Chroma is up from 0.13 to 0.16 because a
-   * desaturated glow reads as fog.
+   * ground rather than white, which measures 4.84:1 at its worst point in her
+   * range, the rose end at the flat end of her energy, and gets better from
+   * there. Chroma is up from 0.13 to 0.16 because a desaturated glow reads as
+   * fog.
    */
   --mood-hue: 268;
   --mood-lift: 0.55;
@@ -141,6 +145,19 @@
    * twelve it had.
    */
   --glow: oklch(90% 0.04 50);
+
+  /*
+   * The colour of the light *on* her, as its own token so sleep can change it.
+   *
+   * Awake it is nearly all `--glow`: a warm specular on a coloured sphere, the
+   * composition the mark is built on. Asleep it goes back to her own hue,
+   * because a warm highlight is a lit highlight and the whole claim of that
+   * state is that nothing is lit. Dimming the sphere alone left a warm spot
+   * sitting on a dark ball, which reads as an object catching light from
+   * somewhere rather than one that is off.
+   */
+  --spec: color-mix(in oklab, var(--glow) 84%, var(--accent));
+  --spec-mid: color-mix(in oklab, var(--glow) 82%, var(--accent));
 
   /*
    * The backdrop is the sunken surface with the floor taken out.
@@ -209,7 +226,7 @@ strong, b { font-weight: 500; }
  * grey into all four. It measures 3.82:1 on `--sunken` and 4.36:1 on `--raised`,
  * fails at rest and fails focused, and it is the thirteenth painted colour
  * arriving exactly the way `#0000ee` used to. `--ink-faint` is the ink chosen
- * for the smallest text in the sheet and measures 4.80:1 and 5.47:1 on those
+ * for the smallest text in the sheet and measures 6.77:1 and 5.63:1 on those
  * same two surfaces. One rule, every field, no exceptions to forget.
  */
 input::placeholder,
@@ -225,11 +242,11 @@ textarea::placeholder { color: var(--ink-faint); opacity: 1; }
  * accents appears anywhere until the pointer is on something.
  *
  * Her colour arrives on the rule and not in the word. The accent as link text
- * measures 4.40:1 at its worst hue, which is hue 194 at the flat end of her
- * mood, and these are 13px links — 2.7% of the mood space put them under the
- * floor. A 1px rule is not text and answers to 3:1 instead of 4.5:1, where the
- * same colour measures 4.40:1 against `--raised` with room to spare. So the
- * word stays `--ink` at 13.87:1 and the underline goes from one ink pixel to
+ * measures 4.11:1 at its worst hue, which is the rose end of her range at the
+ * flat end of her energy, and these are 13px links — under the 4.5:1 floor for
+ * text that size. A 1px rule is not text and answers to 3:1 instead, where that
+ * same worst case has room to spare. So the word stays `--ink` at 14.90:1 on
+ * `--raised` and the underline goes from one ink pixel to
  * two of hers, which is a larger change than a hue shift on eight characters
  * was. Rejected: mixing the accent toward `--ink` for a darker link colour —
  * that resolves to a thirteenth painted colour to fix a hover state.
@@ -343,7 +360,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 /* One button in a corner needs no breakpoint. What the narrow case does need is
    a smaller sphere, and that is `min(64vh, 420px)` doing its job. */
 
-/* Identified by its label, not by its edge: `--ink-soft` on `--raised` is 8.05:1
+/* Identified by its label, not by its edge: `--ink-soft` on `--raised` is 8.69:1
    and a word inside a pill is what tells you it is a button, so 1.4.11 has no
    claim on the hairline round it. */
 .ghost {
@@ -485,7 +502,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   background:
     radial-gradient(
       circle at 34% 26%,
-      color-mix(in oklab, var(--glow) 84%, var(--accent)) 0%,
+      var(--spec) 0%,
       var(--accent) 42%,
       color-mix(in oklab, var(--accent) 72%, var(--sunken)) 78%
     ),
@@ -526,7 +543,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   background: linear-gradient(
     90deg,
     transparent 0%,
-    color-mix(in oklab, var(--glow) 82%, var(--accent)) 50%,
+    var(--spec-mid) 50%,
     transparent 100%
   );
 }
@@ -651,15 +668,26 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
 }
 
 /*
- * Asleep is an unlit sphere in the room, not a grey one.
+ * Asleep takes the light away and nothing else.
  *
- * The first version desaturated to 0.28, which on the old near-black ground
- * read as "off" and on the violet one reads as mud — a colour belonging to
- * neither her nor the room. Keeping half her chroma and taking the light away
- * instead leaves something the same family as the wall behind it, which is what
- * an unlit object in that room would actually look like.
+ * Two earlier versions desaturated as well, and both were wrong for the same
+ * reason. `saturate(0.28)` read as "off" against near-black and as mud against
+ * violet. `saturate(0.55)` was worse in a way that took a screenshot to see:
+ * desaturation moves her violet body a long way and the near-neutral warm
+ * highlight hardly at all, so the specular came to dominate and the whole
+ * sphere went brown — a lit-looking highlight on an object that is meant to be
+ * unlit.
+ *
+ * Brightness alone is what an unlit object actually does. Her hue is untouched,
+ * the highlight dims in proportion with the body, and what is left is the same
+ * family as the wall behind it.
  */
-.app[data-state='asleep'] .orb-core { filter: saturate(0.55) brightness(0.42); }
+.app[data-state='asleep'],
+.app[data-state='error'] {
+  --spec: color-mix(in oklab, var(--glow) 18%, var(--accent));
+  --spec-mid: color-mix(in oklab, var(--glow) 14%, var(--accent));
+}
+.app[data-state='asleep'] .orb-core { filter: brightness(0.34); }
 .app[data-state='asleep'] .orb-bloom { opacity: 0.28; }
 .app[data-state='asleep'] .orb-horizon { opacity: 0.12; }
 /* The ring goes with her. A saturated ring around a desaturated ball is the one
@@ -809,7 +837,7 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
  *
  * `:focus-visible` rather than `:focus` so a pointer press does not leave a
  * ring behind, which is the behaviour the UA was already giving and the only
- * part of it worth keeping. Accent on `--raised` is 4.40:1 at its worst over
+ * part of it worth keeping. Accent on `--raised` is 4.11:1 at its worst over
  * the whole mood sweep, against the 3:1 that 1.4.11 asks of a focus indicator.
  */
 .ghost:focus-visible,
