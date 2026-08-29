@@ -127,7 +127,19 @@ export class Conversation {
     this.#bedtime = new Bedtime({
       rhythm: () => options.brain.rhythm,
       isAwake: () => this.awake,
-      onBedtime: () => void this.sleep(),
+      /*
+       * Caught, because this one runs on a timer with nobody waiting on it.
+       * `sleep()` awaits the socket closing, and a rejection there would be an
+       * unhandled one — from a callback whose stack says nothing about
+       * bedtimes, on a path that has already cleared the timers and not yet
+       * told the browser, which is a companion left half asleep with the
+       * microphone still open.
+       */
+      onBedtime: () => {
+        this.sleep().catch((error: unknown) => {
+          console.error('[bedtime] she would not go to sleep:', error);
+        });
+      },
       ...(options.setTimer ? { setTimer: options.setTimer } : {}),
       ...(options.clearTimer ? { clearTimer: options.clearTimer } : {}),
     });
@@ -264,9 +276,6 @@ export class Conversation {
     this.#companion?.look(bytes, mimeType);
   }
 
-  setSense(sense: SenseName, on: boolean): void {
-    this.#companion?.setSense(sense, on);
-  }
 
   notePresence(idleSeconds: number, tabVisible: boolean): void {
     this.#companion?.notePresence(idleSeconds, tabVisible);

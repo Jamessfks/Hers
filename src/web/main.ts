@@ -202,13 +202,15 @@ async function toggleWake(): Promise<void> {
   // hear, and it must not stop her waking.
   void vision.startCamera().catch(() => undefined);
   /*
-   * The screen, in the application only, and only when it is switched on.
+   * The screen, in the application only.
    *
-   * Off by default because it is not free: a screen frame every two seconds is
-   * the largest recurring cost of running her, and audio-plus-video sessions
-   * carry a two-minute cap that `contextWindowCompression` is what removes. So
-   * it is a decision somebody makes once — `HERS_SCREEN=1` — rather than a bill
-   * that arrives because a default changed under them.
+   * On by default there, at the half a frame a second `HERS_SCREEN_FPS`
+   * defaults to, and it is the largest recurring cost of running her — a frame
+   * every two seconds for every waking hour, on sessions whose two-minute
+   * audio-plus-video cap only `contextWindowCompression` removes.
+   * `HERS_SCREEN_FPS=0` turns it off, and that is the only switch: an earlier
+   * version of this comment named a `HERS_SCREEN` that never existed in the
+   * code, so the one instruction it gave a reader was one that did nothing.
    */
   if (screenWanted) void vision.startScreen().catch(() => undefined);
   connection.send({ t: 'wake' });

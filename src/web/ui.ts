@@ -46,6 +46,24 @@ const RESET_PHRASE = 'start over';
  */
 const UNNAMED_TITLE = 'Hers';
 
+/**
+ * What the line under the sphere says, per state.
+ *
+ * Empty where the sphere is already saying it better. Thinking and speaking
+ * both leave it blank on purpose: a word reading "thinking" under a sphere that
+ * is visibly thinking is the same fact twice, and the point of the animation is
+ * that it does not need a caption.
+ */
+const HINTS: Record<string, string> = {
+  asleep: 'Touch her to wake her.',
+  connecting: 'Waking her.',
+  reconnecting: 'Finding her again.',
+  listening: 'Say something. Touch her to let her rest.',
+  thinking: '',
+  speaking: '',
+  error: 'Something went wrong. Touch her to try again.',
+};
+
 export class Ui {
   readonly #handlers: UiHandlers;
   readonly #app = need('app');
@@ -189,6 +207,16 @@ export class Ui {
   setState(state: string): void {
     this.#app.dataset.state = state;
     this.#state.textContent = state;
+    /*
+     * The line under her has to agree with what she is visibly doing.
+     *
+     * It was written into the HTML once and never touched again, so it read
+     * "Touch her to wake her." while she was listening, thinking and talking —
+     * telling the user to do the one thing that would in fact stop her. After
+     * v2.0.2 it is one of three pieces of text on the page, which makes it the
+     * only sentence available to contradict the sphere.
+     */
+    this.#hint.textContent = HINTS[state] ?? '';
     this.#awake = state !== 'asleep' && state !== 'error';
     this.#orb.dataset.awake = String(this.#awake);
     this.#orb.setAttribute('aria-label', this.#awake ? 'Let her rest' : 'Wake her');

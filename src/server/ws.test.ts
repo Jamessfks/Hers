@@ -149,10 +149,6 @@ test('the first thing she says is what the UI needs to draw itself', async () =>
     // otherwise the header reads "Anna" for a companion who has not chosen it.
     assert.equal(ready.t === 'ready' && ready.named, false);
     assert.ok(ready.t === 'ready' && ready.cameraFps > 0);
-    assert.deepEqual(
-      ready.t === 'ready' ? Object.keys(ready.senses).sort() : [],
-      ['hearing', 'screen', 'sight'],
-    );
     assert.ok(messages.some((message) => message.t === 'mood'));
   } finally {
     await app.close();

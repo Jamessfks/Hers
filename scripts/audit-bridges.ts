@@ -129,7 +129,7 @@ async function main(): Promise<void> {
           'Aoede',
           // With a direction, because the flat path is the one that was already
           // known to work and the styled one is what criterion 6 rests on.
-          { direction: 'You have very little energy. Slower, lower, the ends falling away.' },
+          { direction: 'Read the following slowly and low, letting the ends of sentences fall away.' },
         );
         const spokenOgg = spoken ? encodeOggOpus(spoken) : null;
         if (!spokenOgg) {

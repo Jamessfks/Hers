@@ -194,13 +194,24 @@ export class Companion {
   #openerInFlight = false;
   #speaking = false;
   /**
-   * When the gap between their turn ending and her first sound began.
+   * She owes them a turn and has not begun it: their words are in, hers are not.
    *
-   * Zero when she is not in it. Kept as a timestamp rather than a flag because
-   * a tool call re-enters the same state and the reason a person is waiting is
-   * worth being able to tell apart later.
+   * Read by `isBusy`, which is the whole reason it exists as its own field. The
+   * first version of this re-used `#speaking`, clearing it to re-enter the
+   * thinking state on a tool call — and `#speaking` is what tells `Initiative`
+   * the floor is taken, so for as long as a tool was outstanding she looked
+   * idle and an opener could be pushed into an unfinished turn.
    */
-  #thinkingSince = 0;
+  #thinking = false;
+  /**
+   * Whether `speaking` has been announced for the turn in progress.
+   *
+   * Separate from `#speaking` because they answer different questions. The
+   * first version guarded the announcement on `#speaking`, which `#onHerText`
+   * also sets — so when transcription arrived before the first audio chunk, the
+   * flag was already true and the state was never emitted at all.
+   */
+  #announcedSpeaking = false;
   #userTalking = false;
   #lastNotifiedMood: MoodReadout | null = null;
   #memories: string[] = [];
@@ -251,7 +262,7 @@ export class Companion {
         options.caption ??
         ((frame) =>
           captionFrame(this.#brain.config.geminiApiKey, frame)),
-      isBusy: () => this.#speaking || this.#userTalking || !this.#live?.isLive,
+      isBusy: () => this.#busy || !this.#live?.isLive,
       onChange: (note) => this.#live?.prompt(note),
       now: this.#now,
     });
@@ -264,7 +275,7 @@ export class Companion {
     this.#initiative = new Initiative({
       maxSilenceMs: this.#brain.config.maxSilenceMs,
       minSilenceMs: this.#brain.config.minSilenceMs,
-      isBusy: () => this.#speaking || this.#userTalking,
+      isBusy: () => this.#busy,
       observe: () => this.situation.snapshot(),
       onOpen: (reason) => this.#open(reason),
       now: this.#now,
@@ -634,7 +645,7 @@ export class Companion {
      * second. In that window the sphere used to sit at rest, which is the
      * shape of a companion who has not heard you.
      */
-    this.#thinkingSince = this.#now();
+    this.#thinking = true;
     if (!this.#closed) this.#sink.state('thinking');
     this.situation.noteUserSpoke();
     this.#brain.memory.record('user', text);
@@ -646,24 +657,48 @@ export class Companion {
   #onHerText(text: string, final: boolean): void {
     this.#sink.transcript('her', text, final);
     if (!final) {
-      this.#speaking = true;
+      // Words are evidence she has started, exactly as audio is. Which of the
+      // two arrives first is not fixed, so both go through the same door.
+      this.#beginSpeaking();
       return;
     }
     this.situation.noteHerSpoke();
     this.#brain.memory.record('her', text);
   }
 
-  /** Her first sound of this turn: thinking is over, whatever it was doing. */
+  /**
+   * Whether she owes them anything: talking, being talked to, or working.
+   *
+   * One place, because three call sites reading three fields is how the tool
+   * case came to be missed.
+   */
+  get busy(): boolean {
+    return this.#busy;
+  }
+
+  get #busy(): boolean {
+    return this.#speaking || this.#userTalking || this.#thinking;
+  }
+
+  /**
+   * She has begun her turn. Announced once, from whichever evidence lands first.
+   *
+   * Audio and transcription are both proof that she has started and the Live
+   * API orders them either way round, so both call this and the flag decides
+   * which one was first.
+   */
   #beginSpeaking(): void {
-    if (this.#speaking || this.#closed) return;
     this.#speaking = true;
-    this.#thinkingSince = 0;
+    this.#thinking = false;
+    if (this.#announcedSpeaking || this.#closed) return;
+    this.#announcedSpeaking = true;
     this.#sink.state('speaking');
   }
 
   #onTurnComplete(): void {
     this.#speaking = false;
-    this.#thinkingSince = 0;
+    this.#thinking = false;
+    this.#announcedSpeaking = false;
     const wasOpener = this.#openerInFlight;
     this.#openerInFlight = false;
     this.#initiative.noteHerFinished(wasOpener);
@@ -678,7 +713,8 @@ export class Companion {
 
   #onInterrupted(): void {
     this.#speaking = false;
-    this.#thinkingSince = 0;
+    this.#thinking = false;
+    this.#announcedSpeaking = false;
     this.#sink.interrupted();
     this.#emitMood(false, () => this.#brain.mood.feel('interrupted'));
   }
@@ -728,8 +764,9 @@ export class Companion {
      * she does.
      */
     if (!this.#closed) {
-      this.#speaking = false;
-      this.#thinkingSince = this.#thinkingSince || this.#now();
+      // `#speaking` is deliberately not cleared: it is what tells `Initiative`
+      // the floor is taken, and a turn waiting on a tool is still her turn.
+      this.#thinking = true;
       this.#sink.state('thinking');
     }
     switch (name) {
@@ -895,11 +932,17 @@ export class Companion {
   /**
    * Re-asks Open-Meteo once an hour, and only speaks when the answer moved.
    *
-   * The hour is `WEATHER_TTL_MS`, which `PlaceSense` already enforces — this
-   * timer is what makes anything ask. Rendering the line and comparing it,
-   * rather than comparing the numbers, means a degree of drift that does not
-   * change what she would say costs nothing, which is the same discipline
-   * `MOOD_NOTIFY_DELTA` applies to her mood.
+   * Ticking at half the hour rather than on it, because the two clocks beat
+   * against each other otherwise. `PlaceSense.refresh()` returns the cached
+   * answer while `now - at < WEATHER_TTL_MS`, and `at` is set a moment *after*
+   * the wake that started the timer — so a tick spaced exactly `WEATHER_TTL_MS`
+   * apart always lands a second or two early, returns the cache, and pushes the
+   * real refresh out to two hours. Half the interval means one of every two
+   * ticks is past the TTL, and the sense still decides when to actually go out.
+   *
+   * Rendering the line and comparing it, rather than comparing the numbers,
+   * means a degree of drift that does not change what she would say costs
+   * nothing — the same discipline `MOOD_NOTIFY_DELTA` applies to her mood.
    */
   #watchWeather(): void {
     if (this.#weatherTimer) return;
@@ -907,7 +950,7 @@ export class Companion {
       void this.#place.refresh().then((place) => {
         if (place.weather) this.#tellPlace(place);
       });
-    }, WEATHER_TTL_MS);
+    }, Math.floor(WEATHER_TTL_MS / 2));
     this.#weatherTimer.unref?.();
   }
 

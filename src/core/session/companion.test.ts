@@ -889,3 +889,57 @@ test('the turn ending puts her back to listening', async () => {
   assert.equal(f.states.at(-1), 'listening');
   await f.companion.sleep();
 });
+
+/*
+ * The other half of the gap, and the half that did not work.
+ *
+ * `#beginSpeaking` guarded on `#speaking`, which `#onHerText` also sets — so on
+ * the ordering where transcription leads the audio, the flag was already true
+ * by the time the first chunk arrived and `speaking` was never emitted at all.
+ * `live.ts` documents that ordering as one that happens.
+ */
+test('she reports speaking even when the transcript arrives before the audio', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+  const from = f.states.length;
+
+  // Transcription first, with no audio in the message at all.
+  f.socket().emit({
+    serverContent: { outputTranscription: { text: 'I am here.' } },
+  } as unknown as LiveServerMessage);
+  await settled();
+  f.socket().emit({
+    serverContent: {
+      modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm' } }] },
+    },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.ok(f.states.slice(from).includes('speaking'), 'her voice never announced itself');
+  await f.companion.sleep();
+});
+
+/*
+ * A tool call must not unblock the thing that speaks first.
+ *
+ * Re-entering `thinking` used to clear `#speaking`, which is the same field
+ * `Initiative.isBusy` reads — so for as long as a tool was outstanding she
+ * looked idle, and an opener could be pushed into a turn the model had not
+ * finished.
+ */
+test('a tool call in flight still counts as busy', async () => {
+  const f = await fixture();
+  await f.companion.wake();
+
+  f.socket().emit({
+    serverContent: { modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm' } }] } },
+  } as unknown as LiveServerMessage);
+  await settled();
+  f.socket().emit({
+    toolCall: { functionCalls: [{ id: 'a', name: 'recall', args: { about: 'x' } }] },
+  } as unknown as LiveServerMessage);
+  await settled();
+
+  assert.equal(f.companion.busy, true, 'an unfinished turn must not look idle');
+  await f.companion.sleep();
+});

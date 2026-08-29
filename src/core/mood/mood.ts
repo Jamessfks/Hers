@@ -324,6 +324,40 @@ export function describe(mood: MoodVector): string {
  * mood, so be cheerful" produces a performance of cheerfulness; "you are in a
  * good mood" produces a good mood.
  */
+/**
+ * How she sounds, and nothing about what she says.
+ *
+ * {@link moodBriefing} is a system instruction for the Live model: it is
+ * written in the second person, it shapes word choice as well as delivery, and
+ * it ends by telling her never to name the mood. All of that is right there and
+ * wrong in a text-to-speech prompt, where the words are already fixed — the
+ * transcript of something she has said — and the only thing left to decide is
+ * how they are read. Handing the briefing to the renderer put 589 characters of
+ * "Shorter sentences." and "Never name it" above a line it was asked to read
+ * aloud, which is an instruction to change the text and a paragraph that can
+ * leak into it.
+ *
+ * So the fallback voice gets its own line: one sentence, third person, about
+ * delivery only.
+ */
+export function deliveryLine(readout: MoodReadout): string {
+  const { current } = readout;
+  const notes: string[] = [];
+
+  if (current.energy < -0.4) notes.push('slowly and low, letting the ends of sentences fall away');
+  else if (current.energy > 0.5) notes.push('quickly, a little ahead of herself');
+
+  if (current.valence < -0.45 && current.warmth <= 0.4) notes.push('with an edge she is not smoothing out');
+  else if (current.warmth > 0.6) notes.push('warmly, and it is audible before the words are');
+
+  if (current.interest < -0.4) notes.push('flatly, putting nothing into it');
+
+  // No notes is not a failure: an even mood is read evenly, and inventing a
+  // direction for it would make the fallback sound like a performance.
+  if (notes.length === 0) return 'Read the following in an even, unhurried voice.';
+  return `Read the following ${notes.join(', ')}.`;
+}
+
 export function moodBriefing(readout: MoodReadout): string {
   const { current, baseline } = readout;
   const lines = [`Right now you feel ${readout.label}.`];

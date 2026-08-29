@@ -169,11 +169,21 @@ test('the origin is cleared on the turn boundary, not on each sentence', async (
   );
 });
 
-test('what the website switched on is what she has on Telegram too', async () => {
+/*
+ * The screen is switched on by a frame arriving, not by anybody asking.
+ *
+ * This used to press `Conversation.setSense`, which was the last caller it had
+ * — the browser has had no sense switches since v2.0 and the screen share
+ * announces itself in `Companion.see`. Testing through the frame is testing the
+ * path that exists.
+ */
+test('one situation and one of her, whichever surface shows her a screen', async () => {
   const f = await fixture();
   await f.conversation.wake();
+  assert.equal(f.conversation.situation?.senses.screen, false);
 
-  f.conversation.setSense('screen', true);
+  f.conversation.see(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'screen', 'web');
+
   assert.equal(f.conversation.situation?.senses.screen, true, 'one situation, one of her');
 });
 

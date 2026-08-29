@@ -228,11 +228,6 @@ export class WebBridge {
       name: brain.profile.identity.name,
       named: hasChosenName(brain.profile.identity),
       voice: brain.profile.voice.voice,
-      senses: this.#options.conversation.situation?.senses ?? {
-        hearing: false,
-        sight: false,
-        screen: false,
-      },
       configured: Boolean(brain.config.geminiApiKey),
       keyHint: maskKey(brain.config.geminiApiKey),
       telegram: Boolean(brain.config.telegram),

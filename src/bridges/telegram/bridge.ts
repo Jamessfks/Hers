@@ -28,7 +28,7 @@
  */
 
 import { encodeOggOpus, pcmSeconds } from '../../core/speech/ogg-opus.ts';
-import { moodBriefing } from '../../core/mood/mood.ts';
+import { deliveryLine } from '../../core/mood/mood.ts';
 import { synthesise } from '../../core/speech/synthesise.ts';
 import { transcribeMedia } from '../../core/gemini/text.ts';
 import type { Conversation, Origin } from '../../core/session/conversation.ts';
@@ -382,10 +382,11 @@ export class TelegramBridge {
   async #speak(text: string): Promise<{ ogg: Buffer; seconds: number } | null> {
     const key = this.#brain.config.geminiApiKey;
     if (!key || !text.trim()) return null;
-    // The same briefing the live session was holding, so the fallback carries
-    // the mood she was actually in rather than a flat reading of her words.
+    // The delivery line rather than the whole briefing: the words are already
+    // fixed here, so the only thing left to hand the renderer is how to read
+    // them. See `deliveryLine`.
     const pcm = await synthesise(key, text, this.#brain.profile.voice.voice, {
-      direction: moodBriefing(this.#brain.mood.read()),
+      direction: deliveryLine(this.#brain.mood.read()),
     });
     if (!pcm) return null;
     const ogg = encodeOggOpus(pcm);

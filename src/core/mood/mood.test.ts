@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { Mood, describe as describeMood, moodBriefing } from './mood.ts';
+import { Mood, deliveryLine, describe as describeMood, moodBriefing } from './mood.ts';
 import type { MoodVector } from '../../shared/protocol.ts';
 
 const ANCHOR: MoodVector = { valence: 0.25, energy: 0.1, warmth: 0.55, interest: 0.4 };
@@ -214,4 +214,37 @@ test('the briefing never tells her to announce the mood it describes', () => {
   // The risk the delivery lines introduce is that she narrates delivery. The
   // briefing must not contain a caption she could copy.
   assert.doesNotMatch(briefing, /\*/);
+});
+
+/**
+ * The text-to-speech fallback gets delivery and nothing else.
+ *
+ * `moodBriefing` is a system instruction for the Live model: second person,
+ * shapes word choice as well as sound, and ends by telling her never to name
+ * the mood. Handing that to a renderer whose words are already fixed is an
+ * instruction to change the text and a paragraph that can leak into it, so the
+ * fallback has its own line.
+ */
+test('the delivery line says how to read and never what to say', () => {
+  const line = deliveryLine({
+    label: 'wrung out',
+    current: { valence: -0.6, energy: -0.7, warmth: 0.1, interest: -0.5 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+
+  assert.match(line, /^Read the following /);
+  // The three things the briefing carries that a renderer must never be handed.
+  assert.doesNotMatch(line, /Shorter sentences/);
+  assert.doesNotMatch(line, /Never name it/);
+  assert.doesNotMatch(line, /\byou\b/i, 'second person is for her, not for the renderer');
+  assert.ok(line.length < 200, `a style prefix, not an essay: ${String(line.length)} chars`);
+});
+
+test('an even mood is read evenly rather than performed', () => {
+  const line = deliveryLine({
+    label: 'even',
+    current: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+    baseline: { valence: 0.2, energy: 0.1, warmth: 0.5, interest: 0.4 },
+  });
+  assert.match(line, /even, unhurried/);
 });

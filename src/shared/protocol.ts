@@ -185,7 +185,6 @@ export type ServerMessage =
        */
       named: boolean;
       voice: string;
-      senses: Record<SenseName, boolean>;
       /** False when the server has no Gemini key; the UI shows setup instead. */
       configured: boolean;
       /**
