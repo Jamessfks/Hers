@@ -4,6 +4,58 @@ Versions follow [semver](https://semver.org). Anything that changes a name you
 have already typed into a config file — an environment variable, a folder, a
 model — is a breaking change and gets called out here with what to do about it.
 
+## v2.0.7 — 29 August 2026
+
+**She was cutting in mid-sentence, and only one of the two knobs for it works on
+this model.** `endOfSpeechSensitivity` was HIGH — documented as "ends speech more
+often" — so a breath in the middle of a sentence read as the end of a turn and
+she came in over the top of somebody who was still going. It is LOW now. Start
+sensitivity stays HIGH, because that is the setting that makes her stop when
+somebody talks over *her*, and being easy to interrupt is the whole of good
+manners in a voice interface.
+
+`silenceDurationMs` is the other obvious lever and it does nothing here:
+googleapis/js-genai#1467 reproduces a 5,000ms threshold being ignored on a
+two-second gap on `gemini-3.1-flash-live-preview`, while working correctly on
+2.5. Open, unacknowledged upstream, no workaround. It is raised to a second
+anyway — it is correct for anyone selecting 2.5 through `HERS_MODEL`, and it is
+already the number we want the day the server honours it — with a comment saying
+which of the two is actually doing the work, so that nobody spends an afternoon
+tuning the one that cannot help.
+
+**Her name was being lower-cased by the stylesheet.** `text-transform: lowercase`
+on the one word in the interface she chose herself.
+
+**She narrated the room, and the instruction telling her to do it was ours.** The
+opening cue read "you can see them, open with one specific thing you can
+actually see right now", which is not a hint but an instruction to describe.
+Seeing somebody is why she looked up; it is not automatically what she talks
+about. The senses section now says the rest of it: having a sense is not a reason
+to use it out loud, and a companion who reports the room is a security camera
+with a voice.
+
+There is deliberately no quota. A rule saying "mention it fifteen per cent of the
+time" is a rule she has to count against, and counted behaviour reads as counted
+— so what is written is the thing that is actually true, which is that most of
+what she can see is not worth a sentence and she can tell which is.
+
+**And she leaned in far too hard for somebody you had just met.** The follow-up
+work in v2.0.6 fixed a companion who asked nothing and overshot into one who
+asked eagerly and early, which from a stranger is not attention but pressure. Her
+posture now moves on the same number her disclosure does, and it moves the
+opposite way to the obvious one: early she is the lighter of the two, letting
+them lead and leaving the silences alone, and only later does she push — because
+by then it is not intensity, it is how two people who know each other talk.
+
+Measured on a fresh memory across three turns on day one: one question, and it
+was "what did she say back?" at the moment a sister was mentioned. No sense
+mentioned at all.
+
+### Migrating from v2.0.6
+
+Nothing to do. She will be a beat slower to start speaking, which is the fix
+rather than a side effect of it.
+
 ## v2.0.6 — 29 August 2026
 
 **She was uninteresting because she had been told to be, and the instruction
