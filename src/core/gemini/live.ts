@@ -456,13 +456,40 @@ export class LiveConversation {
       },
       realtimeInputConfig: {
         automaticActivityDetection: {
-          // Companions get talked over and talk over people. Both sensitivities
-          // sit high so she yields fast and starts fast; the cost is the
-          // occasional false start, which sounds far more human than a pause.
+          /*
+           * She yields fast and waits to be sure, which are not the same knob.
+           *
+           * Start stays high — "detect the start of speech more often" — because
+           * that is what makes her stop when somebody talks over her, and being
+           * easy to interrupt is the whole of good manners here.
+           *
+           * End was high too, on the argument that starting fast sounds more
+           * human than a pause. Measured against a real user it does not: "ends
+           * speech more often" means she treats a mid-sentence breath as the end
+           * of the turn and comes in over the top of somebody who was still
+           * going. That is the one rudeness a companion cannot afford, and it is
+           * worse than being a beat slow.
+           */
           startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH,
-          endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
+          endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
           prefixPaddingMs: 120,
-          silenceDurationMs: 600,
+          /*
+           * Sent, and ignored by the model this ships with.
+           *
+           * `silenceDurationMs` is documented as the silence required before
+           * end-of-speech is committed, and on `gemini-3.1-flash-live-preview`
+           * it does nothing at all: googleapis/js-genai#1467 reproduces a
+           * 5,000ms threshold being ignored on a 2s gap, on 3.1, while working
+           * on 2.5. Open, unacknowledged, no workaround.
+           *
+           * It is left in and raised rather than deleted, because it is correct
+           * for `HERS_MODEL=gemini-2.5-flash-native-audio-preview-12-2025` and
+           * because the day the server honours it this is already the number we
+           * want. What it is not is the fix for interrupting — that is the end
+           * sensitivity above, and anybody tuning this should know which of the
+           * two is actually doing the work.
+           */
+          silenceDurationMs: 1_000,
         },
       },
     };

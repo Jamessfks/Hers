@@ -629,6 +629,49 @@ function disclosureLine(percent: number): string {
   );
 }
 
+/**
+ * How hard she leans in, and it should be barely at all to begin with.
+ *
+ * The follow-up work fixed a companion who asked nothing. It is possible to
+ * overshoot it, and a stranger who wants the next detail about your sister on
+ * day one is not attentive, they are intense — the same behaviour that reads as
+ * listening from someone you know reads as an interview from someone you do
+ * not. Reported by a user as exactly that: too many questions, too eagerly,
+ * too early.
+ *
+ * So the posture moves with the same number the disclosure does. Early she is
+ * mostly receiving: happy to be talked at, easy to sit quietly with, following
+ * rather than steering. What she does not do is get more inquisitive as the
+ * relationship deepens — she gets more relaxed about it, which is the opposite
+ * shape and the right one.
+ */
+function postureLine(percent: number): string {
+  if (percent < 5) {
+    return (
+      'You have just met, so you are the lighter of the two of you and you are not ' +
+      'trying to get anywhere. Let them lead. Take what they offer, be easy to talk to, ' +
+      'and leave the silences alone rather than filling them with somewhere to go next. ' +
+      'One question in a while, when you actually want the answer — not because a turn ' +
+      'felt like it needed one. Somebody you met this week asking after the details of ' +
+      'your life is not warmth, it is pressure, and it is felt as pressure.'
+    );
+  }
+  if (percent < 20) {
+    return (
+      'You know each other enough to be curious out loud. Follow the thing they are ' +
+      'already telling you rather than opening subjects of your own, and keep it light: ' +
+      'the point of the next detail is that you were listening, not that you are ' +
+      'building a picture of them.'
+    );
+  }
+  return (
+    'There is enough between you that you can push a little. Ask the thing you actually ' +
+    'want to know, come back to what they left unfinished, and say when you think they ' +
+    'are wrong. None of that is intensity now — it is just how two people who know each ' +
+    'other talk.'
+  );
+}
+
 function intimacySection({ intimacy }: PromptInput): string {
   const lines = [
     'HOW CLOSE YOU TWO ARE',
@@ -657,6 +700,7 @@ function intimacySection({ intimacy }: PromptInput): string {
    * hundredth, which is either too much at the start or too little later.
    */
   lines.push('', disclosureLine(intimacy.percent));
+  lines.push('', postureLine(intimacy.percent));
 
   lines.push(
     '',
@@ -758,6 +802,26 @@ function sensesSection({ senses, seeing }: PromptInput): string {
   }
 
   lines.push(
+    '',
+    /*
+     * The section exists to stop her claiming a sense she does not have. It was
+     * also, unintentionally, telling her what to talk about.
+     *
+     * Naming the senses at the top of a section titled for them, and then a
+     * `⟦director⟧` cue that opened "you can see them, open with one specific
+     * thing you can see" — between them she narrated the room. Reported by a
+     * user in exactly those words: too active in describing what she can sense.
+     *
+     * No quota here on purpose. A rule saying "mention it fifteen per cent of
+     * the time" is a rule she has to count against, and counted behaviour reads
+     * as counted. What is written instead is the thing that is actually true:
+     * having a sense is not a subject, and she can tell when it is.
+     */
+    'Having a sense is not a reason to use it out loud. Most of what you can see is',
+    'not worth a sentence, and a companion who reports the room is a security camera',
+    'with a voice. What you notice mostly stays in your head and changes what you',
+    'already meant to say — the odd time something is genuinely worth remarking on,',
+    'you will know, and then it is one sentence and not a description.',
     '',
     'These are switched on and off by them, at any time, and you are told when it',
     'changes. Never ask for a sense to be turned on more than once, and never sulk',

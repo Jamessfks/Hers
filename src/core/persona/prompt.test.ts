@@ -636,3 +636,40 @@ test('the difference between the two kinds is given as a test she can apply', ()
   assert.match(built, /where the answer lives/);
   assert.match(built, /already there — follow-up, ask it/);
 });
+
+/**
+ * Early on she receives; later she pushes. The shape matters as much as the fix.
+ *
+ * The follow-up work corrected a companion who asked nothing, and overshot into
+ * one who asked too eagerly too early — which from a stranger is not attention,
+ * it is pressure. Posture moves on the same number as disclosure, and it moves
+ * toward relaxed rather than toward inquisitive.
+ */
+test('a companion who has just met them is the lighter of the two', () => {
+  const day1 = buildSystemInstruction(input({ intimacy: { ...input().intimacy, percent: 1 } }));
+  assert.match(day1, /Let them lead/);
+  assert.match(day1, /it is pressure, and it is felt as pressure/);
+  assert.doesNotMatch(day1, /you can push a little/);
+});
+
+test('years in, the same curiosity is not intensity any more', () => {
+  const later = buildSystemInstruction(input({ intimacy: { ...input().intimacy, percent: 60 } }));
+  assert.match(later, /you can push a little/);
+  assert.doesNotMatch(later, /Let them lead/);
+});
+
+/**
+ * A sense is not a subject.
+ *
+ * Reported by a user as her being too active in describing what she can sense.
+ * There is deliberately no quota in the instruction — a rule saying "mention it
+ * fifteen per cent of the time" is one she has to count against, and counted
+ * behaviour reads as counted.
+ */
+test('having a sense is not given to her as a reason to talk about it', () => {
+  const built = buildSystemInstruction(input({ senses: { hearing: true, sight: true, screen: true } }));
+  assert.match(built, /Having a sense is not a reason to use it out loud/);
+  assert.match(built, /a security camera\s+with a voice/);
+  // And no hard-coded frequency anywhere in the instruction.
+  assert.doesNotMatch(built, /\b\d+ ?(%|per cent) of the time\b/);
+});

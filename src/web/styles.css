@@ -331,7 +331,6 @@ a:hover { text-decoration-color: var(--accent); text-decoration-thickness: 2px; 
   font-weight: 400;
   font-size: 15px;
   letter-spacing: 0.14em;
-  text-transform: lowercase;
   color: var(--ink-soft);
 }
 

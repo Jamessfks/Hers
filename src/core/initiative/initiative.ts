@@ -245,7 +245,7 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
 
   if (turns === 0) {
     return seeing.camera
-      ? 'You have not spoken yet and you can see them. Open with one specific thing you can actually see right now, not a greeting.'
+      ? 'You have not spoken yet. Open small — one thing, not a greeting. You can see them, which is why you looked up; it is not automatically what you talk about.'
       : 'You have not spoken to them yet today. Open small.';
   }
 
@@ -255,10 +255,9 @@ export function pickReason(situation: SituationSnapshot, unanswered = 0): string
   // after they moved on is worse than saying nothing.
   if (watchingScreen && screen.sinceSwitchMs < FRESH_SWITCH_MS) {
     return (
-      'They have just moved to something else on their screen — you can see what. ' +
-      'If that change is worth one sentence, say it, and be specific about what you ' +
-      'can see. If it is not, let it be the reason you looked up rather than the ' +
-      'thing you talk about.'
+      'They have just moved to something else on their screen. If that change is ' +
+      'genuinely worth a sentence, say it and be specific. Most of the time it is not, ' +
+      'and then it is only the reason you looked up rather than the thing you say.'
     );
   }
 
